@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import Connexion from "../../pages/connexion";
+// import Connexion from "../../pages/connexion";
 
 function Header() {
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -33,7 +33,7 @@ function Header() {
                         <div className="hidden md:flex items-center space-x-8">
                             <a href="/" className="text-blue-600 font-medium">Accueil</a>
                             <a href="/dossier-medical" className="text-gray-600 hover:text-blue-600">Dossier Médical</a>
-                            <a href="#" className="text-gray-600 hover:text-blue-600">Médecins</a>
+                            <a href="/medecin" className="text-gray-600 hover:text-blue-600">Médecins</a>
                             <a href="#" className="text-gray-600 hover:text-blue-600">À propos</a>
                             <a href="/connexion" className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition duration-300">Connexion</a>
                         </div>
@@ -52,7 +52,7 @@ function Header() {
                             <button className="self-end text-gray-500 text-2xl mb-6" onClick={() => setMobileMenuOpen(false)}>&times;</button>
                             <a href="/" className="mb-4 text-blue-600 font-medium text-base flex items-center">Accueil</a>
                             <a href="/dossier-medical" className="mb-4 text-gray-600 hover:text-blue-600 text-base flex items-center">Dossier Médical</a>
-                            <a href="#" className="mb-4 text-gray-600 hover:text-blue-600 text-base flex items-center">Médecins</a>
+                            <a href="/medecin" className="mb-4 text-gray-600 hover:text-blue-600 text-base flex items-center">Médecins</a>
                             <a href="#" className="mb-4 text-gray-600 hover:text-blue-600 text-base flex items-center">À propos</a>
                             <a href="/connexion" className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition duration-300 text-center">Connexion</a>
                         </div>

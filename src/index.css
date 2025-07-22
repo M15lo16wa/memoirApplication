@@ -27,3 +27,27 @@ code {
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Styles personnalisés pour headerMed et la page medecin */
+.card {
+  box-shadow: 0 2px 8px 0 rgba(60,72,88,.10);
+}
+.section-title {
+  color: #1e3a8a;
+  letter-spacing: 0.5px;
+}
+.logo-container img {
+  max-height: 48px;
+  max-width: 120px;
+  object-fit: contain;
+}
+
+/* Pour les boutons principaux de la page medecin */
+.btn-primary {
+  background-color: #1e3a8a;
+  color: #fff;
+  transition: background 0.2s;
+}
+.btn-primary:hover {
+  background-color: #3b82f6;
+}

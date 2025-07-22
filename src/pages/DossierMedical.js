@@ -1,49 +1,54 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 
 const DossierMedical = () => {
-  // États pour chaque bloc de données
-  const [profil, setProfil] = useState(null);
-  const [alertes, setAlertes] = useState([]);
-  const [rendezVous, setRendezVous] = useState(null);
-  const [traitement, setTraitement] = useState(null);
-  const [documents, setDocuments] = useState([]);
-  const [resume, setResume] = useState(null);
-  const [parametresBio, setParametresBio] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  // MOCK DATA
+  const [profil] = useState({
+    avatar: "👤",
+    nom: "Samba Ndiaye",
+    dateNaissance: "01/01/1980"
+  });
+  const [alertes] = useState([
+    { message: "Allergie à la pénicilline" },
+    { message: "Diabète de type 2" }
+  ]);
+  const [rendezVous] = useState({
+    details: "15 juin 2024 à 10h00 avec Dr. Ba (Cardiologue)"
+  });
+  const [traitement] = useState({
+    nom: "Metformine 500mg, 2x/jour"
+  });
+  const [documents] = useState([
+    {
+      type: "Ordonnance",
+      date: "10/05/2024",
+      medecin: "Dr. Ba",
+      specialite: "Cardiologie",
+      lienVoir: "#",
+      lienTelecharger: "#"
+    },
+    {
+      type: "Résultat d'analyse",
+      date: "08/05/2024",
+      medecin: "Dr. Diop",
+      specialite: "Biologie",
+      lienVoir: "#",
+      lienTelecharger: "#"
+    }
+  ]);
+  const [resume] = useState({
+    pathologies: "Diabète, Hypertension",
+    antecedents: "Père: diabète, Mère: hypertension",
+    groupeSanguin: "O+",
+    derniereHospitalisation: "Mars 2023"
+  });
+  const [parametresBio] = useState({
+    valeurs: "Glycémie: 1.2g/L, Cholestérol: 2.1g/L"
+  });
+  const [loading] = useState(false);
+  const [error] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  useEffect(() => {
-    // Exemple d'appel API (à adapter à ton backend)
-    async function fetchData() {
-      setLoading(true);
-      setError(null);
-      try {
-        // Remplace les URLs par celles de ton API
-        const [profilRes, alertesRes, rdvRes, traitementRes, docsRes, resumeRes, paramBioRes] = await Promise.all([
-          fetch("/api/profil").then(r => r.json()),
-          fetch("/api/alertes").then(r => r.json()),
-          fetch("/api/rendezvous").then(r => r.json()),
-          fetch("/api/traitement").then(r => r.json()),
-          fetch("/api/documents").then(r => r.json()),
-          fetch("/api/resume").then(r => r.json()),
-          fetch("/api/parametres-biologiques").then(r => r.json()),
-        ]);
-        setProfil(profilRes);
-        setAlertes(alertesRes);
-        setRendezVous(rdvRes);
-        setTraitement(traitementRes);
-        setDocuments(docsRes);
-        setResume(resumeRes);
-        setParametresBio(paramBioRes);
-      } catch (e) {
-        setError("Erreur lors du chargement des données.");
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchData();
-  }, []);
+  // Supprimer le useEffect d'origine
 
   if (loading) {
     return <div className="flex justify-center items-center h-screen">Chargement...</div>;

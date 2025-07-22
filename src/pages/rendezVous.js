@@ -23,6 +23,7 @@ function RendezVous() {
         reason: "",
         appointmentDate: "",
         appointmentTime: "",
+        hospital: "", // Ajout du champ hôpital
         consent: false,
     });
 
@@ -76,6 +77,7 @@ function RendezVous() {
             }
         }
         if (currentStep === 2) {
+            if (!form.hospital) newErrors.hospital = "Veuillez sélectionner un hôpital";
             if (!form.service) newErrors.service = "Veuillez sélectionner un service";
             if (!form.reason) newErrors.reason = "Veuillez décrire le motif de votre consultation";
             if (!form.appointmentDate || !form.appointmentTime) newErrors.appointment = "Veuillez sélectionner une date et heure";
@@ -109,6 +111,7 @@ function RendezVous() {
             reason: "",
             appointmentDate: "",
             appointmentTime: "",
+            hospital: "", // reset
             consent: false,
         });
         setErrors({});
@@ -245,6 +248,19 @@ function RendezVous() {
                                 <h3 className="text-xl font-semibold mb-4 text-gray-800">Détails de la consultation</h3>
                                 <div className="space-y-6">
                                     <div>
+                                        <label htmlFor="hospital" className="block text-sm font-medium text-gray-700 mb-1">Hôpital *</label>
+                                        <select id="hospital" name="hospital" value={form.hospital} onChange={handleChange} required className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
+                                            <option value="">Sélectionner un hôpital...</option>
+                                            <option value="hopital_principal">Hôpital Principal</option>
+                                            <option value="fann">Hôpital Fann</option>
+                                            <option value="dalal_jamm">Hôpital Dalal Jamm</option>
+                                            <option value="aristide_le_dantec">Hôpital Aristide Le Dantec</option>
+                                            <option value="enfant_albert_royer">Hôpital d'Enfants Albert Royer</option>
+                                            <option value="autre">Autre</option>
+                                        </select>
+                                        {errors.hospital && <p className="error-message text-red-500">{errors.hospital}</p>}
+                                    </div>
+                                    <div>
                                         <label htmlFor="service" className="block text-sm font-medium text-gray-700 mb-1">Service/Spécialité *</label>
                                         <select id="service" name="service" value={form.service} onChange={handleChange} required className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
                                             <option value="">Sélectionner un service...</option>
@@ -323,6 +339,17 @@ function RendezVous() {
                                         </div>
                                         <div className="mb-4 pb-4 border-b">
                                             <h4 className="font-semibold text-gray-700 mb-2">Détails du rendez-vous</h4>
+                                            <p>Hôpital: {(() => {
+                                                switch(form.hospital) {
+                                                    case "hopital_principal": return "Hôpital Principal";
+                                                    case "fann": return "Hôpital Fann";
+                                                    case "dalal_jamm": return "Hôpital Dalal Jamm";
+                                                    case "aristide_le_dantec": return "Hôpital Aristide Le Dantec";
+                                                    case "enfant_albert_royer": return "Hôpital d'Enfants Albert Royer";
+                                                    case "autre": return "Autre";
+                                                    default: return "";
+                                                }
+                                            })()}</p>
                                             <p>Service: {getServiceLabel()}</p>
                                             <p>{getDoctorLabel()}</p>
                                             <p>Date et heure: {form.appointmentDate} à {form.appointmentTime}</p>

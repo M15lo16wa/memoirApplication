@@ -5,6 +5,9 @@ import HomePage from './pages/HomePage';
 import RendezVous from './pages/rendezVous';
 import Utilisateurs from './pages/Utilisateur';
 import DossierMedical from './pages/DossierMedical';
+import Medecin from './pages/medecin';
+import Consultation from './pages/consultation';
+import DossierPatient from './pages/dossierPatient';
 
 function App() {
   return (
@@ -15,6 +18,9 @@ function App() {
       <Route path="/rendezVous" element={<RendezVous />}/>
       <Route path="/utilisateurs" element={<Utilisateurs />} />
       <Route path="/dossier-medical" element={<DossierMedical />} />
+      <Route path='/medecin' element={<Medecin/>}/>
+      <Route path='/consultation' element={<Consultation/>}/>
+      <Route path='/dossier-patient' element={<DossierPatient/>}/>
     </Routes>
   );
 }
