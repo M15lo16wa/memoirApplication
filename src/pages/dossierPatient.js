@@ -309,7 +309,7 @@ function DossierPatient() {
                       ))}
                     </div>
                     <p className="text-gray-700 mb-4">Dernière consultation: {p.lastConsult}</p>
-                    <div className="flex justify-end space-x-2">
+                    <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3 justify-end">
                       <button className="text-blue-600 hover:text-blue-800" onClick={()=>openPatientModal(p)}>
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -503,8 +503,8 @@ function DossierPatient() {
       </div>
       {/* Patient Details Modal */}
       {showPatientModal && modalPatient && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-4xl relative">
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-start md:justify-center z-50 p-2 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-full md:max-w-4xl max-h-[95vh] overflow-y-auto mx-auto">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-bold">Dossier de {modalPatient.name}</h2>
               <button onClick={closePatientModal} className="text-gray-500 hover:text-gray-700">
@@ -618,8 +618,8 @@ function DossierPatient() {
 
       {/* Edit Modal */}
       {showEditModal && editPatient && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-xl relative">
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-start md:items-center justify-center z-50 p-2 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-lg shadow-xl p-4 sm:p-6 w-full max-w-full md:max-w-xl relative my-4">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-bold">Modifier {editPatient.name}</h2>
               <button onClick={closeEditModal} className="text-gray-500 hover:text-gray-700">
@@ -628,7 +628,7 @@ function DossierPatient() {
                 </svg>
               </button>
             </div>
-            <form className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            <form className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 mb-4 sm:mb-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Nom</label>
                 <input type="text" className="w-full px-3 py-2 border rounded-md" defaultValue={editPatient.name.split(" ")[0]} />
@@ -685,8 +685,8 @@ function DossierPatient() {
 
       {/* Share Modal */}
       {showShareModal && sharePatient && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-2xl relative">
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-start md:items-center justify-center z-50 p-2 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-lg shadow-xl p-4 sm:p-6 w-full max-w-full md:max-w-2xl relative my-4">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-bold">Mutualiser {sharePatient.name}</h2>
               <button onClick={closeShareModal} className="text-gray-500 hover:text-gray-700">
@@ -752,9 +752,9 @@ Dr. Dupont`
                   </div>
                 </div>
               </div>
-              <div className="flex justify-end space-x-3">
+              <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3 justify-end">
                 <button type="button" className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700">Confirmer le partage</button>
-                <button type="button" onClick={closeShareModal} className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50">Annuler</button>
+                <button type="button" onClick={closeShareModal} className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 order-first sm:order-last">Annuler</button>
               </div>
             </form>
           </div>
@@ -763,8 +763,8 @@ Dr. Dupont`
 
       {/* Add Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-xl relative">
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-start md:items-center justify-center z-50 p-2 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-lg shadow-xl p-4 sm:p-6 w-full max-w-full md:max-w-xl relative my-4">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-bold">Ajouter un nouveau patient</h2>
               <button onClick={closeAddModal} className="text-gray-500 hover:text-gray-700">
@@ -773,7 +773,7 @@ Dr. Dupont`
                 </svg>
               </button>
             </div>
-            <form className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            <form className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 mb-4 sm:mb-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Nom</label>
                 <input type="text" className="w-full px-3 py-2 border rounded-md" />
