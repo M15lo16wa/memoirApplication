@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 
 import Header from "../components/layout/Header";
 import Footer from "../components/layout/Footer";
+import sante from '../assets/sante.jpg';
 
 function HomePage() {
     const navigate = useNavigate();
@@ -27,30 +28,34 @@ function HomePage() {
                             </div>
                         </div>
                         <div className="md:w-1/2 flex justify-center mt-8 md:mt-0">
-                            <div className="relative w-full max-w-xs sm:max-w-sm md:max-w-md">
-                                <img src="https://storage.googleapis.com/workspace-0f70711f-8b4e-4d94-86f1-2a93ccde5887/image/9af025aa-0a10-4336-b0c0-da199df9a143.png" alt="Groupe de médecins professionnels discutant ensemble dans un environnement hospitalier moderne" className="rounded-lg shadow-xl w-full object-cover" />
-                                <div className="absolute -bottom-6 -right-2 sm:-right-6 bg-white p-4 rounded-lg shadow-lg text-gray-800 w-56 sm:w-64">
-                                    <div className="flex items-center mb-2">
-                                        <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-100 rounded-full flex items-center justify-center mr-3">
-                                            <i className="fas fa-user-md text-blue-600 text-lg sm:text-xl" />
-                                        </div>
-                                        <div>
-                                            <p className="font-bold text-base sm:text-lg">500+</p>
-                                            <p className="text-xs sm:text-sm text-gray-600">Professionnels</p>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center">
-                                        <div className="w-10 h-10 sm:w-12 sm:h-12 bg-green-100 rounded-full flex items-center justify-center mr-3">
-                                            <i className="fas fa-smile text-green-600 text-lg sm:text-xl" />
-                                        </div>
-                                        <div>
-                                            <p className="font-bold text-base sm:text-lg">50k+</p>
-                                            <p className="text-xs sm:text-sm text-gray-600">Patients satisfaits</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+    <div className="relative w-full max-w-xs sm:max-w-sm md:max-w-md">
+        <img 
+            src={sante} 
+            alt="Fiche de soin medicale" 
+            className="rounded-lg shadow-xl w-full object-cover" 
+        />
+        <div className="absolute -bottom-6 -right-2 sm:-right-6 bg-white p-4 rounded-lg shadow-lg text-gray-800 w-56 sm:w-64">
+            <div className="flex items-center mb-2">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-100 rounded-full flex items-center justify-center mr-3">
+                    <i className="fas fa-user-md text-blue-600 text-lg sm:text-xl" />
+                </div>
+                <div>
+                    <p className="font-bold text-base sm:text-lg">500+</p>
+                    <p className="text-xs sm:text-sm text-gray-600">Professionnels</p>
+                </div>
+            </div>
+            <div className="flex items-center">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-green-100 rounded-full flex items-center justify-center mr-3">
+                    <i className="fas fa-smile text-green-600 text-lg sm:text-xl" />
+                </div>
+                <div>
+                    <p className="font-bold text-base sm:text-lg">50k+</p>
+                    <p className="text-xs sm:text-sm text-gray-600">Patients satisfaits</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
                     </div>
                 </div>
             </section>
