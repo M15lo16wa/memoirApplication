@@ -1,14 +1,16 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FaUser, FaLock, FaArrowLeft } from 'react-icons/fa';
-import { FaUserDoctor, FaUserInjured } from 'react-icons/fa6';
+import { FaUser, FaLock, FaArrowLeft, FaIdCard } from 'react-icons/fa';
+import { FaUserDoctor, FaUserInjured, FaUserTie, FaUserGear } from 'react-icons/fa6';
 
 function Connexion() {
     const [email, setEmail] = useState("");
     const [numeroCarte, setNumeroCarte] = useState("");
+    const [numeroInscription, setNumeroInscription] = useState("");
     const [mdp, setMotDePasse] = useState("");
     const [error, setError] = useState("");
     const [selectedProfile, setSelectedProfile] = useState("");
+    const [selectedProfessional, setSelectedProfessional] = useState("");
     const navigate = useNavigate();
 
     const handleSubmit = (e) => {
@@ -20,20 +22,53 @@ function Connexion() {
             return;
         }
 
-        if (selectedProfile === 'professionnel' && (!email || !mdp)) {
-            setError('Veuillez remplir tous les champs');
-            return;
+        if (selectedProfile === 'professionnel') {
+            if (selectedProfessional === 'medecin' && (!numeroInscription || !mdp)) {
+                setError('Veuillez remplir tous les champs');
+                return;
+            }
+            if ((selectedProfessional === 'administrateur' || selectedProfessional === 'secretaire') && (!email || !mdp)) {
+                setError('Veuillez remplir tous les champs');
+                return;
+            }
         }
 
         // Logique de connexion
+        let identifiant;
+        if (selectedProfile === 'patient') {
+            identifiant = numeroCarte;
+        } else if (selectedProfessional === 'medecin') {
+            identifiant = numeroInscription;
+        } else {
+            identifiant = email;
+        }
+
         console.log('Tentative de connexion :', { 
             profile: selectedProfile,
-            identifiant: selectedProfile === 'patient' ? numeroCarte : email,
+            professionalType: selectedProfessional,
+            identifiant,
             mdp 
         });
 
         // Redirection après connexion réussie
-        navigate(selectedProfile === 'patient' ? '/espace-patient' : '/espace-pro');
+        if (selectedProfile === 'patient') {
+            navigate('/espace-patient');
+        } else {
+            // Redirection selon le type de professionnel
+            switch (selectedProfessional) {
+                case 'medecin':
+                    navigate('/espace-medecin');
+                    break;
+                case 'administrateur':
+                    navigate('/espace-admin');
+                    break;
+                case 'secretaire':
+                    navigate('/espace-secretaire');
+                    break;
+                default:
+                    navigate('/espace-pro');
+            }
+        }
     };
 
     const renderProfileSelection = () => (
@@ -63,7 +98,7 @@ function Connexion() {
                 >
                     <FaUserDoctor className="h-10 w-10 text-blue-600 mb-3" />
                     <span className="text-base font-medium text-gray-900">Professionnel</span>
-                    <p className="mt-1 text-sm text-gray-500">Email professionnel</p>
+                    <p className="mt-1 text-sm text-gray-500">Personnel de santé</p>
                     {selectedProfile === 'professionnel' && (
                         <div className="absolute top-2 right-2 flex h-5 w-5 items-center justify-center rounded-full bg-blue-500">
                             <svg className="h-3.5 w-3.5 text-white" viewBox="0 0 20 20" fill="currentColor">
@@ -91,78 +126,192 @@ function Connexion() {
         </div>
     );
 
-    const renderLoginForm = () => (
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+    const renderProfessionalSelection = () => (
+        <div className="p-6">
             <button
                 type="button"
                 onClick={() => setSelectedProfile('')}
-                className="flex items-center text-blue-600 hover:text-blue-800 text-sm font-medium mb-2"
+                className="flex items-center text-blue-600 hover:text-blue-800 text-sm font-medium mb-4"
             >
                 <FaArrowLeft className="mr-2" /> Retour au choix du profil
             </button>
             
-            <h3 className="text-lg font-medium text-gray-900 text-center">
-                Connexion {selectedProfile === 'patient' ? 'Patient' : 'Professionnel'}
+            <h3 className="text-lg font-medium text-gray-900 text-center mb-6">
+                Type de professionnel :
             </h3>
             
-            <div>
-                <label htmlFor={selectedProfile === 'patient' ? 'numeroCarte' : 'email'} 
-                       className="block text-sm font-medium text-gray-700">
-                    {selectedProfile === 'patient' ? 'Numéro de carte d\'assurance' : 'Email professionnel'}
-                </label>
-                <div className="mt-1 relative rounded-md shadow-sm">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <FaUser className="h-4 w-4 text-gray-400" />
-                    </div>
-                    <input
-                        id={selectedProfile === 'patient' ? 'numeroCarte' : 'email'}
-                        type={selectedProfile === 'patient' ? 'text' : 'email'}
-                        value={selectedProfile === 'patient' ? numeroCarte : email}
-                        onChange={(e) => selectedProfile === 'patient' ? setNumeroCarte(e.target.value) : setEmail(e.target.value)}
-                        required
-                        className="block w-full pl-10 pr-3 py-2.5 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500 text-sm transition-all duration-200"
-                        placeholder={selectedProfile === 'patient' ? 'Votre numéro de carte' : 'votre@email.santesenegal.sn'}
-                    />
-                </div>
-            </div>
-
-            <div>
-                <label htmlFor="mdp" className="block text-sm font-medium text-gray-700">
-                    Mot de passe
-                </label>
-                <div className="mt-1 relative rounded-md shadow-sm">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <FaLock className="h-4 w-4 text-gray-400" />
-                    </div>
-                    <input
-                        id="mdp"
-                        type="password"
-                        value={mdp}
-                        onChange={(e) => setMotDePasse(e.target.value)}
-                        required
-                        className="block w-full pl-10 pr-3 py-2.5 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500 text-sm transition-all duration-200"
-                        placeholder="Votre mot de passe"
-                    />
-                </div>
-                {selectedProfile === 'professionnel' && (
-                    <div className="mt-1 text-right">
-                        <a href="/mot-de-passe-oublie" className="text-xs text-blue-600 hover:text-blue-500">
-                            Mot de passe oublié ?
-                        </a>
-                    </div>
-                )}
-            </div>
-
-            <div>
-                <button 
-                    type="submit" 
-                    className="w-full py-2.5 px-4 bg-gradient-to-r from-blue-600 to-blue-700 text-white font-medium rounded-lg hover:from-blue-700 hover:to-blue-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200 shadow-md"
+            <div className="grid grid-cols-1 gap-3 mb-6">
+                <button
+                    type="button"
+                    onClick={() => setSelectedProfessional('medecin')}
+                    className={`relative rounded-lg border-2 p-4 flex items-center transition-all duration-200 ${selectedProfessional === 'medecin' ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-blue-300'}`}
                 >
-                    Se connecter
+                    <FaUserDoctor className="h-8 w-8 text-blue-600 mr-4" />
+                    <div className="flex-1 text-left">
+                        <span className="text-base font-medium text-gray-900">Médecin</span>
+                        <p className="text-sm text-gray-500">Numéro d'inscription à l'Ordre</p>
+                    </div>
+                    {selectedProfessional === 'medecin' && (
+                        <div className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-500">
+                            <svg className="h-3.5 w-3.5 text-white" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                            </svg>
+                        </div>
+                    )}
+                </button>
+                
+                <button
+                    type="button"
+                    onClick={() => setSelectedProfessional('administrateur')}
+                    className={`relative rounded-lg border-2 p-4 flex items-center transition-all duration-200 ${selectedProfessional === 'administrateur' ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-blue-300'}`}
+                >
+                    <FaUserTie className="h-8 w-8 text-blue-600 mr-4" />
+                    <div className="flex-1 text-left">
+                        <span className="text-base font-medium text-gray-900">Administrateur</span>
+                        <p className="text-sm text-gray-500">Email professionnel</p>
+                    </div>
+                    {selectedProfessional === 'administrateur' && (
+                        <div className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-500">
+                            <svg className="h-3.5 w-3.5 text-white" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                            </svg>
+                        </div>
+                    )}
+                </button>
+                
+                <button
+                    type="button"
+                    onClick={() => setSelectedProfessional('secretaire')}
+                    className={`relative rounded-lg border-2 p-4 flex items-center transition-all duration-200 ${selectedProfessional === 'secretaire' ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-blue-300'}`}
+                >
+                    <FaUserGear className="h-8 w-8 text-blue-600 mr-4" />
+                    <div className="flex-1 text-left">
+                        <span className="text-base font-medium text-gray-900">Secrétaire</span>
+                        <p className="text-sm text-gray-500">Email professionnel</p>
+                    </div>
+                    {selectedProfessional === 'secretaire' && (
+                        <div className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-500">
+                            <svg className="h-3.5 w-3.5 text-white" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                            </svg>
+                        </div>
+                    )}
                 </button>
             </div>
-        </form>
+            
+            {error && (
+                <div className="mt-4 p-3 bg-red-50 border-l-4 border-red-500 text-red-700 rounded-r">
+                    <p className="text-sm">{error}</p>
+                </div>
+            )}
+        </div>
     );
+
+    const renderLoginForm = () => {
+        const isPatient = selectedProfile === 'patient';
+        const isMedecin = selectedProfessional === 'medecin';
+        const isEmailAuth = selectedProfessional === 'administrateur' || selectedProfessional === 'secretaire';
+        
+        let titleText = 'Connexion ';
+        if (isPatient) {
+            titleText += 'Patient';
+        } else {
+            titleText += selectedProfessional.charAt(0).toUpperCase() + selectedProfessional.slice(1);
+        }
+
+        return (
+            <form onSubmit={handleSubmit} className="p-6 space-y-6">
+                <button
+                    type="button"
+                    onClick={() => {
+                        if (selectedProfile === 'professionnel' && selectedProfessional) {
+                            setSelectedProfessional('');
+                        } else {
+                            setSelectedProfile('');
+                        }
+                    }}
+                    className="flex items-center text-blue-600 hover:text-blue-800 text-sm font-medium mb-2"
+                >
+                    <FaArrowLeft className="mr-2" /> 
+                    {selectedProfile === 'professionnel' && selectedProfessional ? 'Retour au choix du professionnel' : 'Retour au choix du profil'}
+                </button>
+                
+                <h3 className="text-lg font-medium text-gray-900 text-center">
+                    {titleText}
+                </h3>
+                
+                <div>
+                    <label htmlFor="identifiant" className="block text-sm font-medium text-gray-700">
+                        {isPatient ? 'Numéro de carte d\'assurance' : 
+                         isMedecin ? 'Numéro d\'inscription à l\'Ordre des Médecins' : 
+                         'Email professionnel'}
+                    </label>
+                    <div className="mt-1 relative rounded-md shadow-sm">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            {isMedecin ? <FaIdCard className="h-4 w-4 text-gray-400" /> : <FaUser className="h-4 w-4 text-gray-400" />}
+                        </div>
+                        <input
+                            id="identifiant"
+                            type={isEmailAuth ? 'email' : 'text'}
+                            value={isPatient ? numeroCarte : isMedecin ? numeroInscription : email}
+                            onChange={(e) => {
+                                if (isPatient) {
+                                    setNumeroCarte(e.target.value);
+                                } else if (isMedecin) {
+                                    setNumeroInscription(e.target.value);
+                                } else {
+                                    setEmail(e.target.value);
+                                }
+                            }}
+                            required
+                            className="block w-full pl-10 pr-3 py-2.5 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500 text-sm transition-all duration-200"
+                            placeholder={
+                                isPatient ? 'Votre numéro de carte' : 
+                                isMedecin ? 'Ex: SN-12345' : 
+                                'votre@email.santesenegal.sn'
+                            }
+                        />
+                    </div>
+                </div>
+
+                <div>
+                    <label htmlFor="mdp" className="block text-sm font-medium text-gray-700">
+                        Mot de passe
+                    </label>
+                    <div className="mt-1 relative rounded-md shadow-sm">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <FaLock className="h-4 w-4 text-gray-400" />
+                        </div>
+                        <input
+                            id="mdp"
+                            type="password"
+                            value={mdp}
+                            onChange={(e) => setMotDePasse(e.target.value)}
+                            required
+                            className="block w-full pl-10 pr-3 py-2.5 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500 text-sm transition-all duration-200"
+                            placeholder="Votre mot de passe"
+                        />
+                    </div>
+                    {selectedProfile === 'professionnel' && (
+                        <div className="mt-1 text-right">
+                            <a href="/mot-de-passe-oublie" className="text-xs text-blue-600 hover:text-blue-500">
+                                Mot de passe oublié ?
+                            </a>
+                        </div>
+                    )}
+                </div>
+
+                <div>
+                    <button 
+                        type="submit" 
+                        className="w-full py-2.5 px-4 bg-gradient-to-r from-blue-600 to-blue-700 text-white font-medium rounded-lg hover:from-blue-700 hover:to-blue-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200 shadow-md"
+                    >
+                        Se connecter
+                    </button>
+                </div>
+            </form>
+        );
+    };
 
     return (
         <div className="min-h-screen flex items-center justify-center p-2 sm:p-4 bg-gray-50">
@@ -177,7 +326,9 @@ function Connexion() {
                         />
                         <h1 className="mt-4 text-xl sm:text-2xl font-bold text-white">Santé Sénégal</h1>
                         <p className="mt-1 text-blue-100 text-sm">
-                            {!selectedProfile ? 'Sélectionnez votre profil' : 'Connectez-vous à votre compte'}
+                            {!selectedProfile ? 'Sélectionnez votre profil' : 
+                             selectedProfile === 'professionnel' && !selectedProfessional ? 'Choisissez votre fonction' :
+                             'Connectez-vous à votre compte'}
                         </p>
                     </div>
                     
@@ -189,7 +340,9 @@ function Connexion() {
                             </div>
                         )}
                         
-                        {!selectedProfile ? renderProfileSelection() : renderLoginForm()}
+                        {!selectedProfile ? renderProfileSelection() : 
+                         selectedProfile === 'professionnel' && !selectedProfessional ? renderProfessionalSelection() :
+                         renderLoginForm()}
                     </div>
                 </div>
                 
