@@ -18,6 +18,10 @@ function Consultation() {
                         <input type="text" className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" placeholder="Prénom du patient" />
                     </div>
                     <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Age</label>
+                        <input type="number" className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" placeholder="Age du patient" />
+                    </div>
+                    <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Date de Naissance</label>
                         <input type="date" className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" />
                     </div>
@@ -37,6 +41,10 @@ function Consultation() {
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Téléphone</label>
                         <input type="tel" className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" placeholder="06 12 34 56 78" />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Ville/Region</label>
+                        <input type="text" className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" placeholder="Ville/Region de la consultation" />
                     </div>
                 </div>
                 

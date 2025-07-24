@@ -79,7 +79,7 @@ function HomePage() {
                             <div className="w-12 h-12 sm:w-14 sm:h-14 bg-purple-100 rounded-lg flex items-center justify-center mb-4">
                                 <i className="fas fa-pills text-purple-600 text-xl sm:text-2xl"></i>
                             </div>
-                            <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-3">Livraison de médicaments</h3>
+                            <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-3">Prescriptions médicales</h3>
                             <p className="text-gray-600 mb-4 text-sm sm:text-base">Recevez vos ordonnances directement à votre domicile en toute sécurité.</p>
                             <a href="#" className="text-blue-600 font-medium flex items-center text-sm sm:text-base">
                                 En savoir plus <i className="fas fa-arrow-right ml-2"></i>

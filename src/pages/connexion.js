@@ -2,72 +2,100 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { FaUser, FaLock, FaArrowLeft, FaIdCard } from 'react-icons/fa';
 import { FaUserDoctor, FaUserInjured, FaUserTie, FaUserGear } from 'react-icons/fa6';
+// gestion des service de connexion
+import {login, loginPatient, loginMedecin} from "../services/api/authApi";
+
 
 function Connexion() {
     const [email, setEmail] = useState("");
-    const [numeroCarte, setNumeroCarte] = useState("");
-    const [numeroInscription, setNumeroInscription] = useState("");
-    const [mdp, setMotDePasse] = useState("");
+    const [numero_assure, setNumeroAssure] = useState("");
+    const [numero_adeli, setNumeroAdeli] = useState("");
+    const [mot_de_passe, setMotDePasse] = useState("");
     const [error, setError] = useState("");
     const [selectedProfile, setSelectedProfile] = useState("");
     const [selectedProfessional, setSelectedProfessional] = useState("");
     const navigate = useNavigate();
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
         
-        if (selectedProfile === 'patient' && (!numeroCarte || !mdp)) {
+        // Validation des champs
+        if (selectedProfile === 'patient' && (!numero_assure || !mot_de_passe)) {
             setError('Veuillez remplir tous les champs');
             return;
         }
 
         if (selectedProfile === 'professionnel') {
-            if (selectedProfessional === 'medecin' && (!numeroInscription || !mdp)) {
+            if (selectedProfessional === 'medecin' && (!numero_adeli || !mot_de_passe)) {
                 setError('Veuillez remplir tous les champs');
                 return;
             }
-            if ((selectedProfessional === 'administrateur' || selectedProfessional === 'secretaire') && (!email || !mdp)) {
+            if ((selectedProfessional === 'administrateur' || selectedProfessional === 'secretaire') && (!email || !mot_de_passe)) {
                 setError('Veuillez remplir tous les champs');
                 return;
             }
         }
 
-        // Logique de connexion
-        let identifiant;
+        // Préparation des identifiants selon le profil
+        let identifiant = {};
         if (selectedProfile === 'patient') {
-            identifiant = numeroCarte;
+            identifiant = { numero_assure, mot_de_passe };
         } else if (selectedProfessional === 'medecin') {
-            identifiant = numeroInscription;
+            identifiant = { numero_adeli, mot_de_passe };
         } else {
-            identifiant = email;
+            identifiant = { email, mot_de_passe };
         }
 
+        // LOG pour débogage
         console.log('Tentative de connexion :', { 
             profile: selectedProfile,
             professionalType: selectedProfessional,
             identifiant,
-            mdp 
+            route: selectedProfile === 'patient' ? '/patient/auth/login' : 
+                   selectedProfessional === 'medecin' ? '/ProfessionnelSante/auth/login' : 
+                   '/auth/login'
         });
 
-        // Redirection après connexion réussie
-        if (selectedProfile === 'patient') {
-            navigate('/espace-patient');
-        } else {
-            // Redirection selon le type de professionnel
-            switch (selectedProfessional) {
-                case 'medecin':
-                    navigate('/espace-medecin');
-                    break;
-                case 'administrateur':
-                    navigate('/espace-admin');
-                    break;
-                case 'secretaire':
-                    navigate('/espace-secretaire');
-                    break;
-                default:
-                    navigate('/espace-pro');
+        try {
+            let userData;
+            
+            // ROUTE 1: Patient -> /patient/auth/login
+            if (selectedProfile === 'patient') {
+                console.log('🔵 Connexion PATIENT via /patient/auth/login');
+                userData = await loginPatient(identifiant);
+                console.log('✅ Données patient reçues:', userData);
+                navigate('/dossier-medical');
+                
+            // ROUTE 2: Médecin -> /ProfessionnelSante/auth/login  
+            } else if (selectedProfile === 'professionnel' && selectedProfessional === 'medecin') {
+                console.log('🟢 Connexion MÉDECIN via /ProfessionnelSante/auth/login');
+                userData = await loginMedecin(identifiant);
+                console.log('✅ Données médecin reçues:', userData);
+                navigate('/medecin');
+                
+            // ROUTE 3: Admin/Secrétaire -> /auth/login
+            } else if (selectedProfile === 'professionnel') {
+                console.log('🟡 Connexion ADMIN/SECRÉTAIRE via /auth/login');
+                userData = await login(identifiant);
+                console.log('✅ Données utilisateur reçues:', userData);
+                
+                // Redirection selon le type de professionnel
+                switch (selectedProfessional) {
+                    case 'administrateur':
+                        navigate('/admin');
+                        break;
+                    case 'secretaire':
+                        navigate('/secretariat');
+                        break;
+                    default:
+                        navigate('/admin');
+                }
             }
+            
+        } catch (error) {
+            console.error('❌ Erreur de connexion:', error);
+            setError(error || "Erreur de connexion");
         }
     };
 
@@ -253,12 +281,12 @@ function Connexion() {
                         <input
                             id="identifiant"
                             type={isEmailAuth ? 'email' : 'text'}
-                            value={isPatient ? numeroCarte : isMedecin ? numeroInscription : email}
+                            value={isPatient ? numero_assure : isMedecin ? numero_adeli : email}
                             onChange={(e) => {
                                 if (isPatient) {
-                                    setNumeroCarte(e.target.value);
+                                    setNumeroAssure(e.target.value);
                                 } else if (isMedecin) {
-                                    setNumeroInscription(e.target.value);
+                                    setNumeroAdeli(e.target.value);
                                 } else {
                                     setEmail(e.target.value);
                                 }
@@ -275,7 +303,7 @@ function Connexion() {
                 </div>
 
                 <div>
-                    <label htmlFor="mdp" className="block text-sm font-medium text-gray-700">
+                    <label htmlFor="mot_de_passe" className="block text-sm font-medium text-gray-700">
                         Mot de passe
                     </label>
                     <div className="mt-1 relative rounded-md shadow-sm">
@@ -283,9 +311,9 @@ function Connexion() {
                             <FaLock className="h-4 w-4 text-gray-400" />
                         </div>
                         <input
-                            id="mdp"
+                            id="mot_de_passe"
                             type="password"
-                            value={mdp}
+                            value={mot_de_passe}
                             onChange={(e) => setMotDePasse(e.target.value)}
                             required
                             className="block w-full pl-10 pr-3 py-2.5 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500 text-sm transition-all duration-200"
@@ -309,6 +337,12 @@ function Connexion() {
                         Se connecter
                     </button>
                 </div>
+                
+                {error && (
+                    <div className="mt-4 p-3 bg-red-50 border-l-4 border-red-500 text-red-700 rounded-r">
+                        <p className="text-sm">{error}</p>
+                    </div>
+                )}
             </form>
         );
     };

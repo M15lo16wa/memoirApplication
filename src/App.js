@@ -10,18 +10,22 @@ import Consultation from './pages/consultation';
 import DossierPatient from './pages/dossierPatient';
 import FicheInscription from './pages/ficheInscription';
 
+// protection des routes
+import ProtectedRoute from './services/api/protectedRoute';
+
+
 function App() {
   return (
     <Routes>
       <Route path="/" element={<HomePage />} />
       <Route path="/connexion" element={<Connexion />} />
-      <Route path="/admin" element={<Admin />} />
+      <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
       <Route path="/rendezVous" element={<RendezVous />}/>
-      <Route path="/utilisateurs" element={<Utilisateurs />} />
-      <Route path="/dossier-medical" element={<DossierMedical />} />
-      <Route path='/medecin' element={<Medecin/>}/>
-      <Route path='/consultation' element={<Consultation/>}/>
-      <Route path='/dossier-patient' element={<DossierPatient/>}/>
+      <Route path="/utilisateurs" element={<ProtectedRoute><Utilisateurs /></ProtectedRoute>} />
+      <Route path="/dossier-medical" element={<ProtectedRoute><DossierMedical /></ProtectedRoute>} />
+      <Route path='/medecin' element={<ProtectedRoute><Medecin/></ProtectedRoute>}/>
+      <Route path='/consultation' element={<ProtectedRoute><Consultation/></ProtectedRoute>}/>
+      <Route path='/dossier-patient' element={<ProtectedRoute><DossierPatient/></ProtectedRoute>}/>
       <Route path='/fiche-inscription' element={<FicheInscription/>}/>
     </Routes>
   );

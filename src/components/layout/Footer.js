@@ -22,7 +22,7 @@ function Footer() {
                 <h3 className="text-lg font-bold mb-4">Services</h3>
                 <ul className="space-y-2">
                     <li><a href="#" className="text-gray-400 hover:text-white transition">Consultation en ligne</a></li>
-                    <li><a href="#" className="text-gray-400 hover:text-white transition">Livraison de médicaments</a></li>
+                    <li><a href="#" className="text-gray-400 hover:text-white transition">Prescriptions médicales</a></li>
                     <li><a href="#" className="text-gray-400 hover:text-white transition">Suivi médical</a></li>
                     <li><a href="#" className="text-gray-400 hover:text-white transition">Rendez-vous en clinique</a></li>
                     </ul>
