@@ -1,203 +1,209 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 
-// Les données statiques pour l'exemple, on peut les remplacer par des props ou du state dynamique plus tard
-const patients = [
-  {
-    name: "Jean Martin",
-    birth: "15/03/1978",
-    status: "Actif",
-    specialties: ["Cardiologie", "Diabète"],
-    statusColor: "green",
-    lastConsult: "10/05/2023",
-    gender: "Homme",
-    address: "12 Rue de la Paix, Paris",
-    phone: "0612345678",
-    email: "jean.martin@email.com",
-    emergencyContacts: [
-      { name: "Claire Martin", type: "Épouse", phone: "0612345679" },
-      { name: "Lucas Martin", type: "Fils", phone: "0712345680" },
-    ],
-    pathologies: [
-      "Hypertension artérielle (depuis 2018)",
-      "Hypercholestérolémie (depuis 2020)",
-      "Diabète type II (depuis 2021)",
-    ],
-    allergies: [
-      "Penicilline (réaction cutanée)",
-      "Pollens (rhinite saisonnière)",
-    ],
-    consultations: [
-      { date: "10/05/2023", reason: "Suivi hypertension", doctor: "Dr. Dupont" },
-      { date: "22/03/2023", reason: "Analyse diabète", doctor: "Dr. Dupont" },
-    ],
-    treatments: [
-      { name: "Metformine", dose: "500mg", desc: "1 comprimé matin et soir", since: "15/01/2022" },
-      { name: "Atorvastatine", dose: "20mg", desc: "1 comprimé le soir", since: "03/10/2021" },
-    ],
-    blood: "O+",
-    age: 45,
-    image: "https://placehold.co/150"
-  },
-  {
-    name: "Marie Dubois",
-    birth: "22/08/1985",
-    status: "En attente",
-    specialties: ["Pneumologie"],
-    statusColor: "yellow",
-    lastConsult: "18/04/2023",
-    gender: "Femme",
-    image: "https://placehold.co/150"
-  },
-  {
-    name: "Pierre Lambert",
-    birth: "03/11/1962",
-    status: "Actif",
-    specialties: ["Neurologie", "Hypertension"],
-    statusColor: "green",
-    lastConsult: "02/05/2023",
-    gender: "Homme",
-    image: "https://placehold.co/150"
-  }
-];
-
-const sharedFolders = [
-  {
-    patient: patients[0],
-    sharedService: "Cardiologie - Hôpital Central",
-    doctor: "Dr. Sophie Laurent",
-    sharedDate: "12/05/2023",
-    status: "Actif",
-    statusColor: "green"
-  },
-  {
-    patient: patients[1],
-    sharedService: "Pneumologie - Clinique du Nord",
-    doctor: "Dr. Marc Thierry",
-    sharedDate: "25/04/2023",
-    status: "En attente",
-    statusColor: "yellow"
-  }
-];
-
-const accessRules = [
-  {
-    consultant: {
-      name: "Dr. Sophie Laurent",
-      specialty: "Cardiologie",
-      image: "https://placehold.co/40"
-    },
-    patient: patients[0],
-    access: "Lecture et écriture",
-    expires: "12/08/2023"
-  },
-  {
-    consultant: {
-      name: "Dr. Marc Thierry",
-      specialty: "Pneumologie",
-      image: "https://placehold.co/40"
-    },
-    patient: patients[1],
-    access: "Lecture seule",
-    expires: "25/07/2023"
-  }
-];
-
-const accessHistory = [
-  {
-    date: "10/05/2023 09:45",
-    consultant: "Dr. Sophie Laurent",
-    patient: "Jean Martin",
-    action: "Consultation du dossier médical"
-  },
-  {
-    date: "25/04/2023 14:32",
-    consultant: "Dr. Marc Thierry",
-    patient: "Marie Dubois",
-    action: "Ajout d'une prescription"
-  }
-];
-
-const notifications = [
-  {
-    iconBg: "bg-blue-100",
-    iconColor: "text-blue-600",
-    title: "Demande de partage de dossier",
-    time: "10 min ago",
-    content: "Dr. Sophie Laurent demande l'accès au dossier de Jean Martin",
-    actions: [
-      { label: "Approuver", color: "bg-green-100 text-green-800 hover:bg-green-200" },
-      { label: "Refuser", color: "bg-red-100 text-red-800 hover:bg-red-200" }
-    ]
-  },
-  {
-    iconBg: "bg-purple-100",
-    iconColor: "text-purple-600",
-    title: "Nouvelle prescription",
-    time: "1 heure ago",
-    content: "Dr. Marc Thierry a ajouté une nouvelle prescription pour Marie Dubois",
-    actions: [
-      { label: "Voir la prescription", color: "bg-blue-100 text-blue-800 hover:bg-blue-200" }
-    ]
-  }
-];
+import { getPatients, getPatientRendezVous, getProchainRendezVous, getDocumentsRecents, getResumeMedical } from "../services/api/medicalApi";
 
 function DossierPatient() {
   const navigate = useNavigate();
-  // Onglets principaux
+  const accessHistory = useNavigate(); // Using useNavigate for navigation
   const [activeTab, setActiveTab] = useState("patients-list");
-
-  // Pour modals
+  const [patients, setPatients] = useState([]);
+  const [, setLoading] = useState(false);
   const [showPatientModal, setShowPatientModal] = useState(false);
   const [modalPatient, setModalPatient] = useState(null);
-
-  // Edition & Ajout
+  const [, setPatientDetails] = useState(null);
+  const [, setLoadingDetails] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editPatient, setEditPatient] = useState(null);
-
   const [showShareModal, setShowShareModal] = useState(false);
   const [sharePatient, setSharePatient] = useState(null);
-
   const [showAddModal, setShowAddModal] = useState(false);
-
-  // Recherche (mock, pas de filtre ici)
   const [search, setSearch] = useState("");
-
-  // Filtres mock (non utilisés dans cet exemple)
   const [filterRecent, setFilterRecent] = useState(false);
   const [filterShared, setFilterShared] = useState(false);
+  const [sharedFolders] = useState([]);
+  const [accessRules] = useState([]);
 
-  // Gestion ouverture/fermeture modal
-  function openPatientModal(patient) {
+  const [notifications] = useState([
+    {
+      iconBg: "bg-blue-100",
+      iconColor: "text-blue-600",
+      title: "Demande de partage de dossier",
+      time: "10 min ago",
+      content: "Dr. Sophie Laurent demande l'accès au dossier de Jean Martin",
+      actions: [
+        { label: "Approuver", color: "bg-green-100 text-green-800 hover:bg-green-200" },
+        { label: "Refuser", color: "bg-red-100 text-red-800 hover:bg-red-200" }
+      ]
+    }
+  ]);
+
+  // Chargement initial des patients
+  useEffect(() => {
+    loadPatients();
+  }, []);
+
+  const loadPatients = async () => {
+    setLoading(true);
+    try {
+      console.log('Loading patients...');
+      const patientsData = await getPatients();
+      console.log('Received patients data:', patientsData);
+      
+      if (!Array.isArray(patientsData)) {
+        console.error('Expected an array of patients but received:', patientsData);
+        setPatients([]);
+        return [];
+      }
+      
+      // Map the patients to the expected format
+      const formattedPatients = patientsData.map(patient => ({
+        id: patient.id_patient,
+        name: `${patient.prenom || ''} ${patient.nom || ''}`.trim() || 'Nom inconnu',
+        birth: patient.date_naissance 
+          ? new Date(patient.date_naissance).toLocaleDateString('fr-FR')
+          : 'Non renseigné',
+        status: patient.statut || 'Actif',
+        statusColor: (patient.statut === 'actif' || patient.statut === 'Actif') ? 'green' : 'red',
+        lastConsult: patient.date_derniere_consultation 
+          ? new Date(patient.date_derniere_consultation).toLocaleDateString('fr-FR')
+          : 'Aucune',
+        gender: patient.sexe === 'M' ? 'Homme' : 'Femme',
+        blood: patient.groupe_sanguin || 'Non renseigné',
+        phone: patient.telephone || 'Non renseigné',
+        email: patient.email || 'Non renseigné',
+        address: `${patient.adresse || ''} ${patient.code_postal ? patient.code_postal + ' ' : ''}${patient.ville || ''}`.trim() || 'Non renseigné',
+        numero_dossier: patient.numero_dossier || 'N/A',
+        rawData: patient // Keep the raw data in case we need it
+      }));
+      
+      console.log('Formatted patients:', formattedPatients);
+      setPatients(formattedPatients);
+      return formattedPatients;
+    } catch (error) {
+      console.error('Erreur lors du chargement des patients:', error);
+      console.error('Détails de l\'erreur:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status
+      });
+      setPatients([]);
+      return [];
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fonction pour charger les détails complets d'un patient
+  const loadPatientDetails = async (patientId) => {
+    setLoadingDetails(true);
+    try {
+      const [
+        resumeMedical,
+        rendezVous,
+        prochainRdv,
+        documents
+      ] = await Promise.allSettled([
+        getResumeMedical(patientId),
+        getPatientRendezVous(patientId),
+        getProchainRendezVous(patientId),
+        getDocumentsRecents(patientId)
+      ]);
+
+      const details = {
+        resumeMedical: resumeMedical.status === 'fulfilled' ? resumeMedical.value : null,
+        rendezVous: rendezVous.status === 'fulfilled' ? rendezVous.value.data || [] : [],
+        prochainRdv: prochainRdv.status === 'fulfilled' ? prochainRdv.value.data : null,
+        documents: documents.status === 'fulfilled' ? documents.value.data || [] : []
+      };
+
+      setPatientDetails(details);
+    } catch (error) {
+      console.error('Erreur lors du chargement des détails:', error);
+      setPatientDetails(null);
+    } finally {
+      setLoadingDetails(false);
+    }
+  };
+
+  // Gestion des modals
+  const openPatientModal = async (patient) => {
     setModalPatient(patient);
     setShowPatientModal(true);
-  }
-  function closePatientModal() {
+    await loadPatientDetails(patient.id || patient._id);
+  };
+
+  const closePatientModal = () => {
     setShowPatientModal(false);
     setModalPatient(null);
-  }
-  function openEditModal(patient) {
+    setPatientDetails(null);
+  };
+
+  const openEditModal = (patient) => {
     setEditPatient(patient);
     setShowEditModal(true);
-  }
-  function closeEditModal() {
+  };
+
+  const closeEditModal = () => {
     setShowEditModal(false);
     setEditPatient(null);
-  }
-  function openShareModal(patient) {
+  };
+
+  const openShareModal = (patient) => {
     setSharePatient(patient);
     setShowShareModal(true);
-  }
-  function closeShareModal() {
+  };
+
+  const closeShareModal = () => {
     setShowShareModal(false);
     setSharePatient(null);
-  }
-  function openAddModal() {
+  };
+
+  const openAddModal = () => {
     setShowAddModal(true);
-  }
-  function closeAddModal() {
+  };
+
+  const closeAddModal = () => {
     setShowAddModal(false);
-  }
+  };
+
+  // Fonction pour filtrer les patients selon la recherche (commentée car non utilisée pour l'instant)
+  // const filteredPatients = patients.filter(patient => {
+  //   const searchLower = search.toLowerCase();
+  //   const patientName = `${patient.nom || ''} ${patient.prenom || ''}`.toLowerCase();
+  //   return patientName.includes(searchLower);
+  // });
+
+  // Formatage des données patient pour l'affichage
+  const formatPatientData = (patient) => ({
+    id: patient.id_patient,
+    name: `${patient.prenom || ''} ${patient.nom || ''}`.trim(),
+    birth: patient.date_naissance ? new Date(patient.date_naissance).toLocaleDateString('fr-FR') : 'Non renseigné',
+    status: patient.statut || 'Actif',
+    statusColor: (patient.statut === 'actif' || patient.statut === 'Actif') ? 'green' : 'red',
+    lastConsult: patient.date_derniere_consultation 
+      ? new Date(patient.date_derniere_consultation).toLocaleDateString('fr-FR')
+      : 'Aucune',
+    gender: patient.sexe === 'M' ? 'Homme' : 'Femme',
+    blood: patient.groupe_sanguin || 'Non renseigné',
+    phone: patient.telephone || 'Non renseigné',
+    email: patient.email || 'Non renseigné',
+    address: `${patient.adresse || ''} ${patient.code_postal || ''} ${patient.ville || ''}`.trim(),
+    numero_dossier: patient.numero_dossier,
+    rawData: patient // Keep the raw data in case we need it
+  });
+
+  const calculateAge = (birthDate) => {
+    if (!birthDate) return null;
+    const today = new Date();
+    const birth = new Date(birthDate);
+    let age = today.getFullYear() - birth.getFullYear();
+    const monthDiff = today.getMonth() - birth.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+      age--;
+    }
+    return age;
+  };
 
   return (
     <div className="bg-gray-100 min-h-screen">
@@ -292,43 +298,53 @@ function DossierPatient() {
                 <button className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700" onClick={openAddModal}>+ Ajouter un patient</button>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {patients.map((p, idx) => (
-                  <div key={idx} className="patient-card bg-white rounded-lg shadow-md p-4 relative transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
-                    <div className="flex justify-between items-start mb-3">
-                      <div>
-                        <h3 className="font-bold text-lg">{p.name}</h3>
-                        <p className="text-gray-500 text-sm">Né le {p.birth}</p>
+                {Array.isArray(patients) && patients.length > 0 ? (
+                  patients.map((p, idx) => (
+                    <div key={idx} className="patient-card bg-white rounded-lg shadow-md p-4 relative transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
+                      <div className="flex justify-between items-start mb-3">
+                        <div>
+                          <h3 className="font-bold text-lg">{p.name || 'Nom inconnu'}</h3>
+                          <p className="text-gray-500 text-sm">Né le {p.birth || 'Date inconnue'}</p>
+                        </div>
+                        <span className={`bg-${p.statusColor || 'gray'}-100 text-${p.statusColor || 'gray'}-800 text-xs px-2 py-1 rounded-md`}>
+                          {p.status || 'Inconnu'}
+                        </span>
                       </div>
-                      <span className={`bg-${p.statusColor}-100 text-${p.statusColor}-800 text-xs px-2 py-1 rounded-md`}>
-                        {p.status}
-                      </span>
+                      {p.specialties && p.specialties.length > 0 && (
+                        <div className="flex items-center space-x-2 mb-3">
+                          {p.specialties.map((spec, i) => (
+                            <span key={i} className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-md">
+                              {spec}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      <p className="text-gray-700 mb-4">Dernière consultation: {p.lastConsult || 'Aucune'}</p>
+                      <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3 justify-end">
+                        <button className="text-blue-600 hover:text-blue-800" onClick={() => openPatientModal(p)}>
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                          </svg>
+                        </button>
+                        <button className="text-yellow-600 hover:text-yellow-800" onClick={() => openEditModal(p)}>
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+                        <button className="text-green-600 hover:text-green-800" onClick={() => openShareModal(p)}>
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                          </svg>
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex items-center space-x-2 mb-3">
-                      {p.specialties?.map((spec, i) => (
-                        <span key={i} className={`bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-md`}>{spec}</span>
-                      ))}
-                    </div>
-                    <p className="text-gray-700 mb-4">Dernière consultation: {p.lastConsult}</p>
-                    <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3 justify-end">
-                      <button className="text-blue-600 hover:text-blue-800" onClick={()=>openPatientModal(p)}>
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                        </svg>
-                      </button>
-                      <button className="text-yellow-600 hover:text-yellow-800" onClick={()=>openEditModal(p)}>
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                        </svg>
-                      </button>
-                      <button className="text-green-600 hover:text-green-800" onClick={()=>openShareModal(p)}>
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-                        </svg>
-                      </button>
-                    </div>
+                  ))
+                ) : (
+                  <div className="col-span-3 text-center py-10 text-gray-500">
+                    Aucun patient trouvé. Essayez de rafraîchir la page ou d'ajouter un nouveau patient.
                   </div>
-                ))}
+                )}
               </div>
             </div>
           )}
@@ -350,12 +366,12 @@ function DossierPatient() {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {sharedFolders.map((sf, idx) => (
+                    {sharedFolders && sharedFolders.map((sf, idx) => (
                       <tr key={idx}>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center">
                             <div className="flex-shrink-0 h-10 w-10">
-                              <img className="h-10 w-10 rounded-full" src={sf.patient.image || "https://placehold.co/40"} alt={`Photo de ${sf.patient.name}`}/>
+                              <img className="h-10 w-10 rounded-full" src={sf.patient.image || "https://placehold.co/40"} alt=""/>
                             </div>
                             <div className="ml-4">
                               <div className="text-sm font-medium text-gray-900">{sf.patient.name}</div>
@@ -410,7 +426,7 @@ function DossierPatient() {
                             <td className="px-6 py-4 whitespace-nowrap">
                               <div className="flex items-center">
                                 <div className="flex-shrink-0 h-10 w-10">
-                                  <img className="h-10 w-10 rounded-full" src={rule.consultant.image} alt={`Photo du ${rule.consultant.name}`}/>
+                                  <img className="h-10 w-10 rounded-full" src="https://placehold.co/40" alt=""/>
                                 </div>
                                 <div className="ml-4">
                                   <div className="text-sm font-medium text-gray-900">{rule.consultant.name}</div>
@@ -516,7 +532,7 @@ function DossierPatient() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
               <div className="md:col-span-1">
                 <div className="bg-blue-50 rounded-lg p-4 text-center">
-                  <img src={modalPatient.image || "https://placehold.co/150"} alt={`Photo du patient ${modalPatient.name}`} className="rounded-full mx-auto mb-4"/>
+                  <img src={modalPatient.image || "https://placehold.co/150"} alt="" className="rounded-full mx-auto mb-4"/>
                   <h3 className="text-xl font-bold">{modalPatient.name}</h3>
                   <p className="text-gray-600 mb-2">Né le {modalPatient.birth} {modalPatient.age && `(${modalPatient.age} ans)`}</p>
                   <p className="text-gray-600 mb-4">Groupe sanguin: {modalPatient.blood || "?"}</p>

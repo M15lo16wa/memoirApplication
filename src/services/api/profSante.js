@@ -23,77 +23,58 @@ api.interceptors.request.use(
             config.headers.Authorization = `Bearer ${token}`;
             usedToken = token;
         }
-        console.log('[patientApi] Token utilisé pour Authorization:', usedToken);
+        console.log('[adminApi] Token utilisé pour Authorization:', usedToken);
         return config;
     },
     (error) => Promise.reject(error)
 );
 
-// 1-) affichage de tous les patients
-export const getPatients = async () => {
-    try {
-        const response = await api.get(`/patient`);
-        return response.data;
-    } catch (error) {
-        throw error;
-    }
-};
-
-// 2-) affichage d'un patient
-export const getPatient = async(id) => {
+// 1-)affichage des professionnels de sante
+export const getProfSante = async () => {
     try{
-        const response = await api.get(`/patient/${id}`);
+        const response = await api.get('/professionnelSante');
         return response.data;
     }catch(error){
         throw error;
     }
-};
+}
 
-// 3-) creation d'un patient
-export const createPatient = async(patient) => {
+// 2-)affichage d'un professionnel de sante
+export const getProfSanteById = async (id) => {
     try{
-        const response = await api.post(`/patient`, patient);
+        const response = await api.get(`/professionnelSante/${id}`);
         return response.data;
     }catch(error){
         throw error;
     }
-};
+}
 
-// 4-) mise a jour d'un patient
-export const updatePatient = async(id, patient) => {
+// 3-)creation d'un professionnel de sante
+export const createProfSante = async (profSante) => {
     try{
-        const response = await api.put(`/patient/${id}`, patient);
+        const response = await api.post('/professionnelSante', profSante);
         return response.data;
     }catch(error){
         throw error;
     }
-};
+}
 
-// 5-) suppression d'un patient
-export const deletePatient = async(id) => {
+// 4-)modification d'un professionnel de sante
+export const updateProfSante = async (id, profSante) => {
     try{
-        const response = await api.delete(`/patient/${id}`);
+        const response = await api.put(`/professionnelSante/${id}`, profSante);
         return response.data;
     }catch(error){
         throw error;
     }
-};
+}
 
-// 6-) connexion d'un patient
-export const loginPatient = async(patient) => {
+// 5-)suppression d'un professionnel de sante
+export const deleteProfSante = async (id) => {
     try{
-        const response = await api.post(`/patient/auth/login`, patient);
+        const response = await api.delete(`/professionnelSante/${id}`);
         return response.data;
     }catch(error){
         throw error;
     }
-};
-
-export default {
-    getPatients,
-    getPatient,
-    createPatient,
-    updatePatient,
-    deletePatient,
-    loginPatient   
-};
+}

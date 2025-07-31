@@ -63,15 +63,39 @@ function Connexion() {
             // ROUTE 1: Patient -> /patient/auth/login
             if (selectedProfile === 'patient') {
                 console.log('🔵 Connexion PATIENT via /patient/auth/login');
-                userData = await loginPatient(identifiant);
-                console.log('✅ Données patient reçues:', userData);
-                navigate('/dossier-medical');
+                const response = await loginPatient(identifiant);
+                console.log('✅ Réponse complète de connexion patient:', response);
+                
+                // Stocker le token et les données du patient
+                if (response.token) {
+                    localStorage.setItem('jwt', response.token); // <-- correction ici
+                    // Stocker les données du patient en retirant le token pour éviter les doublons
+                    const { token, ...patientData } = response;
+                    localStorage.setItem('patient', JSON.stringify(patientData));
+                    
+                    // Redirection vers la page dossier-medical
+                    console.log('🔑 Token stocké, redirection vers /dossier-medical');
+                    navigate('/dossier-medical');
+                } else {
+                    throw new Error('Aucun token reçu lors de la connexion');
+                }
                 
             // ROUTE 2: Médecin -> /ProfessionnelSante/auth/login  
             } else if (selectedProfile === 'professionnel' && selectedProfessional === 'medecin') {
                 console.log('🟢 Connexion MÉDECIN via /ProfessionnelSante/auth/login');
+                console.log('📤 Identifiants envoyés:', identifiant);
                 userData = await loginMedecin(identifiant);
                 console.log('✅ Données médecin reçues:', userData);
+                console.log('🔑 Token stocké:', localStorage.getItem('token'));
+                console.log('👨‍⚕️ Données médecin stockées:', localStorage.getItem('medecin'));
+                
+                // Debug: afficher tout le localStorage
+                console.log('🔍 Contenu complet du localStorage:');
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i);
+                    console.log(`  - ${key}:`, localStorage.getItem(key));
+                }
+                
                 navigate('/medecin');
                 
             // ROUTE 3: Admin/Secrétaire -> /auth/login

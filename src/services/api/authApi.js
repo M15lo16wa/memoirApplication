@@ -13,35 +13,50 @@ const api = axios.create({
 // Intercepteur pour ajouter le token à chaque requête
 api.interceptors.request.use(
     (config) => {
-        const token = localStorage.getItem('token');
-        if (token) {
-            config.headers.Authorization = `Bearer ${token}`;
+        // Prioriser le token JWT pour les patients
+        const jwtToken = localStorage.getItem('jwt');
+        const generalToken = localStorage.getItem('token');
+        
+        // Pour les routes médecin, utiliser le token général
+        if (config.url && config.url.includes('/ProfessionnelSante/')) {
+            if (generalToken) {
+                config.headers.Authorization = `Bearer ${generalToken}`;
+            }
+        } else if (jwtToken) {
+            // Pour les autres routes, prioriser le JWT
+            config.headers.Authorization = `Bearer ${jwtToken}`;
+        } else if (generalToken) {
+            config.headers.Authorization = `Bearer ${generalToken}`;
         }
         return config;
     },
     (error) => Promise.reject(error)
 );
 
-// Interceptor to handle 401 errors (unauthorized) patient
+// Interceptor pour gérer les erreurs d'authentification
 api.interceptors.response.use(
     (response) => response,
     (error) => {
-      if (error.response?.status === 401) {
-        localStorage.removeItem("jwt");
-        localStorage.removeItem("token");
-        localStorage.removeItem("medecin");
-        localStorage.removeItem("patient");
-        window.location = "/connexion";
-      }
-      return Promise.reject(error);
+        // On laisse la gestion du 401 au composant appelant
+        return Promise.reject(error);
     }
-  );
+);
 
-// 1-) connexion d'un utilisateur
+// Fonction utilitaire pour nettoyer les données d'authentification
+const clearAuthData = () => {
+    localStorage.removeItem("jwt");
+    localStorage.removeItem("token");
+    localStorage.removeItem("medecin");
+    localStorage.removeItem("patient");
+};
+
+// ================================
+// AUTHENTIFICATION GÉNÉRALE
+// ================================
+
 export const login = async (identifiant) => {
     try {
         const response = await api.post(`/auth/login`, identifiant);
-        // Stocker le token dans localStorage
         if (response.data.token) {
             localStorage.setItem('token', response.data.token);
         }
@@ -51,45 +66,37 @@ export const login = async (identifiant) => {
     }
 };
 
-// Vérifier si l'utilisateur est authentifié
-export const isAuthenticated = () => {
-    return !!localStorage.getItem('token');
-};
-
-// 2-) inscription d'un utilisateur
-export const register = async(user) => {
-    try{
-        const response = await api.post(`/auth/register`,  {user});
+export const register = async (user) => {
+    try {
+        const response = await api.post(`/auth/register`, { user });
         return response.data;
-    }catch(error){
+    } catch (error) {
         throw error.response?.data?.message || "Erreur d'inscription";
     }
 };
 
-// 3-) deconnexion d'un utilisateur
 export const logout = async () => {
     try {
         const response = await api.post("/auth/logout");
-        // Stockes d'un token :
         localStorage.removeItem("token");
-        console.log("Deconnexion reussie");
+        console.log("Déconnexion réussie");
         return response.data;
     } catch (error) {
-        throw error.response?.data?.message || "Erreur de deconnexion";
+        // Nettoyer même en cas d'erreur
+        localStorage.removeItem("token");
+        throw error.response?.data?.message || "Erreur de déconnexion";
     }
 };
 
-// 4-) informations sur la session d'un utilisateur
-export const me = async() => {
-    try{
+export const me = async () => {
+    try {
         const response = await api.get(`/auth/me`);
         return response.data;
-    }catch(error){
+    } catch (error) {
         throw error.response?.data?.message || "Erreur de récupération des informations de la session";
     }
 };
 
-// 5-) modification du mot de passe d'un utilisateur
 export const changePassword = async (user) => {
     try {
         const response = await api.put(`/auth/change-password`, { user });
@@ -99,106 +106,216 @@ export const changePassword = async (user) => {
     }
 };
 
-// authentification pour le patient
-// 1-) Authentification pour le patient
+export const isAuthenticated = () => {
+    return !!(localStorage.getItem('token') || localStorage.getItem('jwt'));
+};
+
+// ================================
+// AUTHENTIFICATION PATIENT
+// ================================
+
 export const loginPatient = async (identifiant) => {
     try {
-      const response = await api.post(`/patient/auth/login`, identifiant);
-      const { token, data } = response.data;
-      
-      if (token) {
-        localStorage.setItem("jwt", token);
-        localStorage.setItem("patient", JSON.stringify(data.patient));
-      }
-      
-      return data.patient; // Returns patient data including numero_dossier
-    } catch (error) {
-      throw error.response?.data?.message || "Erreur de connexion";
-    }
-  };
-
-  // 2-)Récupération du profil patient
-export const getPatientProfile = async () => {
-    try {
-      const response = await api.get(`/patient/auth/me`);
-      const { data } = response.data;
-      
-      // Update stored patient data
-      localStorage.setItem("patient", JSON.stringify(data.patient));
-      
-      return data.patient; // Return patient data including numero_dossier
-    } catch (error) {
-      throw error.response?.data?.message || "Erreur de récupération du profil patient";
-    }
-  };
-
-// 3-)  deconnexion du profil patient
-  export const logoutPatient = async () => {
-    try {
-      await api.post(`/patient/auth/logout`);
-      localStorage.removeItem("jwt");
-      localStorage.removeItem("patient");
-    } catch (error) {
-      console.error("Erreur lors de la déconnexion :", error);
-      // Remove token and patient data even if the request fails
-      localStorage.removeItem("jwt");
-      localStorage.removeItem("patient");
-    }
-  };
-
-// 4-) Récupéreration des données du patient depuis localStorage
-export const getStoredPatient = () => {
-    const patient = localStorage.getItem("patient");
-    return patient ? JSON.parse(patient) : null;
-  };
-
-// authentification pour le professionnel de santé
-export const loginMedecin = async (identifiant) => {
-    try {
-        const response = await api.post(`/ProfessionnelSante/auth/login`, identifiant);
-        // Stocker le token si présent
-        if (response.data.token) {
-            localStorage.setItem('token', response.data.token);
+        const response = await api.post(`/patient/auth/login`, identifiant);
+        const { token, data } = response.data;
+        if (token && data && data.patient) {
+            localStorage.setItem("jwt", token);
+            localStorage.setItem("patient", JSON.stringify(data.patient));
         }
         return response.data;
     } catch (error) {
-        throw error.response?.data?.message || "Erreur de connexion";
+        throw error.response?.data?.message || "Erreur de connexion patient";
     }
 };
 
-// recuperation du profil professionnel de santé
+export const getPatientProfile = async () => {
+    try {
+        const response = await api.get(`/patient/auth/me`);
+        const patientProfile = response.data;
+        if (patientProfile && patientProfile.data && patientProfile.data.patient) {
+            localStorage.setItem("patient", JSON.stringify(patientProfile.data.patient));
+            return patientProfile.data.patient;
+        }
+        return null;
+    } catch (error) {
+        console.error("Erreur lors de la récupération du profil patient:", error);
+        if (error.response?.status === 401) {
+            localStorage.removeItem("jwt");
+            localStorage.removeItem("patient");
+        }
+        throw error;
+    }
+};
+
+export const logoutPatient = async () => {
+    try {
+        await api.post(`/patient/auth/logout`);
+    } catch (error) {
+        console.error("Erreur lors de la déconnexion patient:", error);
+    } finally {
+        // Nettoyer les données même en cas d'erreur
+        localStorage.removeItem("jwt");
+        localStorage.removeItem("patient");
+    }
+};
+
+export const getStoredPatient = () => {
+    const patient = localStorage.getItem("patient");
+    return patient ? JSON.parse(patient) : null;
+};
+
+export const isPatientAuthenticated = () => {
+    const token = localStorage.getItem('jwt');
+    const patient = getStoredPatient();
+    return !!(token && patient);
+};
+
+// ================================
+// AUTHENTIFICATION PROFESSIONNEL DE SANTÉ
+// ================================
+
+export const loginMedecin = async (identifiant) => {
+    try {
+        // Nettoyer les tokens existants pour éviter les conflits
+        localStorage.removeItem('jwt');
+        
+        const response = await api.post(`/ProfessionnelSante/auth/login`, identifiant);
+        console.log('🔍 Réponse complète du serveur:', response.data);
+        
+        if (response.data.token) {
+            localStorage.setItem('token', response.data.token);
+        }
+        
+        // Stocker les données du médecin - analyser la structure exacte
+        let medecinData = null;
+        
+        // Log détaillé de la structure
+        console.log('📊 Structure de la réponse:');
+        console.log('  - response.data:', response.data);
+        console.log('  - response.data.data:', response.data.data);
+        console.log('  - response.data.data.professionnel:', response.data.data?.professionnel);
+        console.log('  - response.data.data.medecin:', response.data.data?.medecin);
+        
+        // Essayer différentes structures possibles
+        if (response.data.medecin) {
+            medecinData = response.data.medecin;
+            console.log('✅ Données trouvées dans response.data.medecin');
+        } else if (response.data.professionnel) {
+            medecinData = response.data.professionnel;
+            console.log('✅ Données trouvées dans response.data.professionnel');
+        } else if (response.data.data && response.data.data.professionnel) {
+            medecinData = response.data.data.professionnel;
+            console.log('✅ Données trouvées dans response.data.data.professionnel');
+        } else if (response.data.data && response.data.data.medecin) {
+            medecinData = response.data.data.medecin;
+            console.log('✅ Données trouvées dans response.data.data.medecin');
+        } else if (response.data.data) {
+            // Si data existe mais pas de sous-propriété spécifique, utiliser data directement
+            medecinData = response.data.data;
+            console.log('✅ Utilisation de response.data.data directement');
+        }
+        
+        if (medecinData) {
+            console.log('✅ Données médecin extraites:', medecinData);
+            
+            // Vérifier si les données contiennent les informations nécessaires
+            if (!medecinData.nom && !medecinData.prenom) {
+                console.log('⚠️ Données extraites mais nom/prénom manquants, recherche dans la structure...');
+                
+                // Chercher dans les propriétés imbriquées
+                const allKeys = Object.keys(medecinData);
+                console.log('🔍 Toutes les clés disponibles:', allKeys);
+                
+                // Essayer de trouver les informations dans d'autres propriétés
+                for (const key of allKeys) {
+                    const value = medecinData[key];
+                    if (typeof value === 'object' && value !== null) {
+                        console.log(`🔍 Exploration de ${key}:`, value);
+                        if (value.nom || value.prenom || value.specialite) {
+                            medecinData = { ...medecinData, ...value };
+                            console.log('✅ Informations trouvées dans', key, ':', value);
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            localStorage.setItem('medecin', JSON.stringify(medecinData));
+        } else {
+            console.log('⚠️ Aucune donnée médecin trouvée dans la réponse');
+            
+            // Essayer d'extraire les informations du token
+            if (response.data.token) {
+                const tokenInfo = extractMedecinFromToken(response.data.token);
+                if (tokenInfo) {
+                    console.log('✅ Utilisation des informations du token');
+                    localStorage.setItem('medecin', JSON.stringify(tokenInfo));
+                } else {
+                    // Créer un objet médecin minimal
+                    const minimalMedecin = {
+                        id: response.data.data?.professionnel_id || response.data.data?.medecin_id || 'unknown',
+                        nom: 'Médecin',
+                        prenom: 'Connecté',
+                        role: 'medecin',
+                        specialite: 'Généraliste'
+                    };
+                    localStorage.setItem('medecin', JSON.stringify(minimalMedecin));
+                    console.log('📦 Médecin minimal créé:', minimalMedecin);
+                }
+            } else {
+                // Créer un objet médecin minimal
+                const minimalMedecin = {
+                    id: response.data.data?.professionnel_id || response.data.data?.medecin_id || 'unknown',
+                    nom: 'Médecin',
+                    prenom: 'Connecté',
+                    role: 'medecin',
+                    specialite: 'Généraliste'
+                };
+                localStorage.setItem('medecin', JSON.stringify(minimalMedecin));
+                console.log('📦 Médecin minimal créé:', minimalMedecin);
+            }
+        }
+        
+        return response.data;
+    } catch (error) {
+        throw error.response?.data?.message || "Erreur de connexion médecin";
+    }
+};
+
 export const getMedecinProfile = async () => {
     try {
         const response = await api.get(`/ProfessionnelSante/auth/me`);
+        // On s'assure de la structure
+        const professionnel = response.data?.data?.professionnel || response.data?.professionnel;
+        if (professionnel) {
+            localStorage.setItem('medecin', JSON.stringify(professionnel));
+        }
         return response.data;
     } catch (error) {
-        throw error.response?.data?.message || "Erreur de récupération du profil médecin";
+        // Ne pas lancer d'erreur pour éviter la déconnexion automatique
+        // Retourner les données stockées localement si disponibles
+        const storedMedecin = getStoredMedecin();
+        if (storedMedecin) {
+            return { data: { professionnel: storedMedecin } };
+        }
+        throw error;
     }
 };
 
-// 5-) deconnexion du profil professionnel de santé
 export const logoutMedecin = async () => {
     try {
         await api.post(`/ProfessionnelSante/auth/logout`);
-        localStorage.removeItem("token");
+        console.log("✅ Déconnexion médecin réussie côté serveur");
     } catch (error) {
-        console.error("Erreur lors de la déconnexion :", error);
-        // Remove token even if the request fails
+        console.error("Erreur lors de la déconnexion médecin:", error);
+    } finally {
+        // Nettoyer les données même en cas d'erreur
         localStorage.removeItem("token");
+        localStorage.removeItem("medecin");
+        console.log("🗑️ Token et données médecin supprimés du localStorage");
     }
 };
 
-// 6-) informations sur la session d'un professionnel de santé
-export const meMedecin = async () => {
-    try {
-        const response = await api.get(`/ProfessionnelSante/auth/me`);
-        return response.data;
-    } catch (error) {
-        throw error.response?.data?.message || "Erreur de récupération des informations de la session";
-    }
-};
-
-// 7-) modification du mot de passe d'un professionnel de santé
 export const changePasswordMedecin = async (user) => {
     try {
         const response = await api.put(`/ProfessionnelSante/auth/change-password`, { user });
@@ -208,16 +325,159 @@ export const changePasswordMedecin = async (user) => {
     }
 };
 
+export const getStoredMedecin = () => {
+    const medecin = localStorage.getItem("medecin");
+    return medecin ? JSON.parse(medecin) : null;
+};
+
+export const isMedecinAuthenticated = () => {
+    const token = localStorage.getItem('token');
+    const medecin = getStoredMedecin();
+    
+    console.log('🔍 Vérification authentification médecin:');
+    console.log('  - Token:', token ? '✅ Présent' : '❌ Absent');
+    console.log('  - Données médecin:', medecin ? '✅ Présentes' : '❌ Absentes');
+    console.log('  - Données médecin détaillées:', medecin);
+    
+    const isAuth = !!(token && medecin);
+    console.log('  - Résultat authentification:', isAuth ? '✅ Authentifié' : '❌ Non authentifié');
+    
+    return isAuth;
+};
+
+// Fonction pour récupérer les informations complètes du médecin
+export const fetchMedecinDetails = async () => {
+    try {
+        console.log('🔍 Récupération des détails du médecin...');
+        const response = await api.get(`/ProfessionnelSante/profile`);
+        console.log('✅ Détails médecin reçus:', response.data);
+        
+        if (response.data && response.data.professionnel) {
+            const medecinData = response.data.professionnel;
+            localStorage.setItem('medecin', JSON.stringify(medecinData));
+            console.log('✅ Données médecin mises à jour:', medecinData);
+            return medecinData;
+        }
+        
+        return null;
+    } catch (error) {
+        console.error('❌ Erreur lors de la récupération des détails:', error);
+        return null;
+    }
+};
+
+// ================================
+// UTILITAIRES
+// ================================
+
+// Fonction pour déterminer le type d'utilisateur connecté
+export const getUserType = () => {
+    if (isPatientAuthenticated()) return 'patient';
+    if (isMedecinAuthenticated()) return 'medecin';
+    if (isAuthenticated()) return 'user';
+    return null;
+};
+
+// Fonction pour obtenir les données de l'utilisateur connecté
+export const getCurrentUser = () => {
+    const userType = getUserType();
+    
+    switch (userType) {
+        case 'patient':
+            return { type: 'patient', data: getStoredPatient() };
+        case 'medecin':
+            return { type: 'medecin', data: getStoredMedecin() };
+        default:
+            return null;
+    }
+};
+
+// Déconnexion universelle
+export const logoutAll = async () => {
+    const userType = getUserType();
+    
+    try {
+        switch (userType) {
+            case 'patient':
+                await logoutPatient();
+                break;
+            case 'medecin':
+                await logoutMedecin();
+                break;
+            default:
+                await logout();
+                break;
+        }
+    } catch (error) {
+        console.error("Erreur lors de la déconnexion:", error);
+    } finally {
+        clearAuthData();
+    }
+};
+
+// Fonction pour décoder un token JWT
+const decodeJWT = (token) => {
+    try {
+        const base64Url = token.split('.')[1];
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+        }).join(''));
+        return JSON.parse(jsonPayload);
+    } catch (error) {
+        console.error('Erreur lors du décodage du JWT:', error);
+        return null;
+    }
+};
+
+// Fonction pour extraire les informations du médecin depuis le token
+const extractMedecinFromToken = (token) => {
+    const decoded = decodeJWT(token);
+    if (decoded) {
+        console.log('🔍 Token décodé:', decoded);
+        
+        // Chercher les informations du médecin dans le token
+        const medecinInfo = {
+            id: decoded.professionnel_id || decoded.medecin_id || decoded.id,
+            role: decoded.role || 'medecin',
+            // Autres informations qui pourraient être dans le token
+            ...decoded
+        };
+        
+        console.log('✅ Informations extraites du token:', medecinInfo);
+        return medecinInfo;
+    }
+    return null;
+};
+
 export default {
+    // Authentification générale
     login,
     register,
     logout,
     me,
     changePassword,
+    isAuthenticated,
+    
+    // Authentification patient
     loginPatient,
     getPatientProfile,
     logoutPatient,
     getStoredPatient,
+    isPatientAuthenticated,
+    
+    // Authentification médecin
     loginMedecin,
-    getMedecinProfile
+    getMedecinProfile,
+    logoutMedecin,
+    getStoredMedecin,
+    isMedecinAuthenticated,
+    changePasswordMedecin,
+    fetchMedecinDetails,
+    
+    // Utilitaires
+    getUserType,
+    getCurrentUser,
+    logoutAll,
+    clearAuthData
 };
