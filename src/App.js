@@ -11,7 +11,12 @@ import DossierPatient from './pages/dossierPatient';
 import FicheInscription from './pages/ficheInscription';
 
 // protection des routes
-import ProtectedRoute from './services/api/protectedRoute';
+import { 
+  ProtectedRoute, 
+  ProtectedMedecinRoute, 
+  ProtectedPatientRoute,
+  ProtectedMedecinOrPatientRoute 
+} from './services/api/protectedRoute';
 
 
 function App() {
@@ -19,13 +24,21 @@ function App() {
     <Routes>
       <Route path="/" element={<HomePage />} />
       <Route path="/connexion" element={<Connexion />} />
-      <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
-      <Route path="/rendezVous" element={<RendezVous />}/>
-      <Route path="/utilisateurs" element={<ProtectedRoute><Utilisateurs /></ProtectedRoute>} />
-      <Route path="/dossier-medical" element={<ProtectedRoute><DossierMedical /></ProtectedRoute>} />
-      <Route path='/medecin' element={<ProtectedRoute><Medecin/></ProtectedRoute>}/>
-      <Route path='/consultation' element={<ProtectedRoute><Consultation/></ProtectedRoute>}/>
-      <Route path='/dossier-patient' element={<ProtectedRoute><DossierPatient/></ProtectedRoute>}/>
+      
+      {/* Routes pour les médecins uniquement */}
+      <Route path="/admin" element={<ProtectedMedecinRoute><Admin /></ProtectedMedecinRoute>} />
+      <Route path="/utilisateurs" element={<ProtectedMedecinRoute><Utilisateurs /></ProtectedMedecinRoute>} />
+      <Route path='/medecin' element={<ProtectedMedecinRoute><Medecin/></ProtectedMedecinRoute>}/>
+      <Route path='/consultation' element={<ProtectedMedecinRoute><Consultation/></ProtectedMedecinRoute>}/>
+      
+      {/* Routes pour les patients uniquement */}
+      <Route path="/dossier-medical" element={<ProtectedPatientRoute><DossierMedical /></ProtectedPatientRoute>} />
+      
+      {/* Routes accessibles aux médecins ET aux patients */}
+      <Route path="/rendezVous" element={<ProtectedMedecinOrPatientRoute><RendezVous /></ProtectedMedecinOrPatientRoute>}/>
+      <Route path='/dossier-patient' element={<ProtectedMedecinOrPatientRoute><DossierPatient /></ProtectedMedecinOrPatientRoute>}/>
+      
+      {/* Routes publiques */}
       <Route path='/fiche-inscription' element={<FicheInscription/>}/>
     </Routes>
   );

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { QRCodeCanvas } from 'qrcode.react';
 
@@ -652,7 +652,7 @@ function DossierPatient() {
       loadResumeAujourdhui();
       loadNotifications();
     }
-  }, [activeTab]);
+  }, [activeTab, loadPrescriptions]);
 
   const loadPatients = async () => {
     setLoading(true);
@@ -771,7 +771,7 @@ function DossierPatient() {
   };
 
   // Fonctions pour l'onglet prescription
-  const loadPrescriptions = async () => {
+  const loadPrescriptions = useCallback(async () => {
     setPrescriptionsLoading(true);
     try {
       // Vérifier si un patient est sélectionné
@@ -792,7 +792,7 @@ function DossierPatient() {
     } finally {
       setPrescriptionsLoading(false);
     }
-  };
+  }, [selectedPatientForPrescription]);
 
   const openPrescriptionModal = (patient = null) => {
     if (patient) {

@@ -1,6 +1,6 @@
 import React from "react";
 import MedHeader from "../components/layout/headerMed";
-import ProtectedMedecinRoute from "../services/api/protectedRoute";
+import { ProtectedMedecinRoute } from "../services/api/protectedRoute";
 
 function Medecin() {
     return (

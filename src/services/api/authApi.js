@@ -116,14 +116,42 @@ export const isAuthenticated = () => {
 
 export const loginPatient = async (identifiant) => {
     try {
+        console.log('🔵 Tentative de connexion patient avec:', identifiant);
         const response = await api.post(`/patient/auth/login`, identifiant);
-        const { token, data } = response.data;
-        if (token && data && data.patient) {
-            localStorage.setItem("jwt", token);
-            localStorage.setItem("patient", JSON.stringify(data.patient));
+        console.log('🔵 Réponse complète du serveur:', response.data);
+        
+        // Gérer différentes structures de réponse possibles
+        let token = null;
+        let patientData = null;
+        
+        if (response.data.token) {
+            token = response.data.token;
+        } else if (response.data.data && response.data.data.token) {
+            token = response.data.data.token;
         }
+        
+        if (response.data.data && response.data.data.patient) {
+            patientData = response.data.data.patient;
+        } else if (response.data.patient) {
+            patientData = response.data.patient;
+        } else if (response.data.data) {
+            patientData = response.data.data;
+        }
+        
+        console.log('🔵 Token extrait:', token);
+        console.log('🔵 Données patient extraites:', patientData);
+        
+        if (token && patientData) {
+            localStorage.setItem("jwt", token);
+            localStorage.setItem("patient", JSON.stringify(patientData));
+            console.log('🔵 Données stockées dans localStorage');
+        } else {
+            console.error('🔵 Données manquantes - token:', !!token, 'patientData:', !!patientData);
+        }
+        
         return response.data;
     } catch (error) {
+        console.error('🔵 Erreur de connexion patient:', error);
         throw error.response?.data?.message || "Erreur de connexion patient";
     }
 };

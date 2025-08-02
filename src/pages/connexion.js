@@ -66,18 +66,19 @@ function Connexion() {
                 const response = await loginPatient(identifiant);
                 console.log('✅ Réponse complète de connexion patient:', response);
                 
-                // Stocker le token et les données du patient
-                if (response.token) {
-                    localStorage.setItem('jwt', response.token); // <-- correction ici
-                    // Stocker les données du patient en retirant le token pour éviter les doublons
-                    const { token, ...patientData } = response;
-                    localStorage.setItem('patient', JSON.stringify(patientData));
-                    
+                // Vérifier si la connexion a réussi en vérifiant le localStorage
+                const token = localStorage.getItem('jwt');
+                const patientData = localStorage.getItem('patient');
+                
+                console.log('🔑 Token stocké:', token);
+                console.log('👤 Données patient stockées:', patientData);
+                
+                if (token && patientData) {
                     // Redirection vers la page dossier-medical
-                    console.log('🔑 Token stocké, redirection vers /dossier-medical');
+                    console.log('🔑 Token et données patient présents, redirection vers /dossier-medical');
                     navigate('/dossier-medical');
                 } else {
-                    throw new Error('Aucun token reçu lors de la connexion');
+                    throw new Error('Aucun token ou données patient reçus lors de la connexion');
                 }
                 
             // ROUTE 2: Médecin -> /ProfessionnelSante/auth/login  

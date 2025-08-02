@@ -4,7 +4,8 @@ import {
   isMedecinAuthenticated, 
   getStoredMedecin, 
   isPatientAuthenticated, 
-  getStoredPatient 
+  getStoredPatient,
+  getUserType
 } from './authApi';
 
 const LoadingScreen = () => (
@@ -16,81 +17,74 @@ const LoadingScreen = () => (
   </div>
 );
 
-// Route protégée pour les médecins
+// Route protégée intelligente qui détermine automatiquement le type d'utilisateur
+export const ProtectedRoute = ({ children, allowedUserTypes = ['medecin', 'patient'] }) => {
+  const [isLoading, setIsLoading] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [userType, setUserType] = useState(null);
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    const checkAuth = () => {
+      console.log('🔍 ProtectedRoute - Vérification authentification...');
+      
+      const currentUserType = getUserType();
+      const isMedecin = isMedecinAuthenticated();
+      const isPatient = isPatientAuthenticated();
+      
+      console.log('  - Type d\'utilisateur détecté:', currentUserType);
+      console.log('  - Médecin authentifié:', isMedecin);
+      console.log('  - Patient authentifié:', isPatient);
+      console.log('  - Types autorisés:', allowedUserTypes);
+      
+      if (currentUserType && allowedUserTypes.includes(currentUserType)) {
+        console.log('✅ Utilisateur autorisé, affichage du contenu');
+        setIsAuthenticated(true);
+        setUserType(currentUserType);
+      } else {
+        console.log('❌ Accès non autorisé - redirection vers connexion');
+        
+        let message = "Veuillez vous connecter pour accéder à cette page";
+        if (allowedUserTypes.length === 1) {
+          if (allowedUserTypes[0] === 'medecin') {
+            message = "Veuillez vous connecter en tant que médecin pour accéder à cette page";
+          } else if (allowedUserTypes[0] === 'patient') {
+            message = "Veuillez vous connecter pour accéder à votre espace patient";
+          }
+        }
+        
+        navigate("/connexion", { 
+          state: { 
+            from: location.pathname,
+            message: message
+          } 
+        });
+      }
+      setIsLoading(false);
+    };
+
+    checkAuth();
+  }, [navigate, location, allowedUserTypes]);
+
+  if (isLoading) return <LoadingScreen />;
+  return isAuthenticated ? children : null;
+};
+
+// Route protégée spécifiquement pour les médecins
 export const ProtectedMedecinRoute = ({ children }) => {
-  const [isLoading, setIsLoading] = useState(true);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const navigate = useNavigate();
-  const location = useLocation();
-
-  useEffect(() => {
-    const checkAuth = () => {
-      console.log('🔍 ProtectedMedecinRoute - Vérification authentification médecin...');
-      const authenticated = isMedecinAuthenticated();
-      const storedMedecin = getStoredMedecin();
-      
-      console.log('  - isMedecinAuthenticated():', authenticated);
-      console.log('  - getStoredMedecin():', storedMedecin);
-      
-      if (authenticated && storedMedecin) {
-        console.log('✅ Médecin authentifié, affichage du contenu');
-        setIsAuthenticated(true);
-      } else {
-        console.log('❌ Accès non autorisé - redirection vers connexion');
-        navigate("/connexion", { 
-          state: { 
-            from: location.pathname,
-            message: "Veuillez vous connecter en tant que médecin pour accéder à cette page"
-          } 
-        });
-      }
-      setIsLoading(false);
-    };
-
-    checkAuth();
-  }, [navigate, location]);
-
-  if (isLoading) return <LoadingScreen />;
-  return isAuthenticated ? children : null;
+  return <ProtectedRoute allowedUserTypes={['medecin']}>{children}</ProtectedRoute>;
 };
 
-// Route protégée pour les patients
+// Route protégée spécifiquement pour les patients
 export const ProtectedPatientRoute = ({ children }) => {
-  const [isLoading, setIsLoading] = useState(true);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const navigate = useNavigate();
-  const location = useLocation();
-
-  useEffect(() => {
-    const checkAuth = () => {
-      console.log('🔍 ProtectedPatientRoute - Vérification authentification patient...');
-      const authenticated = isPatientAuthenticated();
-      const storedPatient = getStoredPatient();
-      
-      console.log('  - isPatientAuthenticated():', authenticated);
-      console.log('  - getStoredPatient():', storedPatient);
-      
-      if (authenticated && storedPatient) {
-        console.log('✅ Patient authentifié, affichage du contenu');
-        setIsAuthenticated(true);
-      } else {
-        console.log('❌ Accès non autorisé - redirection vers connexion');
-        navigate("/connexion", { 
-          state: { 
-            from: location.pathname,
-            message: "Veuillez vous connecter pour accéder à votre espace patient"
-          } 
-        });
-      }
-      setIsLoading(false);
-    };
-
-    checkAuth();
-  }, [navigate, location]);
-
-  if (isLoading) return <LoadingScreen />;
-  return isAuthenticated ? children : null;
+  return <ProtectedRoute allowedUserTypes={['patient']}>{children}</ProtectedRoute>;
 };
 
-// Export par défaut pour la rétrocompatibilité
-export default ProtectedMedecinRoute;
+// Route protégée pour les médecins ET les patients
+export const ProtectedMedecinOrPatientRoute = ({ children }) => {
+  return <ProtectedRoute allowedUserTypes={['medecin', 'patient']}>{children}</ProtectedRoute>;
+};
+
+// Export par défaut pour la rétrocompatibilité (route intelligente par défaut)
+export default ProtectedRoute;

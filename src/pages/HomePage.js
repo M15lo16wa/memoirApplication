@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 
 import Header from "../components/layout/Header";
 import Footer from "../components/layout/Footer";
+import AuthStatus from "../components/ui/AuthStatus";
 import sante from '../assets/sante.jpg';
 
 function HomePage() {
@@ -13,6 +14,7 @@ function HomePage() {
     return (
         <div>
             <Header/>
+            <AuthStatus />
             {/* section centrale de la page  */}
             <section className="hero-gradient text-white">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-20 md:py-28">

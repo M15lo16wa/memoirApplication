@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { createConsultation, getPatients, getServices } from "../services/api/medicalApi";
+import { createConsultation, getPatients, getServices, getDossierPatient } from "../services/api/medicalApi";
 
 function Consultation() {
     const navigate = useNavigate();
     const [loading, setLoading] = useState(false);
     const [patients, setPatients] = useState([]);
     const [services, setServices] = useState([]);
+    const [selectedPatientDossier, setSelectedPatientDossier] = useState(null);
+    const [loadingDossier, setLoadingDossier] = useState(false);
     const [consultationForm, setConsultationForm] = useState({
         patient_id: '',
         professionnel_sante_id: '', // This should be set from logged-in user
@@ -81,12 +83,39 @@ function Consultation() {
         }
     };
 
-    const handleInputChange = (e) => {
+    const handleInputChange = async (e) => {
         const { name, value, type, checked } = e.target;
         setConsultationForm(prev => ({
             ...prev,
             [name]: type === 'checkbox' ? checked : value
         }));
+
+        // If patient_id is being changed, fetch the patient's dossier
+        if (name === 'patient_id' && value) {
+            setLoadingDossier(true);
+            setSelectedPatientDossier(null);
+            try {
+                console.log('Fetching dossier for patient ID:', value);
+                const dossierData = await getDossierPatient(value);
+                console.log('Raw dossier data from API:', dossierData);
+                
+                if (dossierData && dossierData.data) {
+                    console.log('Setting dossier data:', dossierData.data);
+                    setSelectedPatientDossier(dossierData.data);
+                } else if (dossierData) {
+                    console.log('Setting dossier data directly:', dossierData);
+                    setSelectedPatientDossier(dossierData);
+                } else {
+                    console.log('No dossier data found');
+                    setSelectedPatientDossier(null);
+                }
+            } catch (error) {
+                console.error('Erreur lors de la récupération du dossier patient:', error);
+                setSelectedPatientDossier(null);
+            } finally {
+                setLoadingDossier(false);
+            }
+        }
     };
 
     const calculateIMC = () => {
@@ -116,15 +145,48 @@ function Consultation() {
                 alert('Veuillez saisir le motif de consultation');
                 return;
             }
+            if (!selectedPatientDossier) {
+                alert('Impossible de récupérer le dossier du patient. Veuillez réessayer.');
+                return;
+            }
+
+            // Get dossier_id from the selected patient's dossier
+            console.log('Selected patient dossier structure:', selectedPatientDossier);
+            if (selectedPatientDossier.dossier) {
+                console.log('Dossier object structure:', selectedPatientDossier.dossier);
+                console.log('Available fields in dossier:', Object.keys(selectedPatientDossier.dossier));
+            }
+            
+            // Try multiple possible field names for dossier ID
+            const dossierId = selectedPatientDossier.id || 
+                             selectedPatientDossier.Id || 
+                             selectedPatientDossier.dossier_id || 
+                             selectedPatientDossier.id_dossier ||
+                             selectedPatientDossier.dossierId ||
+                             (selectedPatientDossier.data && selectedPatientDossier.data.id) ||
+                             (selectedPatientDossier.data && selectedPatientDossier.data.dossier_id) ||
+                             (selectedPatientDossier.dossier && selectedPatientDossier.dossier.id) ||
+                             (selectedPatientDossier.dossier && selectedPatientDossier.dossier.dossier_id) ||
+                             (selectedPatientDossier.dossier && selectedPatientDossier.dossier.Id) ||
+                             (selectedPatientDossier.dossier && selectedPatientDossier.dossier.id_dossier);
+            
+            console.log('Extracted dossier ID:', dossierId);
+            
+            if (!dossierId) {
+                console.error('Available fields in selectedPatientDossier:', Object.keys(selectedPatientDossier));
+                alert('Impossible de récupérer l\'ID du dossier patient. Structure des données: ' + JSON.stringify(selectedPatientDossier, null, 2));
+                return;
+            }
 
             // Prepare consultation data for backend
             const consultationData = {
+                dossier_id: dossierId,
                 patient_id: parseInt(consultationForm.patient_id),
                 professionnel_sante_id: parseInt(consultationForm.professionnel_sante_id) || 1, // Default to 1 if not set
                 service_id: parseInt(consultationForm.service_id) || null,
                 date_consultation: consultationForm.date_consultation,
                 heure_consultation: consultationForm.heure_consultation,
-                motif_consultation: consultationForm.motif,
+                motif: consultationForm.motif_consultation, // Map to 'motif' as expected by backend
                 symptomes: consultationForm.symptomes,
                 diagnostic: consultationForm.diagnostic,
                 code_cim10: consultationForm.code_cim10,
@@ -171,6 +233,8 @@ function Consultation() {
                     examen_physique: '',
                     echelle_douleur: 0
                 });
+                setSelectedPatientDossier(null);
+                setLoadingDossier(false);
             } else {
                 navigate('/medecin');
             }
@@ -262,6 +326,35 @@ function Consultation() {
                         />
                     </div>
                 </div>
+                
+                {/* Patient Dossier Status */}
+                {consultationForm.patient_id && (
+                    <div className="mt-4 p-3 rounded-md">
+                        {loadingDossier ? (
+                            <div className="flex items-center text-blue-600">
+                                <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                Chargement du dossier patient...
+                            </div>
+                        ) : selectedPatientDossier ? (
+                            <div className="flex items-center text-green-600">
+                                <svg className="h-5 w-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                </svg>
+                                Dossier patient chargé avec succès
+                            </div>
+                        ) : (
+                            <div className="flex items-center text-red-600">
+                                <svg className="h-5 w-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                </svg>
+                                Erreur lors du chargement du dossier patient
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
             
             {/* Motif de Consultation */}
