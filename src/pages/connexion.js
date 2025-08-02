@@ -53,8 +53,8 @@ function Connexion() {
             professionalType: selectedProfessional,
             identifiant,
             route: selectedProfile === 'patient' ? '/patient/auth/login' : 
-                   selectedProfessional === 'medecin' ? '/ProfessionnelSante/auth/login' : 
-                   '/auth/login'
+                selectedProfessional === 'medecin' ? '/ProfessionnelSante/auth/login' : 
+                '/auth/login'
         });
 
         try {

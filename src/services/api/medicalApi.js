@@ -13,341 +13,680 @@ const api = axios.create({
 // Intercepteur pour ajouter le token à chaque requête
 api.interceptors.request.use(
     (config) => {
-        // Priorité au token patient (JWT)
+        // Prioriser le token JWT pour les patients
         const jwtToken = localStorage.getItem('jwt');
-        const token = localStorage.getItem('token');
+        const generalToken = localStorage.getItem('token');
         
-        if (jwtToken) {
+        // Pour les routes médecin, utiliser le token général
+        if (config.url && config.url.includes('/ProfessionnelSante/')) {
+            if (generalToken) {
+                config.headers.Authorization = `Bearer ${generalToken}`;
+            }
+        } else if (jwtToken) {
+            // Pour les autres routes, prioriser le JWT
             config.headers.Authorization = `Bearer ${jwtToken}`;
-        } else if (token) {
-            config.headers.Authorization = `Bearer ${token}`;
+        } else if (generalToken) {
+            config.headers.Authorization = `Bearer ${generalToken}`;
         }
         return config;
     },
     (error) => Promise.reject(error)
 );
 
-// 1-) Récupération des rendez-vous du patient
-export const getPatientRendezVous = async (patientId) => {
+// Interceptor pour gérer les erreurs d'authentification
+api.interceptors.response.use(
+    (response) => response,
+    (error) => {
+        // On laisse la gestion du 401 au composant appelant
+        return Promise.reject(error);
+    }
+);
+
+// 1-) recuperation des rendez-vous d'un patient
+const getPatientRendezVous = async (patientId) => {
     try {
         const response = await api.get(`/rendez-vous/patient/${patientId}`);
-        console.log(response.data);
         return response.data;
     } catch (error) {
-        console.log('Service rendez-vous non disponible');
-        return { data: [] };
+        console.error('Erreur lors de la récupération des rendez-vous:', error);
+        return [];
     }
 };
 
-// 2-) Récupération des prochains rendez-vous
-export const getProchainRendezVous = async (patientId) => {
+// 2-) recuperation du prochain rendez-vous d'un patient
+const getProchainRendezVous = async (patientId) => {
     try {
         const response = await api.get(`/rendez-vous/patient/${patientId}/prochain`);
         return response.data;
     } catch (error) {
-        console.log('Aucun prochain rendez-vous');
-        return { data: null };
+        console.error('Erreur lors de la récupération du prochain rendez-vous:', error);
+        return null;
     }
 };
 
-// 3-) Récupération des traitements actifs
-export const getTraitementsActifs = async (patientId) => {
+// 3-) recuperation des traitements actifs d'un patient
+const getTraitementsActifs = async (patientId) => {
     try {
-        const response = await api.get(`/prescription/patient/${patientId}`);
-        console.log(response.data);
+        const response = await api.get(`/traitements/patient/${patientId}/actifs`);
         return response.data;
     } catch (error) {
-        console.log('Service traitements non disponible');
-        return { data: [] };
+        console.error('Erreur lors de la récupération des traitements actifs:', error);
+        return [];
     }
 };
 
-// 3.1-) creation d'ordonnance
-export const createOrdonnance = async (Id) => {
+// 4-) creation d'une ordonnance
+const createOrdonnance = async (Id) => {
     try {
-        const response = await api.post(`/prescription/${Id}`);
-        console.log(response.data);
+        const response = await api.post(`/ordonnances`, { patientId: Id });
         return response.data;
     } catch (error) {
-        console.log('creation d\'ordonnance success');
-        return { data: [] };
+        console.error('Erreur lors de la création de l\'ordonnance:', error);
+        throw error;
     }
 };
 
-// 3.2-) creation de prescription d'examen
-export const createExamen = async (examen) => {
+// 5-) creation d'un examen
+const createExamen = async (examen) => {
     try {
-        const response = await api.post(`/prescription/demande-examen`, examen);
+        const response = await api.post(`/examens`, examen);
         return response.data;
     } catch (error) {
-        console.log('creation de demande d\'examen success');
-        return { data: [] };
+        console.error('Erreur lors de la création de l\'examen:', error);
+        throw error;
     }
 };
 
-//  3.3-) creation de dossier medical
-export const createDossierMedical = async (dossierMedical) => {
+// 3.3.1-) creation de dossier medical
+const createDossierMedical = async (dossierMedical) => {
     try {
+        console.log('Creating dossier medical with data:', dossierMedical);
+        
+        // Validate required fields
+        if (!dossierMedical.patient_id) {
+            throw new Error('ID du patient requis');
+        }
+        if (!dossierMedical.service_id) {
+            throw new Error('ID du service requis');
+        }
+        
         const response = await api.post(`/dossierMedical`, dossierMedical);
+        console.log('Dossier medical créé:', response.data);
         return response.data;
     } catch (error) {
-        console.log('creation de dossier medical success');
-        return { data: [] };
+        console.error('Erreur lors de la création du dossier medical:', error);
+        throw error.response?.data?.message || error.message || 'Erreur lors de la création du dossier medical';
+    }
+};
+
+// 3.3.1.1-) recuperation d'un dossier medical specifique
+const getDossierMedical = async (Id) => {
+    try {
+        const response = await api.get(`/dossierMedical/${Id}`);
+        return response.data;
+    } catch (error) {
+        console.error('Erreur lors de la récupération du dossier medical:', error);
+        throw error;
+    }
+};
+
+// 3.3.1.1-) recuperation de tous les dossiers medicaux avec informations complètes
+const getAllDossiersMedical = async () => {
+    try {
+        console.log('Fetching all dossiers medical from API...');
+        const response = await api.get(`/dossierMedical`);
+        console.log('Dossiers medical API response:', response.data);
+        
+        if (!response || !response.data) {
+            console.error('Invalid API response format:', response);
+            return { data: [], status: 'error', message: 'Format de réponse invalide' };
+        }
+        
+        // Backend returns: { status: 'success', results: N, data: { dossiers: [...] } }
+        if (response.data.status === 'success' && response.data.data && Array.isArray(response.data.data.dossiers)) {
+            const dossiers = response.data.data.dossiers;
+            console.log('Found dossiers:', dossiers);
+            
+            // Debug: Log the first dossier structure to see what fields are available
+            if (dossiers.length > 0) {
+                console.log('=== RAW DOSSIER STRUCTURE DEBUG ===');
+                console.log('First dossier raw data:', dossiers[0]);
+                console.log('All keys in first dossier:', Object.keys(dossiers[0]));
+                console.log('Patient-related fields:', {
+                    patient_id: dossiers[0].patient_id,
+                    patientId: dossiers[0].patientId,
+                    id_patient: dossiers[0].id_patient,
+                    patient: dossiers[0].patient,
+                    Patient: dossiers[0].Patient
+                });
+                console.log('Service-related fields:', {
+                    service_id: dossiers[0].service_id,
+                    serviceId: dossiers[0].serviceId,
+                    id_service: dossiers[0].id_service,
+                    service: dossiers[0].service,
+                    Service: dossiers[0].Service
+                });
+                console.log('=====================================');
+            }
+            
+            // Simple enrichment without external API calls to avoid failures
+            const enrichedDossiers = dossiers.map((dossier) => {
+                try {
+                    // Check if dossier already has patient and service info embedded
+                    const patient = dossier.patient_info || dossier.patient || dossier.Patient;
+                    const service = dossier.service_info || dossier.service || dossier.Service;
+                    
+                    // Create proper file number
+                    const fileNumber = dossier.numeroDossier || dossier.numero_dossier || dossier.id_dossier || dossier.id || 'N/A';
+                    
+                    return {
+                        ...dossier,
+                        id: dossier.id_dossier || dossier.id,
+                        numeroDossier: fileNumber,
+                        patient_name: patient ? `${patient.prenom || ''} ${patient.nom || ''}`.trim() : `Patient ID: ${dossier.patient_id || dossier.patientId || dossier.id_patient || 'undefined'}`,
+                        service_name: service ? (service.nom || service.name || service.libelle) : `Service ID: ${dossier.service_id || dossier.serviceId || dossier.id_service || 'undefined'}`,
+                        dateOuverture: dossier.dateCreation || dossier.createdAt,
+                        patient_info: patient,
+                        patient: patient, // Add direct patient reference
+                        service_info: service
+                    };
+                } catch (enrichError) {
+                    console.error('Error enriching dossier:', enrichError);
+                    return {
+                        ...dossier,
+                        id: dossier.id_dossier || dossier.id,
+                        patient_name: `Patient ID: ${dossier.patient_id || dossier.patientId || dossier.id_patient || 'undefined'}`,
+                        service_name: `Service ID: ${dossier.service_id || dossier.serviceId || dossier.id_service || 'undefined'}`,
+                        dateOuverture: dossier.dateCreation || dossier.createdAt
+                    };
+                }
+            });
+            
+            console.log('Enriched dossiers:', enrichedDossiers);
+            return { data: enrichedDossiers, status: 'success' };
+        }
+        
+        // Fallback: if data is directly an array
+        if (Array.isArray(response.data)) {
+            console.log('Response data is direct array:', response.data);
+            return { data: response.data, status: 'success' };
+        }
+        
+        // Fallback: if dossiers is in root data
+        if (response.data.dossiers && Array.isArray(response.data.dossiers)) {
+            console.log('Found dossiers in response.data.dossiers:', response.data.dossiers);
+            return { data: response.data.dossiers, status: 'success' };
+        }
+        
+        console.error('Unexpected dossiers medical response format:', response.data);
+        return { data: [], status: 'error', message: 'Format de réponse inattendu' };
+        
+    } catch (error) {
+        console.error('Service dossiers medical non disponible:', error);
+        console.error('Error details:', {
+            message: error.message,
+            response: error.response?.data,
+            status: error.response?.status,
+            url: error.config?.url
+        });
+        return { data: [], status: 'error', message: 'Service non disponible' };
+    }
+};
+
+// 3.3.2-) creation de dossier patient (qui est en fait un dossier medical)
+const createDossierPatient = async (dossierData) => {
+    try {
+        console.log('Creating dossier patient (medical) with data:', dossierData);
+        
+        // Validate required fields
+        if (!dossierData.patient_id) {
+            throw new Error('ID du patient requis');
+        }
+        
+        // The backend route for creating a medical dossier is POST /dossierMedical
+        const response = await api.post('/dossierMedical', dossierData);
+        console.log('Dossier patient (medical) créé:', response.data);
+        return response.data;
+    } catch (error) {
+        console.error('Erreur lors de la création du dossier patient (medical):', error);
+        throw error.message || 'Erreur lors de la création du dossier patient (medical)';
+    }
+};
+
+// 3.3.3-) recuperation des dossiers medicaux (tous les dossiers, ou filtrés par patient_id)
+const getDossiersPatients = async (patientId = null) => {
+    try {
+        console.log('Fetching dossiers medical from API...');
+        let url = `/dossierMedical`;
+        if (patientId) {
+            url = `/dossierMedical?patient_id=${patientId}`;
+        }
+        const response = await api.get(url);
+        console.log('Dossiers medical API response:', response);
+        console.log('Dossiers medical API response.data:', response.data);
+        
+        if (!response || !response.data) {
+            console.error('Invalid API response format:', response);
+            return { data: [], status: 'error', message: 'Format de réponse invalide' };
+        }
+        
+        // Backend returns: { status: 'success', results: N, data: { dossiers: [...] } }
+        if (response.data.status === 'success' && response.data.data && Array.isArray(response.data.data.dossiers)) {
+            const dossiers = response.data.data.dossiers;
+            console.log('Found dossiers in getDossiersPatients:', dossiers);
+            
+            // Debug: Log the first dossier structure to see what fields are available
+            if (dossiers.length > 0) {
+                console.log('=== RAW DOSSIER STRUCTURE DEBUG (getDossiersPatients) ===');
+                console.log('First dossier raw data:', dossiers[0]);
+                console.log('All keys in first dossier:', Object.keys(dossiers[0]));
+                console.log('Patient-related fields:', {
+                    patient_id: dossiers[0].patient_id,
+                    patientId: dossiers[0].patientId,
+                    id_patient: dossiers[0].id_patient,
+                    patient: dossiers[0].patient,
+                    Patient: dossiers[0].Patient
+                });
+                console.log('Service-related fields:', {
+                    service_id: dossiers[0].service_id,
+                    serviceId: dossiers[0].serviceId,
+                    id_service: dossiers[0].id_service,
+                    service: dossiers[0].service,
+                    Service: dossiers[0].Service
+                });
+                console.log('=====================================');
+            }
+            
+            // Enrich dossiers with patient and service information
+            const enrichedDossiers = await Promise.all(
+                dossiers.map(async (dossier) => {
+                    try {
+                        // Check if dossier already has patient and service info embedded
+                        let patient = dossier.patient_info || dossier.patient || dossier.Patient;
+                        let service = dossier.service_info || dossier.service || dossier.Service;
+                        
+                        // If not embedded, fetch and find by ID
+                        if (!patient || !service) {
+                            const [patientsData, servicesData] = await Promise.all([
+                                getPatients(),
+                                getServices()
+                            ]);
+                            
+                            // Find matching patient with more flexible ID matching
+                            if (!patient && Array.isArray(patientsData)) {
+                                patient = patientsData.find(p => {
+                                    const patientId = p.id_patient || p.id || p.patient_id;
+                                    const dossierId = dossier.patient_id || dossier.patientId || dossier.id_patient;
+                                    return patientId == dossierId;
+                                });
+                            }
+                            
+                            // Find matching service with more flexible ID matching
+                            if (!service && Array.isArray(servicesData)) {
+                                service = servicesData.find(s => {
+                                    const serviceId = s.id || s.id_service || s.service_id;
+                                    const dossierServiceId = dossier.service_id || dossier.serviceId || dossier.id_service;
+                                    return serviceId == dossierServiceId;
+                                });
+                            }
+                        }
+                        
+                        // Create proper file number
+                        const fileNumber = dossier.numeroDossier || dossier.numero_dossier || dossier.id_dossier || dossier.id || 'N/A';
+                        
+                        return {
+                            ...dossier,
+                            id: dossier.id_dossier || dossier.id,
+                            numeroDossier: fileNumber,
+                            patient_name: patient ? `${patient.prenom || ''} ${patient.nom || ''}`.trim() : `Patient ID: ${dossier.patient_id || dossier.patientId || dossier.id_patient || 'undefined'}`,
+                            service_name: service ? (service.nom || service.name || service.libelle) : `Service ID: ${dossier.service_id || dossier.serviceId || dossier.id_service || 'undefined'}`,
+                            dateOuverture: dossier.dateCreation || dossier.createdAt,
+                            patient_info: patient,
+                            patient: patient, // Add direct patient reference
+                            service_info: service
+                        };
+                    } catch (enrichError) {
+                        console.error('Error enriching dossier:', enrichError);
+                        return {
+                            ...dossier,
+                            id: dossier.id_dossier || dossier.id,
+                            patient_name: `Patient ID: ${dossier.patient_id || dossier.patientId || dossier.id_patient || 'undefined'}`,
+                            service_name: `Service ID: ${dossier.service_id || dossier.serviceId || dossier.id_service || 'undefined'}`,
+                            dateOuverture: dossier.dateCreation || dossier.createdAt
+                        };
+                    }
+                })
+            );
+            
+            console.log('Enriched dossiers from getDossiersPatients:', enrichedDossiers);
+            return { data: enrichedDossiers, status: 'success' };
+        }
+        
+        console.error('Unexpected dossiers medical response format:', response.data);
+        return { data: [], status: 'error', message: 'Format de réponse inattendu' };
+        
+    } catch (error) {
+        console.error('Service dossiers medical non disponible:', error);
+        console.error('Error details:', {
+            message: error.message,
+            response: error.response?.data,
+            status: error.response?.status,
+            url: error.config?.url
+        });
+        return { data: [], status: 'error', message: 'Service non disponible' };
+    }
+};
+
+// 3.3.4-) recuperation d'un dossier patient specifique (complet par patient_id)
+const getDossierPatient = async (patientId) => {
+    try {
+        const response = await api.get(`/dossierMedical/patient/${patientId}/complet`);
+        console.log('Dossier patient complet récupéré:', response.data);
+        return response.data;
+    } catch (error) {
+        console.log('Service dossier patient complet non disponible');
+        return { data: null, status: 'error', message: 'Service non disponible' };
+    }
+};
+
+// 3.3.5-) mise à jour d'un dossier patient
+const updateDossierPatient = async (dossierId, dossierData) => {
+    try {
+        const response = await api.put(`/dossierMedical/${dossierId}`, dossierData);
+        console.log('Dossier patient mis à jour:', response.data);
+        return response.data;
+    } catch (error) {
+        console.error('Erreur lors de la mise à jour du dossier patient:', error);
+        throw error.response?.data?.message || 'Erreur lors de la mise à jour du dossier patient';
+    }
+};
+
+// 3.3.6-) fermeture d'un dossier patient
+const closeDossierPatient = async (dossierId, dateFermeture) => {
+    try {
+        const response = await api.patch(`/dossierMedical/${dossierId}/close`, {
+            dateFermeture: dateFermeture || new Date().toISOString().split('T')[0]
+        });
+        console.log('Dossier patient fermé:', response.data);
+        return response.data;
+    } catch (error) {
+        console.error('Erreur lors de la fermeture du dossier patient:', error);
+        throw error.response?.data?.message || 'Erreur lors de la fermeture du dossier patient';
     }
 };
 
 // 3-3) recuperation des services
-export const getServices = async () => {
+const getServices = async () => {
     try{
-        const response = await api.get(`/service-sante`);
-        console.log(response.data);
-        return response.data;
-    }catch(error){
-        console.log('Service services non disponible');
-        return { data: [] };
-    }
-}
-
-// 3-4) Récupération des patients
-export const getPatients = async () => {
-    try {
-        console.log('Fetching patients from API...');
-        const response = await api.get("/patient");
-        console.log('API Response:', response);
+        const response = await api.get('/service-sante');
         
         if (!response || !response.data) {
-            console.error('Invalid API response format:', response);
+            console.error('Invalid API response format for services');
             return [];
         }
         
-        // Handle the API response format: { status: 'success', results: 3, data: { patients: [...] } }
-        if (response.data.status === 'success' && response.data.data && response.data.data.patients) {
-            console.log('Returning patients from response.data.data.patients:', response.data.data.patients);
-            return response.data.data.patients;
+        // Backend returns: { status: 'success', results: N, data: { services: [...] } }
+        if (response.data.status === 'success' && response.data.data && Array.isArray(response.data.data.services)) {
+            return response.data.data.services;
         }
         
-        // Fallback to check other possible formats
+        // Fallback formats for compatibility
+        if (response.data && response.data.services && Array.isArray(response.data.services)) {
+            return response.data.services;
+        }
+        
         if (Array.isArray(response.data)) {
-            console.log('Returning patients array directly:', response.data);
             return response.data;
         }
         
-        if (response.data.patients && Array.isArray(response.data.patients)) {
-            console.log('Returning patients from response.data.patients:', response.data.patients);
+        console.error('Unexpected services response format:', response.data);
+        return [];
+        
+    } catch (error) {
+        console.error('Service services non disponible:', error.message);
+        return [];
+    }
+};
+
+// 3-4) recuperation des patients
+const getPatients = async () => {
+    try {
+        const response = await api.get('/patient');
+        
+        if (!response || !response.data) {
+            console.error('Invalid API response format for patients');
+            return [];
+        }
+        
+        // Backend returns: { status: 'success', results: N, data: { patients: [...] } }
+        if (response.data.status === 'success' && response.data.data && Array.isArray(response.data.data.patients)) {
+            return response.data.data.patients;
+        }
+        
+        // Fallback formats for compatibility
+        if (response.data && response.data.patients && Array.isArray(response.data.patients)) {
             return response.data.patients;
         }
         
-        if (response.data.id_patient) {
-            console.log('Returning single patient as array:', [response.data]);
-            return [response.data];
+        if (Array.isArray(response.data)) {
+            return response.data;
         }
         
-        console.error('Unexpected API response format:', response.data);
+        console.error('Unexpected patients response format:', response.data);
         return [];
+        
     } catch (error) {
-        console.error('Error fetching patients:', error);
-        console.error('Error details:', {
-            message: error.message,
-            response: error.response?.data,
-            status: error.response?.status
-        });
+        console.error('Service patients non disponible:', error.message);
         return [];
     }
 };
 
-
-// 4-) Récupération des documents récents
-export const getDocumentsRecents = async (Id) => {
+// 4-) recuperation des documents recents
+const getDocumentsRecents = async (Id) => {
     try {
-        const response = await api.get(`/dossierMedical/${Id}`);
-        console.log(response.data);
+        const response = await api.get(`/documents/patient/${Id}/recents`);
         return response.data;
     } catch (error) {
-        console.log('Service documents non disponible');
-        return { data: [] };
+        console.error('Erreur lors de la récupération des documents récents:', error);
+        return [];
     }
 };
 
-// 5-) Récupération de tous les documents du patient
-export const getPatientDocuments = async (patientId) => {
+// 5-) recuperation des documents d'un patient
+const getPatientDocuments = async (patientId) => {
     try {
         const response = await api.get(`/documents/patient/${patientId}`);
-        console.log(response.data);
         return response.data;
     } catch (error) {
-        console.log('Service documents non disponible');
-        return { data: [] };
+        console.error('Erreur lors de la récupération des documents du patient:', error);
+        return [];
     }
 };
 
-// 6-) Récupération des paramètres biologiques
-export const getParametresBiologiques = async (patientId) => {
+// 6-) recuperation des parametres biologiques
+const getParametresBiologiques = async (patientId) => {
     try {
-        const response = await api.get(`/analyses/patient/${patientId}/biologiques`);
-        console.log(response.data);
+        const response = await api.get(`/parametres-biologiques/patient/${patientId}`);
         return response.data;
     } catch (error) {
-        console.log('Service analyses biologiques non disponible');
-        return { data: [] };
+        console.error('Erreur lors de la récupération des paramètres biologiques:', error);
+        return [];
     }
 };
 
-// 7-) Récupération des antécédents médicaux
-export const getAntecedentsMedicaux = async (patientId) => {
+// 7-) recuperation des antecedents medicaux
+const getAntecedentsMedicaux = async (patientId) => {
     try {
-        const response = await api.get(`/antecedents/patient/${patientId}`);
-        console.log(response.data);
+        const response = await api.get(`/antecedents-medicaux/patient/${patientId}`);
         return response.data;
     } catch (error) {
-        console.log('Service antécédents non disponible');
-        return { data: [] };
+        console.error('Erreur lors de la récupération des antécédents médicaux:', error);
+        return [];
     }
 };
 
-// 8-) Récupération des allergies
-export const getAllergies = async (patientId) => {
+// 8-) recuperation des allergies
+const getAllergies = async (patientId) => {
     try {
         const response = await api.get(`/allergies/patient/${patientId}`);
-        console.log(response.data);
         return response.data;
     } catch (error) {
-        console.log('Service allergies non disponible');
-        return { data: [] };
+        console.error('Erreur lors de la récupération des allergies:', error);
+        return [];
     }
 };
 
-// 9-) Récupération de l'historique des consultations
-export const getHistoriqueConsultations = async (patientId) => {
+// 9-) recuperation de l'historique des consultations
+const getHistoriqueConsultations = async (patientId) => {
     try {
         const response = await api.get(`/consultations/patient/${patientId}/historique`);
-        console.log(response.data);
         return response.data;
     } catch (error) {
-        console.log('Service consultations non disponible');
-        return { data: [] };
+        console.error('Erreur lors de la récupération de l\'historique des consultations:', error);
+        return [];
     }
 };
 
-// 10-) Upload d'un document
-export const uploadDocument = async (patientId, formData) => {
+// 10-) upload de document
+const uploadDocument = async (patientId, formData) => {
     try {
         const response = await api.post(`/documents/patient/${patientId}/upload`, formData, {
             headers: {
                 'Content-Type': 'multipart/form-data',
             },
         });
-        console.log(response.data);
         return response.data;
     } catch (error) {
-        throw error.response?.data?.message || "Erreur lors de l'upload du document";
+        console.error('Erreur lors de l\'upload du document:', error);
+        throw error;
     }
 };
 
-// 11-) Téléchargement d'un document
-export const downloadDocument = async (documentId) => {
+// 11-) download de document
+const downloadDocument = async (documentId) => {
     try {
         const response = await api.get(`/documents/${documentId}/download`, {
             responseType: 'blob',
         });
-        console.log(response.data);
         return response.data;
     } catch (error) {
-        throw error.response?.data?.message || "Erreur lors du téléchargement";
+        console.error('Erreur lors du download du document:', error);
+        throw error;
     }
 };
 
-// 12-) Visualisation d'un document
-export const viewDocument = async (documentId) => {
+// 12-) view de document
+const viewDocument = async (documentId) => {
     try {
         const response = await api.get(`/documents/${documentId}/view`);
-        console.log(response.data);
         return response.data;
     } catch (error) {
-        throw error.response?.data?.message || "Erreur lors de la visualisation";
+        console.error('Erreur lors de la visualisation du document:', error);
+        throw error;
     }
 };
 
-// 13-) Récupération du résumé médical complet
-export const getResumeMedical = async (patientId) => {
+// 13-) recuperation du resume medical
+const getResumeMedical = async (patientId) => {
     try {
-        // Récupérer toutes les données en parallèle
-        const [
-            antecedents,
-            allergies,
-            consultations,
-            traitements
-        ] = await Promise.allSettled([
-            getAntecedentsMedicaux(patientId),
-            getAllergies(patientId),
-            getHistoriqueConsultations(patientId),
-            getTraitementsActifs(patientId)
-        ]);
+        const response = await api.get(`/resume-medical/patient/${patientId}`);
+        return response.data;
+    } catch (error) {
+        console.error('Erreur lors de la récupération du résumé médical:', error);
+        return null;
+    }
+};
+
+// 14-) creation d'une consultation
+const createConsultation = async (consultation) => {
+    try {
+        console.log('Creating consultation with data:', consultation);
         
-        return {
-            antecedents: antecedents.status === 'fulfilled' ? antecedents.value.data : [],
-            allergies: allergies.status === 'fulfilled' ? allergies.value.data : [],
-            consultations: consultations.status === 'fulfilled' ? consultations.value.data : [],
-            traitements: traitements.status === 'fulfilled' ? traitements.value.data : []
-        };
+        // Validate required fields
+        if (!consultation.patient_id) {
+            throw new Error('ID du patient requis');
+        }
+        
+        const response = await api.post('/consultations', consultation);
+        console.log('Consultation créée:', response.data);
+        return response.data;
     } catch (error) {
-        console.log('Erreur lors de la récupération du résumé médical');
-        return {
-            antecedents: [],
-            allergies: [],
-            consultations: [],
-            traitements: []
-        };
+        console.error('Erreur lors de la création de la consultation:', error);
+        throw error.response?.data?.message || error.message || 'Erreur lors de la création de la consultation';
     }
 };
 
-// 14-)  creation de consultation
-export const createConsultation = async (consultation) => {
+// 15-) recuperation d'une consultation specifique
+const getConsultation = async (consultationId) => {
     try {
-        const response = await api.post(`/consultation`, consultation);
-        console.log(response.data);
+        const response = await api.get(`/consultations/${consultationId}`);
         return response.data;
     } catch (error) {
-        console.log('Erreur lors de la création de la consultation');
-        return { data: [] };
+        console.error('Erreur lors de la récupération de la consultation:', error);
+        throw error;
     }
 };
 
-// 15-) recuperation des consulatiions
-export const getConsultations = async (ID) => {
+// 16-) recuperation de toutes les consultations
+const getAllConsultations = async () => {
     try {
-        const response = await api.get(`/consultation/${ID}`);
-        console.log(response.data);
+        const response = await api.get('/consultations');
         return response.data;
     } catch (error) {
-        console.log('Erreur lors de la récupération des consultations');
-        return { data: [] };
+        console.error('Erreur lors de la récupération des consultations:', error);
+        return [];
     }
-}
+};
 
-// 16-) suppression de consultation
-export const deleteConsultation = async (ID) => {
+// 17-) recuperation des consultations d'un patient
+const getConsultationsByPatient = async (patientId) => {
     try {
-        const response = await api.delete(`/consultation/${ID}`);
-        console.log(response.data);
+        const response = await api.get(`/consultations/patient/${patientId}`);
         return response.data;
     } catch (error) {
-        console.log('Erreur lors de la suppression de la consultation');
-        return { data: [] };
+        console.error('Erreur lors de la récupération des consultations du patient:', error);
+        return [];
     }
-}
+};
 
-// 17-)transmettre la consultation au patient
+// 18-) suppression d'une consultation
+const deleteConsultation = async (consultationId) => {
+    try {
+        const response = await api.delete(`/consultations/${consultationId}`);
+        return response.data;
+    } catch (error) {
+        console.error('Erreur lors de la suppression de la consultation:', error);
+        throw error;
+    }
+};
 
-// export const transmettreConsultation = async (ID) => {
-//     try{
+// 19-) mise à jour d'une consultation
+const updateConsultation = async (consultationId, consultationData) => {
+    try {
+        const response = await api.put(`/consultations/${consultationId}`, consultationData);
+        return response.data;
+    } catch (error) {
+        console.error('Erreur lors de la mise à jour de la consultation:', error);
+        throw error;
+    }
+};
 
-//     }
-// }
-
-const apiExports = {
+export {
     getPatientRendezVous,
     getProchainRendezVous,
     getTraitementsActifs,
+    createOrdonnance,
+    createExamen,
+    createDossierMedical,
+    getDossierMedical,
+    getAllDossiersMedical,
+    createDossierPatient,
+    getDossiersPatients,
+    getDossierPatient,
+    updateDossierPatient,
+    closeDossierPatient,
+    getServices,
+    getPatients,
     getDocumentsRecents,
     getPatientDocuments,
     getParametresBiologiques,
@@ -358,7 +697,10 @@ const apiExports = {
     downloadDocument,
     viewDocument,
     getResumeMedical,
-    getPatients
-};
-
-export default apiExports;
+    createConsultation,
+    getConsultation,
+    getAllConsultations,
+    getConsultationsByPatient,
+    deleteConsultation,
+    updateConsultation
+}; 
