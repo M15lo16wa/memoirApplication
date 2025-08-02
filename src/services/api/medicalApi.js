@@ -67,7 +67,7 @@ const getProchainRendezVous = async (patientId) => {
 // 3-) recuperation des traitements actifs d'un patient
 const getTraitementsActifs = async (patientId) => {
     try {
-        const response = await api.get(`/traitements/patient/${patientId}/actifs`);
+        const response = await api.get(`/prescription/patient/${patientId}/actifs`);
         return response.data;
     } catch (error) {
         console.error('Erreur lors de la récupération des traitements actifs:', error);
@@ -76,9 +76,10 @@ const getTraitementsActifs = async (patientId) => {
 };
 
 // 4-) creation d'une ordonnance
-const createOrdonnance = async (Id) => {
+const createOrdonnance = async (ordonnanceData) => {
     try {
-        const response = await api.post(`/ordonnances`, { patientId: Id });
+        console.log('Creating ordonnance with data:', ordonnanceData);
+        const response = await api.post(`/prescription/ordonnance`, ordonnanceData);
         return response.data;
     } catch (error) {
         console.error('Erreur lors de la création de l\'ordonnance:', error);
@@ -89,10 +90,91 @@ const createOrdonnance = async (Id) => {
 // 5-) creation d'un examen
 const createExamen = async (examen) => {
     try {
-        const response = await api.post(`/examens`, examen);
+        const response = await api.post(`/prescription/demande-examen`, examen);
         return response.data;
     } catch (error) {
         console.error('Erreur lors de la création de l\'examen:', error);
+        throw error;
+    }
+};
+
+// 6-) Récupération des ordonnances récentes
+const getOrdonnancesRecentes = async (page = 1, limit = 10, jours = 7) => {
+    try {
+        const response = await api.get(`/prescription/ordonnances-recentes?page=${page}&limit=${limit}&jours=${jours}`);
+        return response.data;
+    } catch (error) {
+        console.error('Erreur lors de la récupération des ordonnances récentes:', error);
+        throw error;
+    }
+};
+
+// 7-) Création d'une ordonnance complète avec notification
+const createOrdonnanceComplete = async (ordonnanceData) => {
+    try {
+        console.log('Creating ordonnance complete with data:', ordonnanceData);
+        const response = await api.post(`/prescription/ordonnance-complete`, ordonnanceData);
+        return response.data;
+    } catch (error) {
+        console.error('Erreur lors de la création de l\'ordonnance complète:', error);
+        throw error;
+    }
+};
+
+// 8-) Ajouter une prescription au dossier patient
+const ajouterPrescriptionAuDossier = async (prescriptionId, dossierId) => {
+    try {
+        const response = await api.post(`/prescription/${prescriptionId}/ajouter-dossier`, { dossier_id: dossierId });
+        return response.data;
+    } catch (error) {
+        console.error('Erreur lors de l\'ajout de la prescription au dossier:', error);
+        throw error;
+    }
+};
+
+// 9-) Créer une notification
+const creerNotification = async (prescriptionId, notificationData) => {
+    try {
+        const response = await api.post(`/prescription/${prescriptionId}/notification`, notificationData);
+        return response.data;
+    } catch (error) {
+        console.error('Erreur lors de la création de la notification:', error);
+        throw error;
+    }
+};
+
+// 10-) Marquer une notification comme lue
+const marquerNotificationLue = async (notificationId) => {
+    try {
+        const response = await api.patch(`/prescription/notification/${notificationId}/lue`);
+        return response.data;
+    } catch (error) {
+        console.error('Erreur lors du marquage de la notification:', error);
+        throw error;
+    }
+};
+
+// 11-) Récupérer les notifications d'un patient
+const getNotificationsPatient = async (patientId, statut = null) => {
+    try {
+        const url = statut ? 
+            `/prescription/patient/${patientId}/notifications?statut=${statut}` :
+            `/prescription/patient/${patientId}/notifications`;
+        const response = await api.get(url);
+        return response.data;
+    } catch (error) {
+        console.error('Erreur lors de la récupération des notifications:', error);
+        throw error;
+    }
+};
+
+// 12-) Récupérer le résumé des ordonnances d'aujourd'hui
+const getResumeAujourdhui = async () => {
+    try {
+        const response = await api.get(`/prescription/resume-aujourdhui`);
+        return response.data;
+    } catch (error) {
+        console.error('Erreur lors de la récupération du résumé:', error);
         throw error;
     }
 };
@@ -317,7 +399,7 @@ const getDossiersPatients = async (patientId = null) => {
                                 patient = patientsData.find(p => {
                                     const patientId = p.id_patient || p.id || p.patient_id;
                                     const dossierId = dossier.patient_id || dossier.patientId || dossier.id_patient;
-                                    return patientId == dossierId;
+                                    return patientId === dossierId;
                                 });
                             }
                             
@@ -326,7 +408,7 @@ const getDossiersPatients = async (patientId = null) => {
                                 service = servicesData.find(s => {
                                     const serviceId = s.id || s.id_service || s.service_id;
                                     const dossierServiceId = dossier.service_id || dossier.serviceId || dossier.id_service;
-                                    return serviceId == dossierServiceId;
+                                    return serviceId === dossierServiceId;
                                 });
                             }
                         }
@@ -484,7 +566,7 @@ const getPatients = async () => {
 // 4-) recuperation des documents recents
 const getDocumentsRecents = async (Id) => {
     try {
-        const response = await api.get(`/documents/patient/${Id}/recents`);
+        const response = await api.get(`/dossierMedical/${Id}`);
         return response.data;
     } catch (error) {
         console.error('Erreur lors de la récupération des documents récents:', error);
@@ -495,7 +577,7 @@ const getDocumentsRecents = async (Id) => {
 // 5-) recuperation des documents d'un patient
 const getPatientDocuments = async (patientId) => {
     try {
-        const response = await api.get(`/documents/patient/${patientId}`);
+        const response = await api.get(`/dossierMedical/patient/${patientId}/complet`);
         return response.data;
     } catch (error) {
         console.error('Erreur lors de la récupération des documents du patient:', error);
@@ -539,7 +621,7 @@ const getAllergies = async (patientId) => {
 // 9-) recuperation de l'historique des consultations
 const getHistoriqueConsultations = async (patientId) => {
     try {
-        const response = await api.get(`/consultations/patient/${patientId}/historique`);
+        const response = await api.get(`/consultation/patient/${patientId}`);
         return response.data;
     } catch (error) {
         console.error('Erreur lors de la récupération de l\'historique des consultations:', error);
@@ -548,9 +630,9 @@ const getHistoriqueConsultations = async (patientId) => {
 };
 
 // 10-) upload de document
-const uploadDocument = async (patientId, formData) => {
+const uploadDocument = async (Id, formData) => {
     try {
-        const response = await api.post(`/documents/patient/${patientId}/upload`, formData, {
+        const response = await api.post(`/prescription/${Id}/transferer`, formData, {
             headers: {
                 'Content-Type': 'multipart/form-data',
             },
@@ -607,7 +689,7 @@ const createConsultation = async (consultation) => {
             throw new Error('ID du patient requis');
         }
         
-        const response = await api.post('/consultations', consultation);
+        const response = await api.post('/consultation', consultation);
         console.log('Consultation créée:', response.data);
         return response.data;
     } catch (error) {
@@ -619,7 +701,7 @@ const createConsultation = async (consultation) => {
 // 15-) recuperation d'une consultation specifique
 const getConsultation = async (consultationId) => {
     try {
-        const response = await api.get(`/consultations/${consultationId}`);
+        const response = await api.get(`/consultation/${consultationId}`);
         return response.data;
     } catch (error) {
         console.error('Erreur lors de la récupération de la consultation:', error);
@@ -630,7 +712,7 @@ const getConsultation = async (consultationId) => {
 // 16-) recuperation de toutes les consultations
 const getAllConsultations = async () => {
     try {
-        const response = await api.get('/consultations');
+        const response = await api.get('/consultation');
         return response.data;
     } catch (error) {
         console.error('Erreur lors de la récupération des consultations:', error);
@@ -641,7 +723,7 @@ const getAllConsultations = async () => {
 // 17-) recuperation des consultations d'un patient
 const getConsultationsByPatient = async (patientId) => {
     try {
-        const response = await api.get(`/consultations/patient/${patientId}`);
+        const response = await api.get(`/consultation/patient/${patientId}`);
         return response.data;
     } catch (error) {
         console.error('Erreur lors de la récupération des consultations du patient:', error);
@@ -652,7 +734,7 @@ const getConsultationsByPatient = async (patientId) => {
 // 18-) suppression d'une consultation
 const deleteConsultation = async (consultationId) => {
     try {
-        const response = await api.delete(`/consultations/${consultationId}`);
+        const response = await api.delete(`/consultation/${consultationId}`);
         return response.data;
     } catch (error) {
         console.error('Erreur lors de la suppression de la consultation:', error);
@@ -663,7 +745,7 @@ const deleteConsultation = async (consultationId) => {
 // 19-) mise à jour d'une consultation
 const updateConsultation = async (consultationId, consultationData) => {
     try {
-        const response = await api.put(`/consultations/${consultationId}`, consultationData);
+        const response = await api.put(`/consultation/${consultationId}`, consultationData);
         return response.data;
     } catch (error) {
         console.error('Erreur lors de la mise à jour de la consultation:', error);
@@ -677,6 +759,13 @@ export {
     getTraitementsActifs,
     createOrdonnance,
     createExamen,
+    getOrdonnancesRecentes,
+    createOrdonnanceComplete,
+    ajouterPrescriptionAuDossier,
+    creerNotification,
+    marquerNotificationLue,
+    getNotificationsPatient,
+    getResumeAujourdhui,
     createDossierMedical,
     getDossierMedical,
     getAllDossiersMedical,

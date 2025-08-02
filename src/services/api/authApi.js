@@ -160,8 +160,14 @@ export const logoutPatient = async () => {
 };
 
 export const getStoredPatient = () => {
-    const patient = localStorage.getItem("patient");
-    return patient ? JSON.parse(patient) : null;
+    try {
+        const patient = localStorage.getItem("patient");
+        return patient ? JSON.parse(patient) : null;
+    } catch (error) {
+        console.error('Erreur lors du parsing des données patient:', error);
+        localStorage.removeItem("patient");
+        return null;
+    }
 };
 
 export const isPatientAuthenticated = () => {
@@ -326,8 +332,14 @@ export const changePasswordMedecin = async (user) => {
 };
 
 export const getStoredMedecin = () => {
-    const medecin = localStorage.getItem("medecin");
-    return medecin ? JSON.parse(medecin) : null;
+    try {
+        const medecin = localStorage.getItem("medecin");
+        return medecin ? JSON.parse(medecin) : null;
+    } catch (error) {
+        console.error('Erreur lors du parsing des données médecin:', error);
+        localStorage.removeItem("medecin");
+        return null;
+    }
 };
 
 export const isMedecinAuthenticated = () => {
@@ -450,7 +462,7 @@ const extractMedecinFromToken = (token) => {
     return null;
 };
 
-export default {
+const authApi = {
     // Authentification générale
     login,
     register,
@@ -481,3 +493,5 @@ export default {
     logoutAll,
     clearAuthData
 };
+
+export default authApi;

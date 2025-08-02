@@ -124,7 +124,7 @@ function Consultation() {
                 service_id: parseInt(consultationForm.service_id) || null,
                 date_consultation: consultationForm.date_consultation,
                 heure_consultation: consultationForm.heure_consultation,
-                motif_consultation: consultationForm.motif_consultation,
+                motif_consultation: consultationForm.motif,
                 symptomes: consultationForm.symptomes,
                 diagnostic: consultationForm.diagnostic,
                 code_cim10: consultationForm.code_cim10,
