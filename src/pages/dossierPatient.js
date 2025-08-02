@@ -229,8 +229,13 @@ function DossierPatient() {
       // Log detailed information about each dossier to diagnose patient data issues
       dossiers.forEach((dossier, index) => {
         console.log(`=== DIAGNOSTIC DOSSIER ${index + 1} ===`);
+        console.log('Raw dossier object:', dossier);
         console.log('ID:', dossier.id_dossier || dossier.id);
-        console.log('Numéro:', dossier.numeroDossier);
+        console.log('Numéro dossier (numeroDossier):', dossier.numeroDossier);
+        console.log('Numéro dossier (numero_dossier):', dossier.numero_dossier);
+        console.log('Numéro dossier (numeroDossier - exact):', dossier.numeroDossier);
+        console.log('Numéro dossier (id_dossier):', dossier.id_dossier);
+        console.log('Numéro dossier (id):', dossier.id);
         console.log('Patient ID:', dossier.patient_id);
         console.log('Service ID:', dossier.service_id);
         console.log('Has patient object:', !!dossier.patient);
@@ -560,14 +565,24 @@ function DossierPatient() {
     duree_traitement: '',
     renouvelable: false,
     nb_renouvellements: 0,
-    observations: ''
+    observations: '',
+    // Informations du médecin traitant
+    medecin_nom: '',
+    medecin_prenom: '',
+    medecin_specialite: '',
+    medecin_numero_ordre: ''
   });
   const [examenForm, setExamenForm] = useState({
     patient_id: '',
     type_examen: '',
     parametres: '',
     urgence: 'normal',
-    observations: ''
+    observations: '',
+    // Informations du médecin traitant
+    medecin_nom: '',
+    medecin_prenom: '',
+    medecin_specialite: '',
+    medecin_numero_ordre: ''
   });
 
   // États pour le QR Code
@@ -598,7 +613,12 @@ function DossierPatient() {
     nb_renouvellements: 0,
     observations: '',
     priorite: 'normale',
-    canal: 'application'
+    canal: 'application',
+    // Informations du médecin traitant
+    medecin_nom: '',
+    medecin_prenom: '',
+    medecin_specialite: '',
+    medecin_numero_ordre: ''
   });
 
   // Chargement initial des patients et services
@@ -805,7 +825,12 @@ function DossierPatient() {
       duree_traitement: '',
       renouvelable: false,
       nb_renouvellements: 0,
-      observations: ''
+      observations: '',
+      // Informations du médecin traitant
+      medecin_nom: '',
+      medecin_prenom: '',
+      medecin_specialite: '',
+      medecin_numero_ordre: ''
     });
   };
 
@@ -835,7 +860,12 @@ function DossierPatient() {
       type_examen: '',
       parametres: '',
       urgence: 'normal',
-      observations: ''
+      observations: '',
+      // Informations du médecin traitant
+      medecin_nom: '',
+      medecin_prenom: '',
+      medecin_specialite: '',
+      medecin_numero_ordre: ''
     });
   };
 
@@ -875,6 +905,27 @@ function DossierPatient() {
     
     if (!prescriptionForm.frequence) {
       alert('Veuillez saisir la fréquence');
+      return;
+    }
+
+    // Validation des informations du médecin traitant
+    if (!prescriptionForm.medecin_nom) {
+      alert('Veuillez saisir le nom du médecin traitant');
+      return;
+    }
+    
+    if (!prescriptionForm.medecin_prenom) {
+      alert('Veuillez saisir le prénom du médecin traitant');
+      return;
+    }
+    
+    if (!prescriptionForm.medecin_specialite) {
+      alert('Veuillez saisir la spécialité du médecin traitant');
+      return;
+    }
+    
+    if (!prescriptionForm.medecin_numero_ordre) {
+      alert('Veuillez saisir le numéro d\'ordre du médecin traitant');
       return;
     }
 
@@ -960,6 +1011,27 @@ function DossierPatient() {
     
     if (!examenForm.type_examen) {
       alert('Veuillez saisir le type d\'examen');
+      return;
+    }
+
+    // Validation des informations du médecin traitant
+    if (!examenForm.medecin_nom) {
+      alert('Veuillez saisir le nom du médecin traitant');
+      return;
+    }
+    
+    if (!examenForm.medecin_prenom) {
+      alert('Veuillez saisir le prénom du médecin traitant');
+      return;
+    }
+    
+    if (!examenForm.medecin_specialite) {
+      alert('Veuillez saisir la spécialité du médecin traitant');
+      return;
+    }
+    
+    if (!examenForm.medecin_numero_ordre) {
+      alert('Veuillez saisir le numéro d\'ordre du médecin traitant');
       return;
     }
 
@@ -1111,7 +1183,13 @@ function DossierPatient() {
           dosage: '500mg',
           frequence: '3 fois par jour',
           date_creation: new Date().toISOString(),
-          observations: 'À prendre avec les repas'
+          observations: 'À prendre avec les repas',
+          medecin: {
+            nom: 'Dr. Martin',
+            prenom: 'Jean',
+            specialite: 'Médecine générale',
+            numero_ordre: '12345'
+          }
         },
         {
           id: 2,
@@ -1121,7 +1199,13 @@ function DossierPatient() {
           dosage: '400mg',
           frequence: '2 fois par jour',
           date_creation: new Date(Date.now() - 86400000).toISOString(), // Hier
-          observations: 'En cas de douleur'
+          observations: 'En cas de douleur',
+          medecin: {
+            nom: 'Dr. Dupont',
+            prenom: 'Marie',
+            specialite: 'Cardiologie',
+            numero_ordre: '23456'
+          }
         },
         {
           id: 3,
@@ -1131,7 +1215,13 @@ function DossierPatient() {
           dosage: '1g',
           frequence: '2 fois par jour',
           date_creation: new Date(Date.now() - 172800000).toISOString(), // Avant-hier
-          observations: 'Antibiotique - 7 jours'
+          observations: 'Antibiotique - 7 jours',
+          medecin: {
+            nom: 'Dr. Durand',
+            prenom: 'Pierre',
+            specialite: 'Pneumologie',
+            numero_ordre: '34567'
+          }
         }
       ];
       
@@ -1226,6 +1316,27 @@ function DossierPatient() {
     
     if (!ordonnanceCompleteForm.frequence) {
       alert('Veuillez saisir la fréquence');
+      return;
+    }
+
+    // Validation des informations du médecin traitant
+    if (!ordonnanceCompleteForm.medecin_nom) {
+      alert('Veuillez saisir le nom du médecin traitant');
+      return;
+    }
+    
+    if (!ordonnanceCompleteForm.medecin_prenom) {
+      alert('Veuillez saisir le prénom du médecin traitant');
+      return;
+    }
+    
+    if (!ordonnanceCompleteForm.medecin_specialite) {
+      alert('Veuillez saisir la spécialité du médecin traitant');
+      return;
+    }
+    
+    if (!ordonnanceCompleteForm.medecin_numero_ordre) {
+      alert('Veuillez saisir le numéro d\'ordre du médecin traitant');
       return;
     }
 
@@ -1519,7 +1630,19 @@ function DossierPatient() {
                                     }
                                   </div>
                                   <div className="text-sm text-gray-500">
-                                    Dossier #{dossier.numeroDossier || dossier.id_dossier || dossier.id || 'N/A'}
+                                    {(() => {
+                                      // Prioriser le numeroDossier (avec D majuscule), ne jamais afficher l'ID
+                                      const numeroDossier = dossier.numeroDossier || dossier.numero_dossier || 'N/A';
+                                      console.log('Affichage numéro dossier:', {
+                                        numeroDossier: dossier.numeroDossier,
+                                        numero_dossier: dossier.numero_dossier,
+                                        id_dossier: dossier.id_dossier,
+                                        id: dossier.id,
+                                        final: numeroDossier,
+                                        rawDossier: dossier
+                                      });
+                                      return `Dossier #${numeroDossier}`;
+                                    })()}
                                     {dossier.patient?.sexe && (
                                       <span className="ml-2 px-1 py-0.5 bg-blue-100 text-blue-800 text-xs rounded">
                                         {dossier.patient.sexe === 'M' ? 'Homme' : dossier.patient.sexe === 'F' ? 'Femme' : dossier.patient.sexe}
@@ -2692,7 +2815,7 @@ Dr. Dupont`
           <div className="bg-white w-full max-w-full md:max-w-4xl mx-auto rounded-lg shadow-lg max-h-[95vh] overflow-y-auto my-2 md:my-4">
             <div className="flex justify-between items-center border-b px-4 py-3 sticky top-0 bg-white z-10">
               <h3 className="text-lg font-medium">
-                Dossier #{selectedDossier.numeroDossier || selectedDossier.id_dossier || selectedDossier.id || (dossierDetails?.numeroDossier) || 'N/A'} - {
+                Dossier #{selectedDossier.numeroDossier || selectedDossier.numero_dossier || (dossierDetails?.numeroDossier) || 'N/A'} - {
                   // Priority: Use enriched patient info from dossierDetails if available
                   dossierDetails?.patient ?
                     `${dossierDetails.patient.prenom || ''} ${dossierDetails.patient.nom || ''}`.trim() || 'Patient inconnu' :
@@ -2925,7 +3048,7 @@ Dr. Dupont`
           <div className="bg-white w-full max-w-full md:max-w-6xl mx-auto rounded-lg shadow-lg max-h-[95vh] overflow-y-auto my-2 md:my-4">
             <div className="flex justify-between items-center border-b px-4 py-3 sticky top-0 bg-white z-10">
               <h3 className="text-lg font-medium">
-                Modifier le Dossier {selectedDossier.numeroDossier || selectedDossier.id_dossier || selectedDossier.id || 'N/A'}
+                Modifier le Dossier {selectedDossier.numeroDossier || selectedDossier.numero_dossier || 'N/A'}
               </h3>
               <div className="flex items-center space-x-2">
                 {loading && (
@@ -3410,6 +3533,64 @@ Dr. Dupont`
                 </div>
               </div>
 
+              {/* Informations du médecin traitant */}
+              <div className="mb-6">
+                <h4 className="text-md font-semibold text-gray-800 mb-4 border-b pb-2">Médecin Traitant</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Nom du médecin *</label>
+                    <input
+                      type="text"
+                      name="medecin_nom"
+                      value={prescriptionForm.medecin_nom}
+                      onChange={handlePrescriptionInputChange}
+                      className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="ex: Martin"
+                      required
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Prénom du médecin *</label>
+                    <input
+                      type="text"
+                      name="medecin_prenom"
+                      value={prescriptionForm.medecin_prenom}
+                      onChange={handlePrescriptionInputChange}
+                      className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="ex: Jean"
+                      required
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Spécialité *</label>
+                    <input
+                      type="text"
+                      name="medecin_specialite"
+                      value={prescriptionForm.medecin_specialite}
+                      onChange={handlePrescriptionInputChange}
+                      className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="ex: Cardiologie, Médecine générale"
+                      required
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Numéro d'ordre *</label>
+                    <input
+                      type="text"
+                      name="medecin_numero_ordre"
+                      value={prescriptionForm.medecin_numero_ordre}
+                      onChange={handlePrescriptionInputChange}
+                      className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="ex: 12345"
+                      required
+                    />
+                  </div>
+                </div>
+              </div>
+
               {/* Renouvellement */}
               <div className="mb-6">
                 <h4 className="text-md font-semibold text-gray-800 mb-4 border-b pb-2">Renouvellement</h4>
@@ -3565,6 +3746,64 @@ Dr. Dupont`
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       rows={3}
                       placeholder="Paramètres spécifiques à analyser, conditions particulières, etc."
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Informations du médecin traitant */}
+              <div className="mb-6">
+                <h4 className="text-md font-semibold text-gray-800 mb-4 border-b pb-2">Médecin Traitant</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Nom du médecin *</label>
+                    <input
+                      type="text"
+                      name="medecin_nom"
+                      value={examenForm.medecin_nom}
+                      onChange={handleExamenInputChange}
+                      className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="ex: Martin"
+                      required
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Prénom du médecin *</label>
+                    <input
+                      type="text"
+                      name="medecin_prenom"
+                      value={examenForm.medecin_prenom}
+                      onChange={handleExamenInputChange}
+                      className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="ex: Jean"
+                      required
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Spécialité *</label>
+                    <input
+                      type="text"
+                      name="medecin_specialite"
+                      value={examenForm.medecin_specialite}
+                      onChange={handleExamenInputChange}
+                      className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="ex: Cardiologie, Médecine générale"
+                      required
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Numéro d'ordre *</label>
+                    <input
+                      type="text"
+                      name="medecin_numero_ordre"
+                      value={examenForm.medecin_numero_ordre}
+                      onChange={handleExamenInputChange}
+                      className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="ex: 12345"
+                      required
                     />
                   </div>
                 </div>
@@ -3969,6 +4208,64 @@ Dr. Dupont`
                     className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Observations particulières..."
                   />
+                </div>
+              </div>
+
+              {/* Informations du médecin traitant */}
+              <div className="mb-6">
+                <h4 className="text-md font-semibold text-gray-800 mb-4 border-b pb-2">Médecin Traitant</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Nom du médecin *</label>
+                    <input
+                      type="text"
+                      name="medecin_nom"
+                      value={ordonnanceCompleteForm.medecin_nom}
+                      onChange={handleOrdonnanceCompleteInputChange}
+                      className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="ex: Martin"
+                      required
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Prénom du médecin *</label>
+                    <input
+                      type="text"
+                      name="medecin_prenom"
+                      value={ordonnanceCompleteForm.medecin_prenom}
+                      onChange={handleOrdonnanceCompleteInputChange}
+                      className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="ex: Jean"
+                      required
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Spécialité *</label>
+                    <input
+                      type="text"
+                      name="medecin_specialite"
+                      value={ordonnanceCompleteForm.medecin_specialite}
+                      onChange={handleOrdonnanceCompleteInputChange}
+                      className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="ex: Cardiologie, Médecine générale"
+                      required
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Numéro d'ordre *</label>
+                    <input
+                      type="text"
+                      name="medecin_numero_ordre"
+                      value={ordonnanceCompleteForm.medecin_numero_ordre}
+                      onChange={handleOrdonnanceCompleteInputChange}
+                      className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="ex: 12345"
+                      required
+                    />
+                  </div>
                 </div>
               </div>
 

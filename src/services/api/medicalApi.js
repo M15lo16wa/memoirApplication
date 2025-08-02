@@ -229,11 +229,17 @@ const getAllDossiersMedical = async () => {
             const dossiers = response.data.data.dossiers;
             console.log('Found dossiers:', dossiers);
             
-            // Debug: Log the first dossier structure to see what fields are available
+                         // Debug: Log the first dossier structure to see what fields are available
             if (dossiers.length > 0) {
                 console.log('=== RAW DOSSIER STRUCTURE DEBUG ===');
                 console.log('First dossier raw data:', dossiers[0]);
                 console.log('All keys in first dossier:', Object.keys(dossiers[0]));
+                console.log('NumeroDossier fields:', {
+                    numeroDossier: dossiers[0].numeroDossier,
+                    numero_dossier: dossiers[0].numero_dossier,
+                    numeroDossier_exact: dossiers[0].numeroDossier,
+                    'numeroDossier (string)': dossiers[0]['numeroDossier']
+                });
                 console.log('Patient-related fields:', {
                     patient_id: dossiers[0].patient_id,
                     patientId: dossiers[0].patientId,
@@ -258,8 +264,14 @@ const getAllDossiersMedical = async () => {
                     const patient = dossier.patient_info || dossier.patient || dossier.Patient;
                     const service = dossier.service_info || dossier.service || dossier.Service;
                     
-                    // Create proper file number
-                    const fileNumber = dossier.numeroDossier || dossier.numero_dossier || dossier.id_dossier || dossier.id || 'N/A';
+                                         // Create proper file number - Prioriser le numeroDossier, sinon générer un numéro basé sur l'ID
+                    let fileNumber = dossier.numeroDossier || dossier.numero_dossier;
+                    
+                     // Si le numeroDossier n'est pas présent, générer un numéro basé sur l'ID
+                    if (!fileNumber || fileNumber === 'N/A' || fileNumber === 'undefined') {
+                        const dossierId = dossier.id_dossier || dossier.id;
+                        fileNumber = `DOSSIER-${dossierId.toString().padStart(6, '0')}`;
+                    }
                     
                     return {
                         ...dossier,
@@ -413,8 +425,22 @@ const getDossiersPatients = async (patientId = null) => {
                             }
                         }
                         
-                        // Create proper file number
-                        const fileNumber = dossier.numeroDossier || dossier.numero_dossier || dossier.id_dossier || dossier.id || 'N/A';
+                                                 // Create proper file number - Prioriser le numeroDossier, sinon générer un numéro basé sur l'ID
+                        let fileNumber = dossier.numeroDossier || dossier.numero_dossier;
+                        
+                         // Si le numeroDossier n'est pas présent, générer un numéro basé sur l'ID
+                        if (!fileNumber || fileNumber === 'N/A' || fileNumber === 'undefined') {
+                            const dossierId = dossier.id_dossier || dossier.id;
+                            fileNumber = `DOSSIER-${dossierId.toString().padStart(6, '0')}`;
+                        }
+                        console.log('Enrichissement dossier - Numéro dossier:', {
+                            original: dossier.numeroDossier,
+                            fallback: dossier.numero_dossier,
+                            id_dossier: dossier.id_dossier,
+                            id: dossier.id,
+                            final: fileNumber,
+                            rawDossier: dossier
+                        });
                         
                         return {
                             ...dossier,
