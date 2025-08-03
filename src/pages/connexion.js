@@ -74,9 +74,9 @@ function Connexion() {
                 console.log('👤 Données patient stockées:', patientData);
                 
                 if (token && patientData) {
-                    // Redirection vers la page dossier-medical
-                    console.log('🔑 Token et données patient présents, redirection vers /dossier-medical');
-                    navigate('/dossier-medical');
+                    // Redirection vers la nouvelle page DMP
+                    console.log('🔑 Token et données patient présents, redirection vers /dmp');
+                    navigate('/dmp');
                 } else {
                     throw new Error('Aucun token ou données patient reçus lors de la connexion');
                 }

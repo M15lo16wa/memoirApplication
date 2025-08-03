@@ -30,7 +30,7 @@ function Header() {
 
     const navLinks = [
         { href: "/", text: "Accueil", isActive: true },
-        { href: "/dossier-medical", text: "Dossier Médical" },
+        { href: "/dmp", text: "Mon DMP" },
         { href: "/medecin", text: "Médecins" },
         { href: "#", text: "À propos" }
     ];

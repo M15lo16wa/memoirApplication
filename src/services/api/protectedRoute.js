@@ -2,9 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   isMedecinAuthenticated, 
-  getStoredMedecin, 
   isPatientAuthenticated, 
-  getStoredPatient,
   getUserType
 } from './authApi';
 
@@ -21,7 +19,6 @@ const LoadingScreen = () => (
 export const ProtectedRoute = ({ children, allowedUserTypes = ['medecin', 'patient'] }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [userType, setUserType] = useState(null);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -41,7 +38,6 @@ export const ProtectedRoute = ({ children, allowedUserTypes = ['medecin', 'patie
       if (currentUserType && allowedUserTypes.includes(currentUserType)) {
         console.log('✅ Utilisateur autorisé, affichage du contenu');
         setIsAuthenticated(true);
-        setUserType(currentUserType);
       } else {
         console.log('❌ Accès non autorisé - redirection vers connexion');
         

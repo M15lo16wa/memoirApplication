@@ -4,6 +4,7 @@ import Admin from './pages/Admin';
 import HomePage from './pages/HomePage';
 import RendezVous from './pages/rendezVous';
 import Utilisateurs from './pages/Utilisateur';
+import DMP from './pages/DMP';
 import DossierMedical from './pages/DossierMedical';
 import Medecin from './pages/medecin';
 import Consultation from './pages/consultation';
@@ -32,7 +33,8 @@ function App() {
       <Route path='/consultation' element={<ProtectedMedecinRoute><Consultation/></ProtectedMedecinRoute>}/>
       
       {/* Routes pour les patients uniquement */}
-      <Route path="/dossier-medical" element={<ProtectedPatientRoute><DossierMedical /></ProtectedPatientRoute>} />
+      <Route path="/dossier-medical" element={<DossierMedical />} />
+      <Route path="/dmp" element={<DMP />} />
       
       {/* Routes accessibles aux médecins ET aux patients */}
       <Route path="/rendezVous" element={<ProtectedMedecinOrPatientRoute><RendezVous /></ProtectedMedecinOrPatientRoute>}/>
