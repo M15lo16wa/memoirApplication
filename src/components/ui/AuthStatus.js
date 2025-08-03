@@ -1,13 +1,32 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { getUserType, getCurrentUser } from '../../services/api/authApi';
 
 const AuthStatus = () => {
+  const [isVisible, setIsVisible] = useState(true);
   const userType = getUserType();
   const currentUser = getCurrentUser();
 
+  // Ne pas afficher si l'utilisateur n'est pas connecté
+  if (!userType) {
+    return null;
+  }
+
+  if (!isVisible) {
+    return null;
+  }
+
   return (
     <div className="fixed top-4 right-4 bg-white p-4 rounded-lg shadow-lg border z-50 max-w-sm">
-      <h3 className="font-bold text-gray-800 mb-2">Statut d'authentification</h3>
+      <div className="flex justify-between items-start mb-2">
+        <h3 className="font-bold text-gray-800">Statut d'authentification</h3>
+        <button 
+          onClick={() => setIsVisible(false)}
+          className="text-gray-400 hover:text-gray-600 text-sm"
+          title="Fermer"
+        >
+          ✕
+        </button>
+      </div>
       <div className="space-y-1 text-sm">
         <p><span className="font-semibold">Type:</span> {userType || 'Non connecté'}</p>
         {currentUser && currentUser.data && (

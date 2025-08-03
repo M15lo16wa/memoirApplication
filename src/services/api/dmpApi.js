@@ -2,7 +2,7 @@ import axios from "axios";
 
 const API_URL = "http://localhost:3000/api";
 
-const api = axios.create({
+const dmpApi = axios.create({
     baseURL: API_URL,
     headers: {
         "Content-Type": "application/json",
@@ -10,273 +10,598 @@ const api = axios.create({
     },
 });
 
-// Intercepteur pour ajouter le token JWT patient
-api.interceptors.request.use(
+// Fonction utilitaire pour récupérer l'ID du patient connecté
+const getConnectedPatientId = () => {
+    const storedPatient = JSON.parse(localStorage.getItem('patient') || '{}');
+    return storedPatient.id;
+};
+
+// Intercepteur d'authentification
+dmpApi.interceptors.request.use(
     (config) => {
         const jwtToken = localStorage.getItem('jwt');
+        const token = localStorage.getItem('token');
+        
         if (jwtToken) {
             config.headers.Authorization = `Bearer ${jwtToken}`;
+        } else if (token) {
+            config.headers.Authorization = `Bearer ${token}`;
         }
+        
         return config;
     },
     (error) => Promise.reject(error)
 );
 
-// ================================
-// CATÉGORIE 1 : LE CŒUR DU DMP
-// ================================
+// ===== DONNÉES MOCK POUR DÉVELOPPEMENT =====
+const getMockDataForPatient = (patientId) => {
+    // Récupérer les données du patient connecté
+    const storedPatient = JSON.parse(localStorage.getItem('patient') || '{}');
+    
+    return {
+        tableauDeBord: {
+            patient: {
+                id: patientId || storedPatient.id || 1,
+                nom: storedPatient.nom || "Dupont",
+                prenom: storedPatient.prenom || "Jean",
+                date_naissance: storedPatient.date_naissance || "1985-03-15",
+                groupe_sanguin: storedPatient.groupe_sanguin || "A+",
+                allergies: storedPatient.allergies || "Pénicilline",
+                maladies_chroniques: storedPatient.maladies_chroniques || "Diabète type 2",
+                telephone: storedPatient.telephone || "+221 77 123 45 67",
+                email: storedPatient.email || "jean.dupont@email.com"
+            },
+            statistiques: {
+                auto_mesures: 24,
+                documents: 8,
+                rendez_vous: 3,
+                consultations: 12
+            },
+            derniere_activite: "Consultation cardiologie - 15/01/2024"
+        },
+        statistiques: {
+            auto_mesures: {
+                total: 24,
+                ce_mois: 8,
+                types: {
+                    poids: 6,
+                    tension: 8,
+                    temperature: 4,
+                    glycemie: 6
+                }
+            },
+            documents: {
+                total: 8,
+                types: {
+                    ordonnances: 3,
+                    resultats: 2,
+                    radiographies: 2,
+                    autres: 1
+                }
+            },
+            rendez_vous: {
+                total: 3,
+                a_venir: 2,
+                passes: 1
+            }
+        },
+        rappels: [
+            {
+                id: 1,
+                titre: "Prise de tension",
+                description: "Mesurez votre tension artérielle",
+                date_rappel: "2024-01-20",
+                type: "auto_mesure",
+                actif: true
+            },
+            {
+                id: 2,
+                titre: "Rendez-vous cardiologue",
+                description: "Consultation de suivi",
+                date_rappel: "2024-01-25",
+                type: "rendez_vous",
+                actif: true
+            }
+        ],
+        historique: [
+            {
+                id: 1,
+                type: "Consultation",
+                date: "2024-01-15",
+                description: "Consultation cardiologie - Dr. Martin",
+                medecin: "Dr. Martin",
+                specialite: "Cardiologie"
+            },
+            {
+                id: 2,
+                type: "Analyse",
+                date: "2024-01-10",
+                description: "Prise de sang - Glycémie, Cholestérol",
+                laboratoire: "Labo Central"
+            }
+        ],
+        auto_mesures: [
+            {
+                id: 1,
+                type: "poids",
+                valeur: 75,
+                unite: "kg",
+                date_mesure: "2024-01-15",
+                heure_mesure: "08:30",
+                commentaire: "Poids stable"
+            },
+            {
+                id: 2,
+                type: "tension",
+                valeur: 120,
+                valeur_secondaire: 80,
+                unite: "mmHg",
+                date_mesure: "2024-01-14",
+                heure_mesure: "09:15",
+                commentaire: "Tension normale"
+            },
+            {
+                id: 3,
+                type: "temperature",
+                valeur: 36.8,
+                unite: "°C",
+                date_mesure: "2024-01-13",
+                heure_mesure: "18:45",
+                commentaire: "Température normale"
+            }
+        ],
+        documents: [
+            {
+                id: 1,
+                titre: "Ordonnance cardiologie",
+                type: "ordonnance",
+                description: "Ordonnance du Dr. Martin",
+                date_upload: "2024-01-15",
+                taille: "245 KB",
+                url: "#"
+            },
+            {
+                id: 2,
+                titre: "Résultats analyses",
+                type: "resultat",
+                description: "Analyses sanguines",
+                date_upload: "2024-01-10",
+                taille: "1.2 MB",
+                url: "#"
+            }
+        ],
+        droits_acces: [
+            {
+                id: 1,
+                professionnel: {
+                    nom: "Martin",
+                    prenom: "Sophie",
+                    specialite: "Cardiologie"
+                },
+                date_autorisation: "2024-01-01",
+                permissions: ["lecture", "ecriture"]
+            }
+        ]
+    };
+};
 
-// 1. Tableau de Bord Personnalisé
+// ===== FONCTIONS DMP PRINCIPALES =====
+
+// 1. Récupérer le tableau de bord
 export const getTableauDeBord = async () => {
     try {
-        const response = await api.get('/patient/dmp/tableau-de-bord');
-        return response.data;
+        const patientId = getConnectedPatientId();
+        
+        if (!patientId) {
+            throw new Error('Patient non connecté');
+        }
+        
+        // Simulation d'un délai réseau
+        await new Promise(resolve => setTimeout(resolve, 500));
+        const mockData = getMockDataForPatient(patientId);
+        return { data: { tableau_de_bord: mockData.tableauDeBord } };
     } catch (error) {
-        throw error.response?.data?.message || "Erreur lors de la récupération du tableau de bord";
+        console.warn("Mode développement: utilisation des données mock");
+        const patientId = getConnectedPatientId();
+        const mockData = getMockDataForPatient(patientId);
+        return { data: { tableau_de_bord: mockData.tableauDeBord } };
     }
 };
 
-// 2. Historique Médical Complet
-export const getHistoriqueMedical = async (params = {}) => {
-    try {
-        const response = await api.get('/patient/dmp/historique-medical', { params });
-        return response.data;
-    } catch (error) {
-        throw error.response?.data?.message || "Erreur lors de la récupération de l'historique médical";
-    }
-};
-
-// 3. Journal d'Activité et de Consentement
-export const getJournalActivite = async (params = {}) => {
-    try {
-        const response = await api.get('/patient/dmp/journal-activite', { params });
-        return response.data;
-    } catch (error) {
-        throw error.response?.data?.message || "Erreur lors de la récupération du journal d'activité";
-    }
-};
-
-// ================================
-// CATÉGORIE 2 : GESTION ACTIVE
-// ================================
-
-// 4. Gestion des Droits d'Accès
-export const getDroitsAcces = async () => {
-    try {
-        const response = await api.get('/patient/dmp/droits-acces');
-        return response.data;
-    } catch (error) {
-        throw error.response?.data?.message || "Erreur lors de la récupération des droits d'accès";
-    }
-};
-
-export const autoriserAcces = async (professionnelId, permissions) => {
-    try {
-        const response = await api.post('/patient/dmp/autoriser-acces', {
-            professionnel_id: professionnelId,
-            permissions
-        });
-        return response.data;
-    } catch (error) {
-        throw error.response?.data?.message || "Erreur lors de l'autorisation d'accès";
-    }
-};
-
-export const revoquerAcces = async (professionnelId) => {
-    try {
-        const response = await api.delete(`/patient/dmp/revoquer-acces/${professionnelId}`);
-        return response.data;
-    } catch (error) {
-        throw error.response?.data?.message || "Erreur lors de la révocation d'accès";
-    }
-};
-
-// 5. Ajout d'Informations par le Patient
-export const updateInformationsPersonnelles = async (informations) => {
-    try {
-        const response = await api.patch('/patient/dmp/informations-personnelles', informations);
-        return response.data;
-    } catch (error) {
-        throw error.response?.data?.message || "Erreur lors de la mise à jour des informations";
-    }
-};
-
-export const ajouterAutoMesure = async (autoMesure) => {
-    try {
-        const response = await api.post('/patient/dmp/auto-mesures', autoMesure);
-        return response.data;
-    } catch (error) {
-        throw error.response?.data?.message || "Erreur lors de l'ajout de l'auto-mesure";
-    }
-};
-
-// 6. Upload de Documents Personnels
-export const uploadDocument = async (formData) => {
-    try {
-        const response = await api.post('/patient/dmp/upload-document', formData, {
-            headers: {
-                'Content-Type': 'multipart/form-data',
-            },
-        });
-        return response.data;
-    } catch (error) {
-        throw error.response?.data?.message || "Erreur lors de l'upload du document";
-    }
-};
-
-// ================================
-// CATÉGORIE 3 : INTERACTION ET SERVICES
-// ================================
-
-// 7. Gestion des Rendez-vous
-export const getRendezVous = async (params = {}) => {
-    try {
-        const response = await api.get('/patient/dmp/rendez-vous', { params });
-        return response.data;
-    } catch (error) {
-        throw error.response?.data?.message || "Erreur lors de la récupération des rendez-vous";
-    }
-};
-
-// 8. Messagerie Sécurisée Patient-Médecin
-export const envoyerMessage = async (message) => {
-    try {
-        const response = await api.post('/patient/dmp/messagerie', message);
-        return response.data;
-    } catch (error) {
-        throw error.response?.data?.message || "Erreur lors de l'envoi du message";
-    }
-};
-
-export const getMessages = async (params = {}) => {
-    try {
-        const response = await api.get('/patient/dmp/messagerie', { params });
-        return response.data;
-    } catch (error) {
-        throw error.response?.data?.message || "Erreur lors de la récupération des messages";
-    }
-};
-
-// ================================
-// CATÉGORIE 4 : AUTONOMISATION ET PRÉVENTION
-// ================================
-
-// 9. Fiche d'Urgence Imprimable / QR Code
-export const getFicheUrgence = async () => {
-    try {
-        const response = await api.get('/patient/dmp/fiche-urgence');
-        return response.data;
-    } catch (error) {
-        throw error.response?.data?.message || "Erreur lors de la génération de la fiche d'urgence";
-    }
-};
-
-// 10. Rappels et Plan de Soins Personnalisé
-export const getRappels = async (params = {}) => {
-    try {
-        const response = await api.get('/patient/dmp/rappels', { params });
-        return response.data;
-    } catch (error) {
-        throw error.response?.data?.message || "Erreur lors de la récupération des rappels";
-    }
-};
-
-export const creerRappel = async (rappel) => {
-    try {
-        const response = await api.post('/patient/dmp/rappels', rappel);
-        return response.data;
-    } catch (error) {
-        throw error.response?.data?.message || "Erreur lors de la création du rappel";
-    }
-};
-
-// 11. Bibliothèque de Santé
-export const getBibliothequeSante = async (params = {}) => {
-    try {
-        const response = await api.get('/patient/dmp/bibliotheque-sante', { params });
-        return response.data;
-    } catch (error) {
-        throw error.response?.data?.message || "Erreur lors de la récupération de la bibliothèque de santé";
-    }
-};
-
-// 12. Statistiques du DMP
+// 2. Récupérer les statistiques
 export const getStatistiques = async () => {
     try {
-        const response = await api.get('/patient/dmp/statistiques');
-        return response.data;
+        // Récupérer l'ID du patient connecté
+        const storedPatient = JSON.parse(localStorage.getItem('patient') || '{}');
+        const patientId = storedPatient.id;
+        
+        if (!patientId) {
+            throw new Error('Patient non connecté');
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, 300));
+        const mockData = getMockDataForPatient(patientId);
+        return { data: mockData.statistiques };
     } catch (error) {
-        throw error.response?.data?.message || "Erreur lors de la récupération des statistiques";
+        console.warn("Mode développement: utilisation des données mock");
+        const storedPatient = JSON.parse(localStorage.getItem('patient') || '{}');
+        const mockData = getMockDataForPatient(storedPatient.id);
+        return { data: mockData.statistiques };
     }
 };
 
-// ================================
-// UTILITAIRES
-// ================================
-
-// Fonction pour télécharger un document
-export const telechargerDocument = async (documentId) => {
+// 3. Récupérer les rappels
+export const getRappels = async () => {
     try {
-        const response = await api.get(`/patient/dmp/documents/${documentId}/download`, {
-            responseType: 'blob'
-        });
-        return response.data;
+        const patientId = getConnectedPatientId();
+        
+        if (!patientId) {
+            throw new Error('Patient non connecté');
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, 200));
+        const mockData = getMockDataForPatient(patientId);
+        return { data: mockData.rappels };
     } catch (error) {
-        throw error.response?.data?.message || "Erreur lors du téléchargement du document";
+        console.warn("Mode développement: utilisation des données mock");
+        const patientId = getConnectedPatientId();
+        const mockData = getMockDataForPatient(patientId);
+        return { data: mockData.rappels };
     }
 };
 
-// Fonction pour supprimer un document
-export const supprimerDocument = async (documentId) => {
+// 4. Récupérer le DMP complet d'un patient
+export const getDMP = async (patientId = null) => {
     try {
-        const response = await api.delete(`/patient/dmp/documents/${documentId}`);
-        return response.data;
+        // Récupérer l'ID du patient connecté si non fourni
+        if (!patientId) {
+            const storedPatient = JSON.parse(localStorage.getItem('patient') || '{}');
+            patientId = storedPatient.id;
+        }
+        
+        if (!patientId) {
+            throw new Error('Patient non connecté');
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, 400));
+        const mockData = getMockDataForPatient(patientId);
+        return {
+            data: {
+                patient: mockData.tableauDeBord.patient,
+                historique: mockData.historique,
+                auto_mesures: mockData.auto_mesures,
+                documents: mockData.documents
+            }
+        };
     } catch (error) {
-        throw error.response?.data?.message || "Erreur lors de la suppression du document";
+        console.warn("Mode développement: utilisation des données mock");
+        const storedPatient = JSON.parse(localStorage.getItem('patient') || '{}');
+        const mockData = getMockDataForPatient(storedPatient.id);
+        return {
+            data: {
+                patient: mockData.tableauDeBord.patient,
+                historique: mockData.historique,
+                auto_mesures: mockData.auto_mesures,
+                documents: mockData.documents
+            }
+        };
     }
 };
 
-// Fonction pour marquer un rappel comme terminé
-export const marquerRappelTermine = async (rappelId) => {
+// 5. Mettre à jour le DMP
+export const updateDMP = async (patientId, dmpData) => {
     try {
-        const response = await api.patch(`/patient/dmp/rappels/${rappelId}/termine`);
-        return response.data;
+        await new Promise(resolve => setTimeout(resolve, 300));
+        return { data: { success: true, message: "DMP mis à jour" } };
     } catch (error) {
-        throw error.response?.data?.message || "Erreur lors de la mise à jour du rappel";
+        console.warn("Mode développement: simulation de mise à jour");
+        return { data: { success: true, message: "DMP mis à jour" } };
     }
 };
 
-// Export par défaut
-const dmpApi = {
-    // Catégorie 1
-    getTableauDeBord,
+// 6. Récupérer l'historique médical
+export const getHistoriqueMedical = async (patientId = null) => {
+    try {
+        // Récupérer l'ID du patient connecté si non fourni
+        if (!patientId) {
+            const storedPatient = JSON.parse(localStorage.getItem('patient') || '{}');
+            patientId = storedPatient.id;
+        }
+        
+        if (!patientId) {
+            throw new Error('Patient non connecté');
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, 300));
+        const mockData = getMockDataForPatient(patientId);
+        return { data: mockData.historique };
+    } catch (error) {
+        console.warn("Mode développement: utilisation des données mock");
+        const storedPatient = JSON.parse(localStorage.getItem('patient') || '{}');
+        const mockData = getMockDataForPatient(storedPatient.id);
+        return { data: mockData.historique };
+    }
+};
+
+// 7. Ajouter une entrée à l'historique
+export const addHistoriqueEntry = async (patientId, entry) => {
+    try {
+        await new Promise(resolve => setTimeout(resolve, 200));
+        const newEntry = { id: Date.now(), ...entry };
+        return { data: newEntry };
+    } catch (error) {
+        console.warn("Mode développement: simulation d'ajout");
+        const newEntry = { id: Date.now(), ...entry };
+        return { data: newEntry };
+    }
+};
+
+// 8. Récupérer le journal d'activité
+export const getJournalActivite = async (patientId, filters = {}) => {
+    try {
+        // Récupérer l'ID du patient connecté si non fourni
+        if (!patientId) {
+            const storedPatient = JSON.parse(localStorage.getItem('patient') || '{}');
+            patientId = storedPatient.id;
+        }
+        
+        if (!patientId) {
+            throw new Error('Patient non connecté');
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, 300));
+        const mockData = getMockDataForPatient(patientId);
+        return { data: mockData.historique };
+    } catch (error) {
+        console.warn("Mode développement: utilisation des données mock");
+        const storedPatient = JSON.parse(localStorage.getItem('patient') || '{}');
+        const mockData = getMockDataForPatient(storedPatient.id);
+        return { data: mockData.historique };
+    }
+};
+
+// 9. Gestion des droits d'accès
+export const getDroitsAcces = async (patientId = null) => {
+    try {
+        // Récupérer l'ID du patient connecté si non fourni
+        if (!patientId) {
+            const storedPatient = JSON.parse(localStorage.getItem('patient') || '{}');
+            patientId = storedPatient.id;
+        }
+        
+        if (!patientId) {
+            throw new Error('Patient non connecté');
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, 300));
+        const mockData = getMockDataForPatient(patientId);
+        return { data: mockData.droits_acces };
+    } catch (error) {
+        console.warn("Mode développement: utilisation des données mock");
+        const storedPatient = JSON.parse(localStorage.getItem('patient') || '{}');
+        const mockData = getMockDataForPatient(storedPatient.id);
+        return { data: mockData.droits_acces };
+    }
+};
+
+export const updateDroitsAcces = async (patientId, droits) => {
+    try {
+        await new Promise(resolve => setTimeout(resolve, 300));
+        return { data: { success: true, message: "Droits mis à jour" } };
+    } catch (error) {
+        console.warn("Mode développement: simulation de mise à jour");
+        return { data: { success: true, message: "Droits mis à jour" } };
+    }
+};
+
+// 10. Auto-mesures DMP
+export const getAutoMesuresDMP = async (patientId = null, type = null) => {
+    try {
+        // Récupérer l'ID du patient connecté si non fourni
+        if (!patientId) {
+            const storedPatient = JSON.parse(localStorage.getItem('patient') || '{}');
+            patientId = storedPatient.id;
+        }
+        
+        if (!patientId) {
+            throw new Error('Patient non connecté');
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, 300));
+        const mockData = getMockDataForPatient(patientId);
+        let mesures = mockData.auto_mesures;
+        if (type) {
+            mesures = mesures.filter(m => m.type === type);
+        }
+        return { data: mesures };
+    } catch (error) {
+        console.warn("Mode développement: utilisation des données mock");
+        const storedPatient = JSON.parse(localStorage.getItem('patient') || '{}');
+        const mockData = getMockDataForPatient(storedPatient.id);
+        let mesures = mockData.auto_mesures;
+        if (type) {
+            mesures = mesures.filter(m => m.type === type);
+        }
+        return { data: mesures };
+    }
+};
+
+export const createAutoMesureDMP = async (patientId = null, mesureData) => {
+    try {
+        // Récupérer l'ID du patient connecté si non fourni
+        if (!patientId) {
+            const storedPatient = JSON.parse(localStorage.getItem('patient') || '{}');
+            patientId = storedPatient.id;
+        }
+        
+        if (!patientId) {
+            throw new Error('Patient non connecté');
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, 200));
+        const newMesure = { 
+            id: Date.now(), 
+            patient_id: patientId,
+            ...mesureData 
+        };
+        return { data: newMesure };
+    } catch (error) {
+        console.warn("Mode développement: simulation d'ajout");
+        const storedPatient = JSON.parse(localStorage.getItem('patient') || '{}');
+        const newMesure = { 
+            id: Date.now(), 
+            patient_id: storedPatient.id,
+            ...mesureData 
+        };
+        return { data: newMesure };
+    }
+};
+
+// 11. Rendez-vous DMP
+export const getRendezVousDMP = async (patientId) => {
+    try {
+        await new Promise(resolve => setTimeout(resolve, 300));
+        return { data: [] };
+    } catch (error) {
+        console.warn("Mode développement: utilisation des données mock");
+        return { data: [] };
+    }
+};
+
+export const createRendezVousDMP = async (patientId, rdvData) => {
+    try {
+        await new Promise(resolve => setTimeout(resolve, 200));
+        const newRdv = { id: Date.now(), ...rdvData };
+        return { data: newRdv };
+    } catch (error) {
+        console.warn("Mode développement: simulation d'ajout");
+        const newRdv = { id: Date.now(), ...rdvData };
+        return { data: newRdv };
+    }
+};
+
+// 12. Documents DMP
+export const getDocumentsDMP = async (patientId = null, type = null) => {
+    try {
+        // Récupérer l'ID du patient connecté si non fourni
+        if (!patientId) {
+            const storedPatient = JSON.parse(localStorage.getItem('patient') || '{}');
+            patientId = storedPatient.id;
+        }
+        
+        if (!patientId) {
+            throw new Error('Patient non connecté');
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, 300));
+        const mockData = getMockDataForPatient(patientId);
+        let documents = mockData.documents;
+        if (type) {
+            documents = documents.filter(d => d.type === type);
+        }
+        return { data: documents };
+    } catch (error) {
+        console.warn("Mode développement: utilisation des données mock");
+        const storedPatient = JSON.parse(localStorage.getItem('patient') || '{}');
+        const mockData = getMockDataForPatient(storedPatient.id);
+        let documents = mockData.documents;
+        if (type) {
+            documents = documents.filter(d => d.type === type);
+        }
+        return { data: documents };
+    }
+};
+
+export const uploadDocumentDMP = async (patientId = null, documentData) => {
+    try {
+        // Récupérer l'ID du patient connecté si non fourni
+        if (!patientId) {
+            const storedPatient = JSON.parse(localStorage.getItem('patient') || '{}');
+            patientId = storedPatient.id;
+        }
+        
+        if (!patientId) {
+            throw new Error('Patient non connecté');
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        const newDocument = {
+            id: Date.now(),
+            patient_id: patientId,
+            titre: documentData.description || "Document uploadé",
+            type: documentData.type || "autre",
+            description: documentData.description || "",
+            date_upload: new Date().toISOString().split('T')[0],
+            taille: "1.5 MB",
+            url: "#"
+        };
+        return { data: newDocument };
+    } catch (error) {
+        console.warn("Mode développement: simulation d'upload");
+        const storedPatient = JSON.parse(localStorage.getItem('patient') || '{}');
+        const newDocument = {
+            id: Date.now(),
+            patient_id: storedPatient.id,
+            titre: documentData.description || "Document uploadé",
+            type: documentData.type || "autre",
+            description: documentData.description || "",
+            date_upload: new Date().toISOString().split('T')[0],
+            taille: "1.5 MB",
+            url: "#"
+        };
+        return { data: newDocument };
+    }
+};
+
+// 13. Bibliothèque de santé
+export const getBibliothequeSante = async (patientId) => {
+    try {
+        await new Promise(resolve => setTimeout(resolve, 300));
+        return { data: [] };
+    } catch (error) {
+        console.warn("Mode développement: utilisation des données mock");
+        return { data: [] };
+    }
+};
+
+// 14. Statistiques DMP
+export const getStatistiquesDMP = async (patientId, periode = '30j') => {
+    try {
+        // Récupérer l'ID du patient connecté si non fourni
+        if (!patientId) {
+            const storedPatient = JSON.parse(localStorage.getItem('patient') || '{}');
+            patientId = storedPatient.id;
+        }
+        
+        if (!patientId) {
+            throw new Error('Patient non connecté');
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, 300));
+        const mockData = getMockDataForPatient(patientId);
+        return { data: mockData.statistiques };
+    } catch (error) {
+        console.warn("Mode développement: utilisation des données mock");
+        const storedPatient = JSON.parse(localStorage.getItem('patient') || '{}');
+        const mockData = getMockDataForPatient(storedPatient.id);
+        return { data: mockData.statistiques };
+    }
+};
+
+export default {
+    getDMP,
+    updateDMP,
     getHistoriqueMedical,
+    addHistoriqueEntry,
     getJournalActivite,
-    
-    // Catégorie 2
     getDroitsAcces,
-    autoriserAcces,
-    revoquerAcces,
-    updateInformationsPersonnelles,
-    ajouterAutoMesure,
-    uploadDocument,
-    
-    // Catégorie 3
-    getRendezVous,
-    envoyerMessage,
-    getMessages,
-    
-    // Catégorie 4
-    getFicheUrgence,
-    getRappels,
-    creerRappel,
+    updateDroitsAcces,
+    getAutoMesuresDMP,
+    createAutoMesureDMP,
+    getRendezVousDMP,
+    createRendezVousDMP,
+    getDocumentsDMP,
+    uploadDocumentDMP,
     getBibliothequeSante,
-    getStatistiques,
-    
-    // Utilitaires
-    telechargerDocument,
-    supprimerDocument,
-    marquerRappelTermine
-};
-
-export default dmpApi; 
+    getStatistiquesDMP
+}; 

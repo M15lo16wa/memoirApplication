@@ -635,6 +635,30 @@ function DossierPatient() {
     }
   }, [showPatientFileModal]);
 
+  // Fonctions pour l'onglet prescription
+  const loadPrescriptions = useCallback(async () => {
+    setPrescriptionsLoading(true);
+    try {
+      // Vérifier si un patient est sélectionné
+      const patientId = selectedPatientForPrescription?.id || selectedPatientForPrescription?.rawData?.id_patient || selectedPatientForPrescription?.id_patient;
+      if (!patientId) {
+        console.log('Aucun patient sélectionné pour charger les prescriptions');
+        setPrescriptions([]);
+        return;
+      }
+
+      // Pour l'instant, on charge les traitements actifs
+      // TODO: Implémenter une API pour récupérer toutes les prescriptions
+      const traitementsActifs = await getTraitementsActifs(patientId);
+      setPrescriptions(traitementsActifs || []);
+    } catch (error) {
+      console.error('Erreur lors du chargement des prescriptions:', error);
+      setPrescriptions([]);
+    } finally {
+      setPrescriptionsLoading(false);
+    }
+  }, [selectedPatientForPrescription]);
+
   // Load dossiers patients when switching to shared-folder tab
   useEffect(() => {
     console.log('Active tab changed to:', activeTab);
@@ -769,30 +793,6 @@ function DossierPatient() {
   const closeAddModal = () => {
     setShowAddModal(false);
   };
-
-  // Fonctions pour l'onglet prescription
-  const loadPrescriptions = useCallback(async () => {
-    setPrescriptionsLoading(true);
-    try {
-      // Vérifier si un patient est sélectionné
-      const patientId = selectedPatientForPrescription?.id || selectedPatientForPrescription?.rawData?.id_patient || selectedPatientForPrescription?.id_patient;
-      if (!patientId) {
-        console.log('Aucun patient sélectionné pour charger les prescriptions');
-        setPrescriptions([]);
-        return;
-      }
-
-      // Pour l'instant, on charge les traitements actifs
-      // TODO: Implémenter une API pour récupérer toutes les prescriptions
-      const traitementsActifs = await getTraitementsActifs(patientId);
-      setPrescriptions(traitementsActifs || []);
-    } catch (error) {
-      console.error('Erreur lors du chargement des prescriptions:', error);
-      setPrescriptions([]);
-    } finally {
-      setPrescriptionsLoading(false);
-    }
-  }, [selectedPatientForPrescription]);
 
   const openPrescriptionModal = (patient = null) => {
     if (patient) {
