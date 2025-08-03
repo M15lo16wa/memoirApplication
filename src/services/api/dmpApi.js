@@ -42,14 +42,14 @@ const getMockDataForPatient = (patientId) => {
         tableauDeBord: {
             patient: {
                 id: patientId || storedPatient.id || 1,
-                nom: storedPatient.nom || "Dupont",
-                prenom: storedPatient.prenom || "Jean",
-                date_naissance: storedPatient.date_naissance || "1985-03-15",
-                groupe_sanguin: storedPatient.groupe_sanguin || "A+",
-                allergies: storedPatient.allergies || "Pénicilline",
-                maladies_chroniques: storedPatient.maladies_chroniques || "Diabète type 2",
-                telephone: storedPatient.telephone || "+221 77 123 45 67",
-                email: storedPatient.email || "jean.dupont@email.com"
+                nom: storedPatient.nom || "",
+                prenom: storedPatient.prenom || "",
+                date_naissance: storedPatient.date_naissance || "",
+                groupe_sanguin: storedPatient.groupe_sanguin || "",
+                allergies: storedPatient.allergies || "",
+                maladies_chroniques: storedPatient.maladies_chroniques || "",
+                telephone: storedPatient.telephone || "",
+                email: storedPatient.email || ""
             },
             statistiques: {
                 auto_mesures: 24,
