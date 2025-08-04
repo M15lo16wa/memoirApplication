@@ -74,7 +74,7 @@ function Connexion() {
                 console.log('👤 Données patient stockées:', patientData);
                 
                 if (token && patientData) {
-                    // Redirection vers la nouvelle page DMP
+                    // Redirection vers la page DMP
                     console.log('🔑 Token et données patient présents, redirection vers /dmp');
                     navigate('/dmp');
                 } else {
@@ -296,8 +296,8 @@ function Connexion() {
                 <div>
                     <label htmlFor="identifiant" className="block text-sm font-medium text-gray-700">
                         {isPatient ? 'Numéro de carte d\'assurance' : 
-                         isMedecin ? 'Numéro d\'inscription à l\'Ordre des Médecins' : 
-                         'Email professionnel'}
+                        isMedecin ? 'Numéro d\'inscription à l\'Ordre des Médecins' : 
+                        'Email professionnel'}
                     </label>
                     <div className="mt-1 relative rounded-md shadow-sm">
                         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">

@@ -11,9 +11,9 @@ import Consultation from './pages/consultation';
 import DossierPatient from './pages/dossierPatient';
 import FicheInscription from './pages/ficheInscription';
 
+
 // protection des routes
 import { 
-  ProtectedRoute, 
   ProtectedMedecinRoute, 
   ProtectedPatientRoute,
   ProtectedMedecinOrPatientRoute 
@@ -34,7 +34,7 @@ function App() {
       
       {/* Routes pour les patients uniquement */}
       <Route path="/dossier-medical" element={<DossierMedical />} />
-      <Route path="/dmp" element={<DMP />} />
+      <Route path="/dmp" element={<ProtectedPatientRoute><DMP /></ProtectedPatientRoute>} />
       
       {/* Routes accessibles aux médecins ET aux patients */}
       <Route path="/rendezVous" element={<ProtectedMedecinOrPatientRoute><RendezVous /></ProtectedMedecinOrPatientRoute>}/>

@@ -98,7 +98,18 @@ const createExamen = async (examen) => {
     }
 };
 
-// 6-) Récupération des ordonnances récentes
+// 6-) Récupération de toutes les prescriptions
+const getAllPrescriptions = async () => {
+    try {
+        const response = await api.get(`/prescription/`);
+        return response.data;
+    } catch (error) {
+        console.error('Erreur lors de la récupération des prescriptions:', error);
+        throw error;
+    }
+};
+
+// 7-) Récupération des ordonnances récentes
 const getOrdonnancesRecentes = async (page = 1, limit = 10, jours = 7) => {
     try {
         const response = await api.get(`/prescription/ordonnances-recentes?page=${page}&limit=${limit}&jours=${jours}`);
@@ -785,6 +796,7 @@ export {
     getTraitementsActifs,
     createOrdonnance,
     createExamen,
+    getAllPrescriptions,
     getOrdonnancesRecentes,
     createOrdonnanceComplete,
     ajouterPrescriptionAuDossier,

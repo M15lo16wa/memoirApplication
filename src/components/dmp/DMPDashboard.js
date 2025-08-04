@@ -5,7 +5,6 @@ import { FaHeartbeat, FaFileMedical, FaCalendarAlt, FaChartLine, FaUserMd, FaThe
 const DMPDashboard = () => {
     const { 
         dmpData, 
-        statistiques, 
         loading, 
         error,
         loadStatistiques,
@@ -19,6 +18,16 @@ const DMPDashboard = () => {
     useEffect(() => {
         loadStatistiques();
     }, [loadStatistiques]);
+
+    // Recharger les données quand les auto-mesures ou documents changent
+    useEffect(() => {
+        if (dmpData) {
+            console.log('🔄 DMPDashboard - Données mises à jour:', {
+                autoMesures: dmpData.autoMesures?.length || 0,
+                documents: dmpData.documents?.length || 0
+            });
+        }
+    }, [dmpData]);
 
     if (loading) {
         return (
@@ -40,6 +49,10 @@ const DMPDashboard = () => {
     const latestMesures = getLatestAutoMesures(3);
     const latestDocs = getLatestDocuments(3);
     const upcomingRdv = getUpcomingRendezVous().slice(0, 3);
+
+    // Debug: afficher les auto-mesures
+    console.log('📊 DMPDashboard - Auto-mesures disponibles:', latestMesures);
+    console.log('📊 DMPDashboard - Statistiques:', resume);
 
     const getMesureIcon = (type) => {
         switch (type) {
@@ -133,7 +146,7 @@ const DMPDashboard = () => {
                                         {getMesureIcon(mesure.type)}
                                     </div>
                                     <div className="flex-1">
-                                        <p className="font-medium">{mesure.type.replace('_', ' ')}</p>
+                                        <p className="font-medium">{mesure.type ? mesure.type.replace('_', ' ') : 'Mesure'}</p>
                                         <p className="text-sm text-gray-600">
                                             {mesure.valeur} {mesure.unite}
                                             {mesure.valeur_secondaire && ` / ${mesure.valeur_secondaire} ${mesure.unite_secondaire}`}

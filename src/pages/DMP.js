@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { 
-  FaUser, FaCalendar, FaFileMedical, FaShieldAlt, 
+  FaUser, FaFileMedical, FaShieldAlt, 
   FaUpload, FaBell, FaQrcode, FaBook, FaChartBar,
-  FaSignOutAlt, FaPlus, FaSearch, FaDownload, FaTrash,
+  FaSignOutAlt, FaPlus, FaDownload, FaTrash,
   FaHeartbeat, FaPills, FaThermometerHalf, FaWeight,
-  FaTint, FaMobile, FaEnvelope, FaPrint
+  FaTint, FaPrint
 } from "react-icons/fa";
 import { ProtectedPatientRoute } from "../services/api/protectedRoute";
 import { logoutPatient, getStoredPatient } from "../services/api/authApi";
@@ -23,8 +23,7 @@ const DMP = () => {
   const [tableauDeBord, setTableauDeBord] = useState(null);
   const [historiqueMedical, setHistoriqueMedical] = useState([]);
   const [droitsAcces, setDroitsAcces] = useState([]);
-  const [rappels, setRappels] = useState([]);
-  const [statistiques, setStatistiques] = useState(null);
+    const [rappels, setRappels] = useState([]);
   const [showAutoMesureModal, setShowAutoMesureModal] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
@@ -42,12 +41,9 @@ const DMP = () => {
   const [uploadFile, setUploadFile] = useState(null);
   const [uploadTitle, setUploadTitle] = useState('');
   const [uploadDescription, setUploadDescription] = useState('');
-  const [documents, setDocuments] = useState([]);
-  const [documentsLoading, setDocumentsLoading] = useState(false);
-  const [showDocumentModal, setShowDocumentModal] = useState(false);
-  const [selectedDocument, setSelectedDocument] = useState(null);
 
   const navigate = useNavigate();
+  const { createAutoMesure } = useDMP();
 
   useEffect(() => {
     loadInitialData();
@@ -83,8 +79,7 @@ const DMP = () => {
       setTableauDeBord(tableauData.data?.tableau_de_bord);
 
       // Charger les statistiques (utilise automatiquement l'ID du patient connecté)
-      const statsData = await dmpApi.getStatistiques();
-      setStatistiques(statsData.data);
+      // const statsData = await dmpApi.getStatistiques(); // Les statistiques sont maintenant gérées par le contexte DMP
 
     } catch (error) {
       console.warn("Mode développement: utilisation des données mock");
@@ -113,7 +108,7 @@ const DMP = () => {
           setRappels(rappelsData.data || []);
           break;
         case 'mon-espace-sante':
-          await loadDocuments();
+          // Documents are now handled by DMPMonEspaceSante component
           break;
         default:
           break;
@@ -161,31 +156,36 @@ const DMP = () => {
         date_complete: `${autoMesure.date_mesure} à ${autoMesure.heure_mesure}`
       };
 
-      // Simulation de l'enregistrement - à remplacer par l'API réelle
       console.log('Mesure à enregistrer:', mesureData);
       
-      // Ici, vous appelleriez votre API
-      // await dmpApi.ajouterAutoMesure(mesureData);
+      // Utiliser le contexte DMP pour créer l'auto-mesure
+      const response = await createAutoMesure(mesureData);
       
-      setShowAutoMesureModal(false);
-      
-      // Réinitialiser le formulaire
-      const config = getMesureConfig('poids');
-      setAutoMesure({
-        type_mesure: 'poids',
-        valeur: '',
-        valeur_secondaire: '',
-        unite: config.unite,
-        unite_secondaire: '',
-        commentaire: '',
-        date_mesure: new Date().toISOString().split('T')[0],
-        heure_mesure: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
-      });
-      
-      alert('Mesure enregistrée avec succès !');
+      if (response) {
+        console.log('✅ Auto-mesure créée avec succès via contexte:', response);
+        
+        setShowAutoMesureModal(false);
+        
+        // Réinitialiser le formulaire
+        const config = getMesureConfig('poids');
+        setAutoMesure({
+          type_mesure: 'poids',
+          valeur: '',
+          valeur_secondaire: '',
+          unite: config.unite,
+          unite_secondaire: '',
+          commentaire: '',
+          date_mesure: new Date().toISOString().split('T')[0],
+          heure_mesure: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+        });
+        
+        alert('Mesure enregistrée avec succès !');
+      } else {
+        throw new Error('Réponse invalide de l\'API');
+      }
     } catch (error) {
       console.error('Erreur lors de l\'enregistrement:', error);
-      alert('Erreur lors de l\'enregistrement de la mesure');
+      alert(`Erreur lors de l'enregistrement de la mesure: ${error.message}`);
     } finally {
       setLoading(false);
     }
@@ -201,17 +201,7 @@ const DMP = () => {
     try {
       setLoading(true);
       // Simulation de l'upload - à remplacer par l'API réelle
-      const newDocument = {
-        id: Date.now(),
-        titre: uploadTitle,
-        description: uploadDescription,
-        type: 'document',
-        date_upload: new Date().toISOString().split('T')[0],
-        taille: `${Math.round(uploadFile.size / 1024)} KB`,
-        url: '#'
-      };
-
-      setDocuments(prev => [newDocument, ...prev]);
+      // Note: Document upload is now handled by DMPMonEspaceSante component
       setShowUploadModal(false);
       setUploadFile(null);
       setUploadTitle('');
@@ -229,126 +219,40 @@ const DMP = () => {
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (file) {
+      // Validation de la taille du fichier (max 10MB)
+      const maxSize = 10 * 1024 * 1024; // 10MB en bytes
+      const warningSize = 8 * 1024 * 1024; // 8MB - seuil d'avertissement
+      
+      if (file.size > maxSize) {
+        alert('Le fichier est trop volumineux. Taille maximale autorisée : 10MB');
+        e.target.value = ''; // Réinitialiser l'input
+        return;
+      }
+
+      // Avertissement si le fichier est proche de la limite
+      if (file.size > warningSize) {
+        const fileSizeMB = (file.size / (1024 * 1024)).toFixed(1);
+        const remainingMB = (10 - fileSizeMB).toFixed(1);
+        alert(`Attention : Votre fichier fait ${fileSizeMB}MB. Il reste ${remainingMB}MB disponibles sur la limite de 10MB.`);
+      }
+
+      // Validation du type de fichier autorisé
+      const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'application/pdf', 'text/plain', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+      if (!allowedTypes.includes(file.type)) {
+        alert('Type de fichier non autorisé. Types acceptés : JPG, PNG, GIF, PDF, TXT, DOC, DOCX');
+        e.target.value = ''; // Réinitialiser l'input
+        return;
+      }
+
       setUploadFile(file);
     }
   };
 
-  const getTypeMesureIcon = (type) => {
-    switch (type) {
-      case 'poids': return <FaWeight className="text-blue-500" />;
-      case 'taille': return <FaUser className="text-green-500" />;
-      case 'tension_arterielle': return <FaHeartbeat className="text-red-500" />;
-      case 'glycemie': return <FaTint className="text-purple-500" />;
-      case 'temperature': return <FaThermometerHalf className="text-orange-500" />;
-      default: return <FaUser className="text-gray-500" />;
-    }
-  };
 
-  const getTypeMesureLabel = (type) => {
-    switch (type) {
-      case 'poids': return 'Poids';
-      case 'taille': return 'Taille';
-      case 'tension_arterielle': return 'Tension artérielle';
-      case 'glycemie': return 'Glycémie';
-      case 'temperature': return 'Température';
-      default: return type;
-    }
-  };
 
-  // Fonctions pour l'espace de santé
-  const loadDocuments = async () => {
-    try {
-      setDocumentsLoading(true);
-      // Simulation des documents - à remplacer par l'API réelle
-      const mockDocuments = [
-        {
-          id: 1,
-          titre: 'Ordonnance Dr. Martin',
-          description: 'Ordonnance pour traitement antibiotique',
-          type: 'ordonnance',
-          date_upload: '2024-01-15',
-          taille: '245 KB',
-          url: '#'
-        },
-        {
-          id: 2,
-          titre: 'Résultats analyse sang',
-          description: 'Bilan sanguin complet',
-          type: 'analyse',
-          date_upload: '2024-01-10',
-          taille: '1.2 MB',
-          url: '#'
-        },
-        {
-          id: 3,
-          titre: 'Certificat médical',
-          description: 'Certificat pour arrêt de travail',
-          type: 'certificat',
-          date_upload: '2024-01-08',
-          taille: '156 KB',
-          url: '#'
-        }
-      ];
-      setDocuments(mockDocuments);
-    } catch (error) {
-      console.error('Erreur lors du chargement des documents:', error);
-    } finally {
-      setDocumentsLoading(false);
-    }
-  };
 
-  const handleDocumentUpload = async (e) => {
-    e.preventDefault();
-    if (!uploadFile || !uploadTitle) {
-      alert('Veuillez sélectionner un fichier et saisir un titre');
-      return;
-    }
 
-    try {
-      setLoading(true);
-      // Simulation de l'upload - à remplacer par l'API réelle
-      const newDocument = {
-        id: Date.now(),
-        titre: uploadTitle,
-        description: uploadDescription,
-        type: 'document',
-        date_upload: new Date().toISOString().split('T')[0],
-        taille: `${Math.round(uploadFile.size / 1024)} KB`,
-        url: '#'
-      };
 
-      setDocuments(prev => [newDocument, ...prev]);
-      setShowUploadModal(false);
-      setUploadFile(null);
-      setUploadTitle('');
-      setUploadDescription('');
-      
-      alert('Document uploadé avec succès !');
-    } catch (error) {
-      console.error('Erreur lors de l\'upload:', error);
-      alert('Erreur lors de l\'upload du document');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDocumentDelete = async (documentId) => {
-    if (window.confirm('Êtes-vous sûr de vouloir supprimer ce document ?')) {
-      try {
-        // Simulation de la suppression - à remplacer par l'API réelle
-        setDocuments(prev => prev.filter(doc => doc.id !== documentId));
-        alert('Document supprimé avec succès !');
-      } catch (error) {
-        console.error('Erreur lors de la suppression:', error);
-        alert('Erreur lors de la suppression du document');
-      }
-    }
-  };
-
-  const openDocumentModal = (document) => {
-    setSelectedDocument(document);
-    setShowDocumentModal(true);
-  };
 
   // Configuration spécifique pour chaque type de mesure
   const getMesureConfig = (type) => {
@@ -803,8 +707,8 @@ const DMP = () => {
 
       {/* Modal Auto-mesure */}
       {showAutoMesureModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-lg">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-4 sm:p-6 w-full max-w-sm sm:max-w-md md:max-w-lg lg:max-w-xl xl:max-w-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-semibold">Ajouter une auto-mesure</h3>
               <button
@@ -849,7 +753,7 @@ const DMP = () => {
                     </div>
 
                     {/* Champs de valeurs selon le type */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                       {config.hasSecondValue ? (
                         <>
                           <div>
@@ -906,7 +810,7 @@ const DMP = () => {
                     </div>
 
                     {/* Date et heure de la mesure */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Date de mesure</label>
                         <input
@@ -958,17 +862,17 @@ const DMP = () => {
                 );
               })()}
 
-              <div className="flex justify-end space-x-3 mt-6 pt-4 border-t">
+              <div className="flex flex-col sm:flex-row justify-end gap-3 mt-6 pt-4 border-t">
                 <button
                   type="button"
                   onClick={() => setShowAutoMesureModal(false)}
-                  className="px-4 py-2 text-gray-600 hover:text-gray-800 border border-gray-300 rounded-md hover:bg-gray-50"
+                  className="w-full sm:w-auto px-4 py-2 text-gray-600 hover:text-gray-800 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
                 >
                   Annuler
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:ring-2 focus:ring-blue-500"
+                  className="w-full sm:w-auto px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 transition-colors"
                   disabled={loading}
                 >
                   {loading ? 'Enregistrement...' : 'Enregistrer la mesure'}
@@ -981,8 +885,8 @@ const DMP = () => {
 
       {/* Modal Upload */}
       {showUploadModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-4 sm:p-6 w-full max-w-sm sm:max-w-md md:max-w-lg max-h-[90vh] overflow-y-auto">
             <h3 className="text-lg font-semibold mb-4">Uploader un document</h3>
             <form onSubmit={handleUploadSubmit}>
               <div className="space-y-4">
@@ -1011,22 +915,38 @@ const DMP = () => {
                     type="file"
                     onChange={handleFileChange}
                     className="w-full p-2 border rounded-md"
-                    accept=".pdf,.jpg,.jpeg,.png"
+                    accept=".pdf,.jpg,.jpeg,.png,.gif,.txt,.doc,.docx"
                     required
                   />
+                  {uploadFile && (
+                    <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded-md">
+                      <p className="text-sm text-blue-800">
+                        <strong>Fichier sélectionné :</strong> {uploadFile.name}
+                      </p>
+                      <p className="text-sm text-blue-700">
+                        <strong>Taille :</strong> {(uploadFile.size / (1024 * 1024)).toFixed(2)}MB 
+                        {uploadFile.size > 8 * 1024 * 1024 && (
+                          <span className="text-orange-600 font-medium"> (Proche de la limite de 10MB)</span>
+                        )}
+                      </p>
+                      <p className="text-xs text-blue-600 mt-1">
+                        Limite maximale : 10MB | Types acceptés : JPG, PNG, GIF, PDF, TXT, DOC, DOCX
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
-              <div className="flex justify-end space-x-3 mt-6">
+              <div className="flex flex-col sm:flex-row justify-end gap-3 mt-6">
                 <button
                   type="button"
                   onClick={() => setShowUploadModal(false)}
-                  className="px-4 py-2 text-gray-600 hover:text-gray-800"
+                  className="w-full sm:w-auto px-4 py-2 text-gray-600 hover:text-gray-800 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
                 >
                   Annuler
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+                  className="w-full sm:w-auto px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
                 >
                   Uploader
                 </button>
@@ -1036,76 +956,7 @@ const DMP = () => {
         </div>
       )}
 
-      {/* Modal Détails Document */}
-      {showDocumentModal && selectedDocument && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-lg">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold">Détails du document</h3>
-              <button
-                onClick={() => setShowDocumentModal(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                ✕
-              </button>
-            </div>
-            <div className="space-y-4">
-              <div className="flex items-center">
-                <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mr-4">
-                  <FaFileMedical className="text-blue-600 text-xl" />
-                </div>
-                <div>
-                  <h4 className="font-medium text-lg">{selectedDocument.titre}</h4>
-                  <p className="text-sm text-gray-500">{selectedDocument.type}</p>
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                <p className="text-gray-600">{selectedDocument.description}</p>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Date d'upload</label>
-                  <p className="text-gray-600">{selectedDocument.date_upload}</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Taille</label>
-                  <p className="text-gray-600">{selectedDocument.taille}</p>
-                </div>
-              </div>
-              <div className="flex space-x-3 pt-4">
-                <button
-                  onClick={() => {
-                    // Simulation du téléchargement
-                    alert('Téléchargement en cours...');
-                  }}
-                  className="flex items-center px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-                >
-                  <FaDownload className="mr-2" />
-                  Télécharger
-                </button>
-                <button
-                  onClick={() => {
-                    // Simulation de l'impression
-                    alert('Impression en cours...');
-                  }}
-                  className="flex items-center px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
-                >
-                  <FaPrint className="mr-2" />
-                  Imprimer
-                </button>
-                <button
-                  onClick={() => handleDocumentDelete(selectedDocument.id)}
-                  className="flex items-center px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
-                >
-                  <FaTrash className="mr-2" />
-                  Supprimer
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+
     </div>
   );
 };

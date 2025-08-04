@@ -23,6 +23,14 @@ const DMPMonEspaceSante = () => {
         description: '',
         categorie: 'general'
     });
+    
+    // États pour les filtres de documents
+    const [documentFilters, setDocumentFilters] = useState({
+        type: '',
+        date_debut: '',
+        date_fin: ''
+    });
+    const [showFilters, setShowFilters] = useState(false);
     const [autoMesureData, setAutoMesureData] = useState({
         type: 'poids',
         valeur: '',
@@ -35,9 +43,34 @@ const DMPMonEspaceSante = () => {
     });
 
     useEffect(() => {
-        loadDocuments();
+        loadDocuments({}); // Charger avec des filtres vides par défaut
         loadAutoMesures();
     }, [loadDocuments, loadAutoMesures]);
+
+    // Fonctions pour gérer les filtres de documents
+    const handleFilterChange = (field, value) => {
+        setDocumentFilters(prev => ({
+            ...prev,
+            [field]: value
+        }));
+    };
+
+    const applyFilters = () => {
+        // Nettoyer les filtres vides
+        const cleanFilters = Object.fromEntries(
+            Object.entries(documentFilters).filter(([key, value]) => value !== '' && value !== null)
+        );
+        loadDocuments(cleanFilters);
+    };
+
+    const clearFilters = () => {
+        setDocumentFilters({
+            type: '',
+            date_debut: '',
+            date_fin: ''
+        });
+        loadDocuments({}); // Recharger sans filtres
+    };
 
     const handleFileChange = (e) => {
         const file = e.target.files[0];
@@ -57,7 +90,7 @@ const DMPMonEspaceSante = () => {
                 description: '',
                 categorie: 'general'
             });
-            loadDocuments(); // Recharger les documents
+            loadDocuments({}); // Recharger les documents
         } catch (error) {
             console.error('Erreur lors de l\'upload:', error);
         }
@@ -171,10 +204,81 @@ const DMPMonEspaceSante = () => {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Documents */}
                 <div className="bg-white p-6 rounded-lg shadow">
-                    <h2 className="text-xl font-semibold mb-4 flex items-center">
-                        <FaFileMedical className="text-blue-500 mr-2" />
-                        Mes Documents
-                    </h2>
+                    <div className="flex justify-between items-center mb-4">
+                        <h2 className="text-xl font-semibold flex items-center">
+                            <FaFileMedical className="text-blue-500 mr-2" />
+                            Mes Documents
+                        </h2>
+                        <button
+                            onClick={() => setShowFilters(!showFilters)}
+                            className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                        >
+                            {showFilters ? 'Masquer les filtres' : 'Afficher les filtres'}
+                        </button>
+                    </div>
+                    
+                    {/* Interface de filtres */}
+                    {showFilters && (
+                        <div className="bg-gray-50 p-4 rounded-lg mb-4">
+                            <h3 className="font-medium mb-3">Filtres de recherche</h3>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Type de document
+                                    </label>
+                                    <select
+                                        value={documentFilters.type}
+                                        onChange={(e) => handleFilterChange('type', e.target.value)}
+                                        className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+                                    >
+                                        <option value="">Tous les types</option>
+                                        <option value="ordonnance">Ordonnance</option>
+                                        <option value="resultat">Résultat d'examen</option>
+                                        <option value="certificat">Certificat médical</option>
+                                        <option value="general">Document général</option>
+                                        <option value="autre">Autre</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Date de début
+                                    </label>
+                                    <input
+                                        type="date"
+                                        value={documentFilters.date_debut}
+                                        onChange={(e) => handleFilterChange('date_debut', e.target.value)}
+                                        className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Date de fin
+                                    </label>
+                                    <input
+                                        type="date"
+                                        value={documentFilters.date_fin}
+                                        onChange={(e) => handleFilterChange('date_fin', e.target.value)}
+                                        className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+                                    />
+                                </div>
+                            </div>
+                            <div className="flex justify-end space-x-2 mt-4">
+                                <button
+                                    onClick={clearFilters}
+                                    className="px-3 py-1 text-sm text-gray-600 hover:text-gray-800 border border-gray-300 rounded"
+                                >
+                                    Effacer
+                                </button>
+                                <button
+                                    onClick={applyFilters}
+                                    className="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600"
+                                >
+                                    Appliquer
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                    
                     <div className="space-y-3">
                         {documents.length > 0 ? (
                             documents.map((doc, index) => (

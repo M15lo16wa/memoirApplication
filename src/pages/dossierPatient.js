@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { QRCodeCanvas } from 'qrcode.react';
 
-import { getPatients, getPatientRendezVous, getProchainRendezVous, getDocumentsRecents, getResumeMedical, createDossierMedical, getServices, getAllDossiersMedical, getDossierMedical, closeDossierPatient, updateDossierPatient, createOrdonnance, createExamen, getTraitementsActifs, getOrdonnancesRecentes, createOrdonnanceComplete, ajouterPrescriptionAuDossier, creerNotification, marquerNotificationLue, getNotificationsPatient, getResumeAujourdhui } from "../services/api/medicalApi";
+import { getPatients, getPatientRendezVous, getProchainRendezVous, getDocumentsRecents, getResumeMedical, createDossierMedical, getServices, getAllDossiersMedical, getDossierMedical, closeDossierPatient, updateDossierPatient, createOrdonnance, createExamen, getTraitementsActifs, getAllPrescriptions, getOrdonnancesRecentes, createOrdonnanceComplete, ajouterPrescriptionAuDossier, creerNotification, marquerNotificationLue, getNotificationsPatient, getResumeAujourdhui } from "../services/api/medicalApi";
 
 function DossierPatient() {
   const navigate = useNavigate();
@@ -639,18 +639,24 @@ function DossierPatient() {
   const loadPrescriptions = useCallback(async () => {
     setPrescriptionsLoading(true);
     try {
-      // Vérifier si un patient est sélectionné
-      const patientId = selectedPatientForPrescription?.id || selectedPatientForPrescription?.rawData?.id_patient || selectedPatientForPrescription?.id_patient;
-      if (!patientId) {
-        console.log('Aucun patient sélectionné pour charger les prescriptions');
-        setPrescriptions([]);
-        return;
+      // Récupérer toutes les prescriptions depuis l'API
+      const prescriptionsData = await getAllPrescriptions();
+      console.log('Prescriptions récupérées depuis l\'API:', prescriptionsData);
+      
+      // Filtrer par patient si un patient est sélectionné
+      let prescriptionsToShow = prescriptionsData;
+      if (selectedPatientForPrescription) {
+        const patientId = selectedPatientForPrescription?.id || selectedPatientForPrescription?.rawData?.id_patient || selectedPatientForPrescription?.id_patient;
+        if (patientId) {
+          prescriptionsToShow = prescriptionsData.filter(prescription => 
+            prescription.patient_id === patientId || 
+            prescription.patient?.id_patient === patientId ||
+            prescription.patient_id === parseInt(patientId)
+          );
+        }
       }
-
-      // Pour l'instant, on charge les traitements actifs
-      // TODO: Implémenter une API pour récupérer toutes les prescriptions
-      const traitementsActifs = await getTraitementsActifs(patientId);
-      setPrescriptions(traitementsActifs || []);
+      
+      setPrescriptions(prescriptionsToShow || []);
     } catch (error) {
       console.error('Erreur lors du chargement des prescriptions:', error);
       setPrescriptions([]);
@@ -1130,38 +1136,15 @@ function DossierPatient() {
   const loadNotifications = async (patientId = null) => {
     setNotificationsLoading(true);
     try {
-      // Simulation des notifications en attendant l'implémentation backend
-      const notificationsSimulees = [
-        {
-          id: 1,
-          titre: 'Nouvelle ordonnance créée',
-          contenu: 'Une nouvelle ordonnance a été créée pour le patient Jean Martin',
-          priorite: 'normale',
-          canal: 'application',
-          date_creation: new Date().toISOString(),
-          lue: false
-        },
-        {
-          id: 2,
-          titre: 'Renouvellement d\'ordonnance',
-          contenu: 'L\'ordonnance ORD-001 peut être renouvelée',
-          priorite: 'haute',
-          canal: 'email',
-          date_creation: new Date(Date.now() - 3600000).toISOString(), // Il y a 1 heure
-          lue: true
-        },
-        {
-          id: 3,
-          titre: 'Notification urgente',
-          contenu: 'Modification de l\'ordonnance ORD-002 pour Marie Dupont',
-          priorite: 'urgente',
-          canal: 'sms',
-          date_creation: new Date(Date.now() - 7200000).toISOString(), // Il y a 2 heures
-          lue: false
-        }
-      ];
-      
-      setPrescriptionNotifications(notificationsSimulees);
+      // Récupérer les notifications depuis l'API
+      if (patientId) {
+        const notificationsData = await getNotificationsPatient(patientId);
+        setPrescriptionNotifications(notificationsData || []);
+      } else {
+        // Si aucun patient spécifique, récupérer toutes les notifications
+        const notificationsData = await getNotificationsPatient();
+        setPrescriptionNotifications(notificationsData || []);
+      }
     } catch (error) {
       console.error('Erreur lors du chargement des notifications:', error);
       setPrescriptionNotifications([]);
@@ -1173,59 +1156,10 @@ function DossierPatient() {
   const loadOrdonnancesRecentes = async (page = 1, limit = 10, jours = 7) => {
     setOrdonnancesRecentesLoading(true);
     try {
-      // Simulation des données en attendant l'implémentation backend
-      const ordonnancesSimulees = [
-        {
-          id: 1,
-          numero_prescription: 'ORD-001',
-          patient: { nom: 'Jean Martin', prenom: 'Jean' },
-          principe_actif: 'Paracétamol',
-          dosage: '500mg',
-          frequence: '3 fois par jour',
-          date_creation: new Date().toISOString(),
-          observations: 'À prendre avec les repas',
-          medecin: {
-            nom: 'Dr. Martin',
-            prenom: 'Jean',
-            specialite: 'Médecine générale',
-            numero_ordre: '12345'
-          }
-        },
-        {
-          id: 2,
-          numero_prescription: 'ORD-002',
-          patient: { nom: 'Marie Dupont', prenom: 'Marie' },
-          principe_actif: 'Ibuprofène',
-          dosage: '400mg',
-          frequence: '2 fois par jour',
-          date_creation: new Date(Date.now() - 86400000).toISOString(), // Hier
-          observations: 'En cas de douleur',
-          medecin: {
-            nom: 'Dr. Dupont',
-            prenom: 'Marie',
-            specialite: 'Cardiologie',
-            numero_ordre: '23456'
-          }
-        },
-        {
-          id: 3,
-          numero_prescription: 'ORD-003',
-          patient: { nom: 'Pierre Durand', prenom: 'Pierre' },
-          principe_actif: 'Amoxicilline',
-          dosage: '1g',
-          frequence: '2 fois par jour',
-          date_creation: new Date(Date.now() - 172800000).toISOString(), // Avant-hier
-          observations: 'Antibiotique - 7 jours',
-          medecin: {
-            nom: 'Dr. Durand',
-            prenom: 'Pierre',
-            specialite: 'Pneumologie',
-            numero_ordre: '34567'
-          }
-        }
-      ];
-      
-      setOrdonnancesRecentes(ordonnancesSimulees);
+      // Récupérer les ordonnances récentes depuis l'API
+      const ordonnancesData = await getOrdonnancesRecentes(page, limit, jours);
+      console.log('Ordonnances récentes récupérées depuis l\'API:', ordonnancesData);
+      setOrdonnancesRecentes(ordonnancesData || []);
     } catch (error) {
       console.error('Erreur lors du chargement des ordonnances récentes:', error);
       setOrdonnancesRecentes([]);
@@ -1237,21 +1171,10 @@ function DossierPatient() {
   const loadResumeAujourdhui = async () => {
     setResumeLoading(true);
     try {
-      // Simulation des données en attendant l'implémentation backend
-      const resumeSimule = {
-        total_ordonnances: 5,
-        total_examens: 2,
-        notifications_envoyees: 8,
-        derniere_creation: '14:30',
-        periode_reference: 'Aujourd\'hui',
-        tendances: {
-          ordonnances_par_jour: 5,
-          examens_par_jour: 2,
-          notifications_par_jour: 8
-        }
-      };
-      
-      setResumeAujourdhui(resumeSimule);
+      // Récupérer le résumé depuis l'API
+      const resumeData = await getResumeAujourdhui();
+      console.log('Résumé récupéré depuis l\'API:', resumeData);
+      setResumeAujourdhui(resumeData);
     } catch (error) {
       console.error('Erreur lors du chargement du résumé:', error);
       setResumeAujourdhui(null);
@@ -1342,19 +1265,19 @@ function DossierPatient() {
 
     setLoading(true);
     try {
-      // Simulation de la création en attendant l'implémentation backend
+      // Créer l'ordonnance complète via l'API
       console.log('Ordonnance complète à créer:', ordonnanceCompleteForm);
       
-      // Simuler un délai de création
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const result = await createOrdonnanceComplete(ordonnanceCompleteForm);
+      console.log('Ordonnance complète créée:', result);
       
-      alert('Ordonnance créée avec succès ! (Simulation)');
+      alert('Ordonnance créée avec succès !');
       closeOrdonnanceCompleteModal();
       loadOrdonnancesRecentes(); // Recharger la liste
       loadResumeAujourdhui(); // Mettre à jour le résumé
     } catch (error) {
       console.error('Erreur lors de la création de l\'ordonnance complète:', error);
-      alert('Erreur lors de la création de l\'ordonnance');
+      alert('Erreur lors de la création de l\'ordonnance: ' + (error.message || error));
     } finally {
       setLoading(false);
     }
@@ -1362,8 +1285,8 @@ function DossierPatient() {
 
   const marquerNotificationCommeLue = async (notificationId) => {
     try {
-      // Simulation du marquage en attendant l'implémentation backend
-      console.log('Marquage de la notification:', notificationId);
+      // Marquer la notification comme lue via l'API
+      await marquerNotificationLue(notificationId);
       
       // Mettre à jour localement les notifications
       setPrescriptionNotifications(prev => 
@@ -1374,9 +1297,10 @@ function DossierPatient() {
         )
       );
       
-      alert('Notification marquée comme lue ! (Simulation)');
+      console.log('Notification marquée comme lue avec succès');
     } catch (error) {
       console.error('Erreur lors du marquage de la notification:', error);
+      alert('Erreur lors du marquage de la notification');
     }
   };
 
