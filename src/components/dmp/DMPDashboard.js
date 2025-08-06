@@ -1,8 +1,13 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useDMP } from '../../hooks/useDMP';
 import { FaHeartbeat, FaFileMedical, FaCalendarAlt, FaChartLine, FaUserMd, FaThermometerHalf, FaTint, FaWeight } from 'react-icons/fa';
+import NotificationsStats from '../ui/NotificationsStats';
+import * as dmpApi from '../../services/api/dmpApi';
 
 const DMPDashboard = () => {
+    const [notificationsStats, setNotificationsStats] = useState(null);
+    const [loadingStats, setLoadingStats] = useState(false);
+    
     const { 
         dmpData, 
         loading, 
@@ -17,7 +22,41 @@ const DMPDashboard = () => {
 
     useEffect(() => {
         loadStatistiques();
+        loadNotificationsStats();
     }, [loadStatistiques]);
+
+    const loadNotificationsStats = async () => {
+        try {
+            setLoadingStats(true);
+            const statsData = await dmpApi.getNotificationsStats();
+            setNotificationsStats(statsData.data);
+        } catch (error) {
+            console.error('Erreur lors du chargement des statistiques des notifications:', error);
+        } finally {
+            setLoadingStats(false);
+        }
+    };
+
+    const handleMarkAllAsRead = async () => {
+        try {
+            await dmpApi.marquerToutesNotificationsLues();
+            await loadNotificationsStats(); // Recharger les stats
+        } catch (error) {
+            console.error('Erreur lors du marquage de toutes les notifications:', error);
+        }
+    };
+
+    const handleViewAllNotifications = () => {
+        // Naviguer vers l'onglet des droits d'accès
+        // Cette fonction sera passée depuis le composant parent
+        if (window.location.pathname.includes('/dmp')) {
+            // Simuler un clic sur l'onglet droits d'accès
+            const droitsAccesTab = document.querySelector('[data-tab="droits-acces"]');
+            if (droitsAccesTab) {
+                droitsAccesTab.click();
+            }
+        }
+    };
 
     // Recharger les données quand les auto-mesures ou documents changent
     useEffect(() => {
@@ -129,6 +168,15 @@ const DMPDashboard = () => {
                     </div>
                 </div>
             </div>
+
+            {/* Statistiques des notifications */}
+            {!loadingStats && notificationsStats && (
+                <NotificationsStats
+                    stats={notificationsStats}
+                    onViewAll={handleViewAllNotifications}
+                    onMarkAllAsRead={handleMarkAllAsRead}
+                />
+            )}
 
             {/* Contenu principal en 2 colonnes */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

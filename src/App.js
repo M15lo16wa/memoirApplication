@@ -9,6 +9,7 @@ import DossierMedical from './pages/DossierMedical';
 import Medecin from './pages/medecin';
 import Consultation from './pages/consultation';
 import DossierPatient from './pages/dossierPatient';
+import DMPAccess from './pages/DMPAccess';
 import FicheInscription from './pages/ficheInscription';
 
 
@@ -39,6 +40,9 @@ function App() {
       {/* Routes accessibles aux médecins ET aux patients */}
       <Route path="/rendezVous" element={<ProtectedMedecinOrPatientRoute><RendezVous /></ProtectedMedecinOrPatientRoute>}/>
       <Route path='/dossier-patient' element={<ProtectedMedecinOrPatientRoute><DossierPatient /></ProtectedMedecinOrPatientRoute>}/>
+      
+      {/* Routes DMP pour les médecins */}
+      <Route path='/dmp-access/:patientId' element={<ProtectedMedecinRoute><DMPAccess /></ProtectedMedecinRoute>}/>
       
       {/* Routes publiques */}
       <Route path='/fiche-inscription' element={<FicheInscription/>}/>

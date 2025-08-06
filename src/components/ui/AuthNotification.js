@@ -1,82 +1,123 @@
-import React, { useState, useEffect } from 'react';
-import { getUserType, getCurrentUser } from '../../services/api/authApi';
+import React from 'react';
+import { FaCheckCircle, FaExclamationTriangle, FaInfoCircle, FaTimes, FaBell } from 'react-icons/fa';
 
-const AuthNotification = () => {
-  const [isVisible, setIsVisible] = useState(false);
-  const [userType, setUserType] = useState(null);
-  const [currentUser, setCurrentUser] = useState(null);
+const AuthNotification = ({ 
+  message, 
+  type = 'info', 
+  onClose, 
+  show = false,
+  isDMPNotification = false,
+  notificationData = null 
+}) => {
+  if (!show) return null;
 
-  useEffect(() => {
-    const checkAuth = () => {
-      const type = getUserType();
-      const user = getCurrentUser();
-      
-      if (type && !userType) {
-        // Première connexion détectée
-        setUserType(type);
-        setCurrentUser(user);
-        setIsVisible(true);
-        
-        // Masquer automatiquement après 5 secondes
-        setTimeout(() => {
-          setIsVisible(false);
-        }, 5000);
-      } else if (!type && userType) {
-        // Déconnexion détectée
-        setUserType(null);
-        setCurrentUser(null);
-        setIsVisible(true);
-        
-        // Masquer automatiquement après 3 secondes
-        setTimeout(() => {
-          setIsVisible(false);
-        }, 3000);
-      }
-    };
-
-    // Vérifier l'authentification toutes les 2 secondes
-    const interval = setInterval(checkAuth, 2000);
+  const getIcon = () => {
+    if (isDMPNotification) {
+      return <FaBell className="text-blue-600" />;
+    }
     
-    // Vérification initiale
-    checkAuth();
+    switch (type) {
+      case 'success':
+        return <FaCheckCircle className="text-green-600" />;
+      case 'error':
+        return <FaExclamationTriangle className="text-red-600" />;
+      case 'warning':
+        return <FaExclamationTriangle className="text-yellow-600" />;
+      default:
+        return <FaInfoCircle className="text-blue-600" />;
+    }
+  };
 
-    return () => clearInterval(interval);
-  }, [userType]);
+  const getBackgroundColor = () => {
+    if (isDMPNotification) {
+      return 'bg-blue-50 border-blue-200';
+    }
+    
+    switch (type) {
+      case 'success':
+        return 'bg-green-50 border-green-200';
+      case 'error':
+        return 'bg-red-50 border-red-200';
+      case 'warning':
+        return 'bg-yellow-50 border-yellow-200';
+      default:
+        return 'bg-blue-50 border-blue-200';
+    }
+  };
 
-  if (!isVisible) {
-    return null;
-  }
-
-  const isConnected = !!userType;
+  const getTextColor = () => {
+    if (isDMPNotification) {
+      return 'text-blue-800';
+    }
+    
+    switch (type) {
+      case 'success':
+        return 'text-green-800';
+      case 'error':
+        return 'text-red-800';
+      case 'warning':
+        return 'text-yellow-800';
+      default:
+        return 'text-blue-800';
+    }
+  };
 
   return (
-    <div className={`fixed top-4 right-4 p-4 rounded-lg shadow-lg border z-50 max-w-sm transition-all duration-300 ${
-      isConnected ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
-    }`}>
-      <div className="flex items-center justify-between">
-        <div className="flex items-center">
-          <div className={`w-3 h-3 rounded-full mr-3 ${
-            isConnected ? 'bg-green-500' : 'bg-red-500'
-          }`}></div>
-          <div>
-            <p className={`font-semibold text-sm ${
-              isConnected ? 'text-green-800' : 'text-red-800'
-            }`}>
-              {isConnected ? 'Connexion réussie' : 'Déconnexion'}
-            </p>
-            {isConnected && currentUser && currentUser.data && (
-              <p className="text-xs text-gray-600">
-                {currentUser.data.nom || currentUser.data.prenom || 'Utilisateur'} ({userType})
-              </p>
-            )}
-          </div>
+    <div className={`fixed top-4 right-4 z-50 max-w-md w-full ${getBackgroundColor()} border rounded-lg shadow-lg p-4 transition-all duration-300 ease-in-out`}>
+      <div className="flex items-start space-x-3">
+        <div className="flex-shrink-0 mt-0.5">
+          {getIcon()}
         </div>
-        <button 
-          onClick={() => setIsVisible(false)}
-          className="text-gray-400 hover:text-gray-600 text-sm ml-2"
-        >
-          ✕
-        </button>
+        
+        <div className="flex-1 min-w-0">
+          {isDMPNotification && notificationData ? (
+            <div>
+              <h4 className={`text-sm font-medium ${getTextColor()} mb-1`}>
+                {notificationData.titre}
+              </h4>
+              <p className={`text-sm ${getTextColor()}`}>
+                {notificationData.message}
+              </p>
+              {notificationData.type === 'demande_acces' && !notificationData.repondue && (
+                <div className="mt-3 flex space-x-2">
+                  <button
+                    onClick={() => {
+                      if (notificationData.onAccept) {
+                        notificationData.onAccept(notificationData.demande_id);
+                      }
+                    }}
+                    className="px-3 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 transition-colors"
+                  >
+                    Autoriser
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (notificationData.onReject) {
+                        notificationData.onReject(notificationData.demande_id);
+                      }
+                    }}
+                    className="px-3 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700 transition-colors"
+                  >
+                    Refuser
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <p className={`text-sm ${getTextColor()}`}>
+              {message}
+            </p>
+          )}
+        </div>
+        
+        <div className="flex-shrink-0">
+          <button
+            onClick={onClose}
+            className={`inline-flex ${getTextColor()} hover:opacity-75 transition-opacity`}
+          >
+            <FaTimes className="w-4 h-4" />
+          </button>
+        </div>
       </div>
     </div>
   );

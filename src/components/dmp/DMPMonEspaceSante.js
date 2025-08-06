@@ -166,8 +166,52 @@ const DMPMonEspaceSante = () => {
 
     if (error) {
         return (
-            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
-                <strong>Erreur:</strong> {error}
+            <div className="space-y-4">
+                <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+                    <strong>Attention:</strong> {error}
+                </div>
+                {/* Afficher les données même en cas d'erreur */}
+                <div className="bg-white p-6 rounded-lg shadow">
+                    <h2 className="text-xl font-semibold mb-4">Mes Documents</h2>
+                    <div className="space-y-3">
+                        {documents && documents.length > 0 ? (
+                            documents.map((doc, index) => (
+                                <div key={index} className="border rounded-lg p-4 hover:bg-gray-50">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center">
+                                            <div className="w-10 h-10 bg-blue-100 rounded flex items-center justify-center mr-3">
+                                                <FaFileMedical className="text-blue-500" />
+                                            </div>
+                                            <div>
+                                                <p className="font-medium">{doc.nom}</p>
+                                                <p className="text-sm text-gray-600">{doc.type}</p>
+                                                <p className="text-xs text-gray-500">
+                                                    {doc.taille ? formatFileSize(doc.taille) : 'Taille inconnue'} • {doc.createdAt ? formatDate(doc.createdAt) : 'Date inconnue'}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div className="flex space-x-2">
+                                            <button
+                                                onClick={() => setSelectedDocument(doc)}
+                                                className="text-blue-500 hover:text-blue-700"
+                                            >
+                                                <FaEye />
+                                            </button>
+                                            <button className="text-green-500 hover:text-green-700">
+                                                <FaDownload />
+                                            </button>
+                                            <button className="text-red-500 hover:text-red-700">
+                                                <FaTrash />
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))
+                        ) : (
+                            <p className="text-gray-500 text-center py-8">Aucun document disponible</p>
+                        )}
+                    </div>
+                </div>
             </div>
         );
     }

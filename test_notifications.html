@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Notifications DMP</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .notification {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 10px 0;
+            background-color: #f9f9f9;
+        }
+
+        .notification.unread {
+            background-color: #fff3cd;
+            border-color: #ffeaa7;
+        }
+
+        .notification h4 {
+            margin: 0 0 10px 0;
+            color: #333;
+        }
+
+        .notification p {
+            margin: 5px 0;
+            color: #666;
+        }
+
+        .badge {
+            background-color: #dc3545;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            margin-left: 10px;
+        }
+
+        .actions {
+            margin-top: 10px;
+        }
+
+        .btn {
+            padding: 5px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+
+        .btn-accept {
+            background-color: #28a745;
+            color: white;
+        }
+
+        .btn-refuse {
+            background-color: #dc3545;
+            color: white;
+        }
+
+        .btn-mark {
+            background-color: #007bff;
+            color: white;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Test des Notifications DMP</h1>
+
+    <div id="notifications">
+        <h2>Notifications des Droits d'Accès</h2>
+        <div id="notifications-list"></div>
+    </div>
+
+    <script>
+        // Données mock des notifications
+        const mockNotifications = [
+            {
+                id: 1,
+                patient_id: 5,
+                titre: "Nouvelle demande d'accès DMP",
+                message: "Le Dr. Martin a demandé l'accès à votre DMP pour une consultation d'urgence.",
+                type: "demande_acces",
+                demande_id: "access_1234567890_abc123",
+                lue: false,
+                repondue: false,
+                date_creation: new Date().toISOString(),
+                medecin_nom: "Dr. Martin",
+                medecin_id: 79
+            },
+            {
+                id: 2,
+                patient_id: 5,
+                titre: "Accès DMP autorisé",
+                message: "Vous avez autorisé l'accès au Dr. Dupont pour 30 minutes.",
+                type: "acces_autorise",
+                demande_id: "access_1234567891_def456",
+                lue: true,
+                repondue: true,
+                date_creation: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+                medecin_nom: "Dr. Dupont",
+                medecin_id: 80
+            },
+            {
+                id: 3,
+                patient_id: 5,
+                titre: "Accès DMP refusé",
+                message: "Vous avez refusé l'accès au Dr. Bernard.",
+                type: "acces_refuse",
+                demande_id: "access_1234567892_ghi789",
+                lue: false,
+                repondue: true,
+                date_creation: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+                medecin_nom: "Dr. Bernard",
+                medecin_id: 81
+            }
+        ];
+
+        function renderNotifications() {
+            const container = document.getElementById('notifications-list');
+            const unreadCount = mockNotifications.filter(n => !n.lue).length;
+
+            container.innerHTML = `
+                <div style="margin-bottom: 20px;">
+                    <strong>Notifications (${unreadCount} non lues)</strong>
+                </div>
+            `;
+
+            mockNotifications.forEach(notification => {
+                const notificationDiv = document.createElement('div');
+                notificationDiv.className = `notification ${!notification.lue ? 'unread' : ''}`;
+
+                const actions = notification.type === 'demande_acces' && !notification.repondue
+                    ? `
+                        <div class="actions">
+                            <button class="btn btn-accept" onclick="handleResponse('${notification.demande_id}', 'accepter')">
+                                Accepter
+                            </button>
+                            <button class="btn btn-refuse" onclick="handleResponse('${notification.demande_id}', 'refuser')">
+                                Refuser
+                            </button>
+                        </div>
+                    ` : '';
+
+                const markAsRead = !notification.lue
+                    ? `<button class="btn btn-mark" onclick="markAsRead(${notification.id})">Marquer comme lue</button>`
+                    : '';
+
+                notificationDiv.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: start;">
+                        <div style="flex: 1;">
+                            <h4>
+                                ${notification.titre}
+                                ${!notification.lue ? '<span class="badge">Nouveau</span>' : ''}
+                            </h4>
+                            <p>${notification.message}</p>
+                            <p style="font-size: 12px; color: #999;">
+                                ${new Date(notification.date_creation).toLocaleDateString('fr-FR')}
+                            </p>
+                            ${actions}
+                        </div>
+                        <div>
+                            ${markAsRead}
+                        </div>
+                    </div>
+                `;
+
+                container.appendChild(notificationDiv);
+            });
+        }
+
+        function handleResponse(demandeId, response) {
+            alert(`Demande ${demandeId} ${response === 'accepter' ? 'acceptée' : 'refusée'} !`);
+            // Ici on mettrait à jour les données
+        }
+
+        function markAsRead(notificationId) {
+            const notification = mockNotifications.find(n => n.id === notificationId);
+            if (notification) {
+                notification.lue = true;
+                renderNotifications();
+            }
+        }
+
+        // Initialiser l'affichage
+        renderNotifications();
+    </script>
+</body>
+
+</html>

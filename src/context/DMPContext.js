@@ -331,15 +331,15 @@ export const DMPProvider = ({ children }) => {
                 const response = await dmpApi.getDocumentsDMP(null, filters); // Utilise l'ID du patient connecté automatiquement
                 console.log('📄 Documents chargés dans le contexte:', response);
                 
-                                    // S'assurer que nous avons un tableau de documents
-                    let documents = [];
-                    if (response && response.data && response.data.documents_personnels && Array.isArray(response.data.documents_personnels)) {
-                        documents = response.data.documents_personnels;
-                    } else if (response && response.data && Array.isArray(response.data)) {
-                        documents = response.data;
-                    } else if (response && Array.isArray(response)) {
-                        documents = response;
-                    }
+                // S'assurer que nous avons un tableau de documents
+                let documents = [];
+                if (response && response.data && response.data.documents_personnels && Array.isArray(response.data.documents_personnels)) {
+                    documents = response.data.documents_personnels;
+                } else if (response && response.data && Array.isArray(response.data)) {
+                    documents = response.data;
+                } else if (response && Array.isArray(response)) {
+                    documents = response;
+                }
                 
                 console.log('📄 Documents finaux pour le contexte:', documents);
                 dispatch({ type: 'SET_DOCUMENTS', payload: documents });

@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { QRCodeCanvas } from 'qrcode.react';
 
-import { getPatients, getPatientRendezVous, getProchainRendezVous, getDocumentsRecents, getResumeMedical, createDossierMedical, getServices, getAllDossiersMedical, getDossierMedical, closeDossierPatient, updateDossierPatient, createOrdonnance, createExamen, getTraitementsActifs, getAllPrescriptions, getOrdonnancesRecentes, createOrdonnanceComplete, ajouterPrescriptionAuDossier, creerNotification, marquerNotificationLue, getNotificationsPatient, getResumeAujourdhui } from "../services/api/medicalApi";
+import { getPatients, createDossierMedical, getServices, getAllDossiersMedical, getDossierMedical, closeDossierPatient, updateDossierPatient, createOrdonnance, createExamen, getAllPrescriptions, getOrdonnancesRecentes, createOrdonnanceComplete, ajouterPrescriptionAuDossier, marquerNotificationLue, getNotificationsPatient, getResumeAujourdhui } from "../services/api/medicalApi";
+import DMPHistory from "../components/dmp/DMPHistory";
 
 function DossierPatient() {
   const navigate = useNavigate();
@@ -484,8 +485,7 @@ function DossierPatient() {
   const [search, setSearch] = useState("");
   const [filterRecent, setFilterRecent] = useState(false);
   const [filterShared, setFilterShared] = useState(false);
-  const [accessRules] = useState([]);
-  const [accessHistory] = useState([]);
+
   const [services, setServices] = useState([]);
   const [servicesLoading, setServicesLoading] = useState(false);
   const [patientsForSelect, setPatientsForSelect] = useState([]);
@@ -535,19 +535,7 @@ function DossierPatient() {
     directives_anticipees: ''
   });
 
-  const [generalNotifications] = useState([
-    {
-      iconBg: "bg-blue-100",
-      iconColor: "text-blue-600",
-      title: "Demande de partage de dossier",
-      time: "10 min ago",
-      content: "Dr. Sophie Laurent demande l'accès au dossier de Jean Martin",
-      actions: [
-        { label: "Approuver", color: "bg-green-100 text-green-800 hover:bg-green-200" },
-        { label: "Refuser", color: "bg-red-100 text-red-800 hover:bg-red-200" }
-      ]
-    }
-  ]);
+
 
   // États pour l'onglet prescription
   const [prescriptions, setPrescriptions] = useState([]);
@@ -1452,6 +1440,16 @@ function DossierPatient() {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                           </svg>
                         </button>
+                        <button 
+                          className="text-green-600 hover:text-green-800" 
+                          onClick={() => navigate(`/dmp-access/${p.id}`)}
+                          title="Accès DMP"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                          </svg>
+                        </button>
                         <button className="text-blue-600 hover:text-blue-800" onClick={() => openPatientModal(p)}>
                           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -1663,80 +1661,24 @@ function DossierPatient() {
           {activeTab === "access-manager" && (
             <div>
               <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold">Gestion des Accès</h2>
-                <button className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">+ Nouvelle règle d'accès</button>
-              </div>
-              <div className="bg-white rounded-lg shadow-md p-6">
-                <div className="mb-6">
-                  <h3 className="text-lg font-semibold mb-3">Règles d'accès actuelles</h3>
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Consultant</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Patient</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Accès accordé</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
-                        {accessRules.map((rule, idx) => (
-                          <tr key={idx}>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="flex items-center">
-                                <div className="flex-shrink-0 h-10 w-10">
-                                  <img className="h-10 w-10 rounded-full" src="https://placehold.co/40" alt=""/>
-                                </div>
-                                <div className="ml-4">
-                                  <div className="text-sm font-medium text-gray-900">{rule.consultant.name}</div>
-                                  <div className="text-sm text-gray-500">{rule.consultant.specialty}</div>
-                                </div>
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="text-sm text-gray-900">{rule.patient.name}</div>
-                              <div className="text-sm text-gray-500">Né le {rule.patient.birth}</div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="text-sm text-gray-900">{rule.access}</div>
-                              <div className="text-sm text-gray-500">Expire le {rule.expires}</div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              <button className="text-yellow-600 hover:text-yellow-900 mr-3">Modifier</button>
-                              <button className="text-red-600 hover:text-red-900">Révoquer</button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold mb-3">Historique des accès</h3>
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Consultant</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Patient</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
-                        </tr>
-                      </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
-                        {accessHistory.map((hist, idx) => (
-                          <tr key={idx}>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{hist.date}</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{hist.consultant}</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{hist.patient}</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{hist.action}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                <h2 className="text-2xl font-bold">Gestion des Accès DMP</h2>
+                <div className="flex space-x-3">
+                  <button 
+                    onClick={() => setActiveTab("patients-list")}
+                    className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700"
+                  >
+                    Nouvel accès DMP
+                  </button>
+                  <button 
+                    onClick={() => window.location.reload()}
+                    className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
+                  >
+                    Actualiser
+                  </button>
                 </div>
               </div>
+              
+              <DMPHistory />
             </div>
           )}
           {/* Notifications */}
