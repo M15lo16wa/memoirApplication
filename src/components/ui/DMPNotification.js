@@ -10,13 +10,12 @@ const DMPNotification = ({
   show = false 
 }) => {
   const [isVisible, setIsVisible] = useState(show);
-  const [isExpanded, setIsExpanded] = useState(false);
 
   useEffect(() => {
     setIsVisible(show);
     if (show) {
       // Auto-hide after 10 seconds for non-actionable notifications
-      if (notification.type !== 'demande_acces' || notification.repondue) {
+      if (notification.type_notification !== 'demande_validation' || notification.statut_envoi !== 'en_attente') {
         const timer = setTimeout(() => {
           setIsVisible(false);
           if (onClose) onClose();
@@ -29,8 +28,8 @@ const DMPNotification = ({
   if (!isVisible) return null;
 
   const getNotificationStyle = () => {
-    switch (notification.type) {
-      case 'demande_acces':
+    switch (notification.type_notification) {
+      case 'demande_validation':
         return {
           bg: 'bg-orange-50 border-orange-200',
           icon: 'bg-orange-100 text-orange-600',
@@ -62,8 +61,8 @@ const DMPNotification = ({
   };
 
   const getStatusText = () => {
-    switch (notification.type) {
-      case 'demande_acces':
+    switch (notification.type_notification) {
+      case 'demande_validation':
         return 'Demande en attente';
       case 'acces_autorise':
         return 'Accès autorisé';
@@ -75,8 +74,8 @@ const DMPNotification = ({
   };
 
   const getIcon = () => {
-    switch (notification.type) {
-      case 'demande_acces':
+    switch (notification.type_notification) {
+      case 'demande_validation':
         return <FaClock className="w-5 h-5" />;
       case 'acces_autorise':
         return <FaCheck className="w-5 h-5" />;
@@ -109,9 +108,9 @@ const DMPNotification = ({
           </div>
           
           <div className="flex items-center space-x-2">
-            {!notification.lue && onMarkAsRead && (
+            {notification.statut_envoi === 'en_attente' && onMarkAsRead && (
               <button
-                onClick={() => onMarkAsRead(notification.id)}
+                onClick={() => onMarkAsRead(notification.id_notification)}
                 className="text-xs text-gray-500 hover:text-gray-700 transition-colors"
               >
                 Marquer comme lue
@@ -136,18 +135,18 @@ const DMPNotification = ({
           </p>
           
           {/* Additional info for access requests */}
-          {notification.type === 'demande_acces' && !notification.repondue && (
+          {notification.type_notification === 'demande_validation' && notification.statut_envoi === 'en_attente' && (
             <div className="mt-3 p-3 bg-white rounded-lg border border-gray-200">
               <div className="flex items-center space-x-2 mb-2">
                 <FaUserMd className="w-4 h-4 text-gray-500" />
                 <span className="text-sm font-medium text-gray-700">
-                  {notification.medecin_nom}
+                  {notification.professionnel ? `${notification.professionnel.prenom} ${notification.professionnel.nom}` : 'Professionnel de santé'}
                 </span>
               </div>
               <div className="flex items-center space-x-2">
                 <FaShieldAlt className="w-4 h-4 text-gray-500" />
                 <span className="text-xs text-gray-600">
-                  Demande d'accès à votre DMP
+                  Raison: {notification.metadata?.raison_acces || 'Non spécifiée'}
                 </span>
               </div>
             </div>
@@ -155,11 +154,13 @@ const DMPNotification = ({
         </div>
 
         {/* Actions */}
-        {notification.type === 'demande_acces' && !notification.repondue && (
+        {notification.type_notification === 'demande_validation' && notification.statut_envoi === 'en_attente' && (
           <div className="flex space-x-2">
             <button
               onClick={() => {
-                if (onAccept) onAccept(notification.demande_id);
+                console.log('🔍 DMPNotification: Tentative d\'acceptation avec session_id:', notification.session_id);
+                console.log('🔍 DMPNotification: id_notification disponible:', notification.id_notification);
+                if (onAccept) onAccept(notification.id_notification);
                 setIsVisible(false);
                 if (onClose) onClose();
               }}
@@ -170,7 +171,9 @@ const DMPNotification = ({
             </button>
             <button
               onClick={() => {
-                if (onReject) onReject(notification.demande_id);
+                console.log('🔍 DMPNotification: Tentative de refus avec session_id:', notification.session_id);
+                console.log('🔍 DMPNotification: id_notification disponible:', notification.id_notification);
+                if (onReject) onReject(notification.id_notification);
                 setIsVisible(false);
                 if (onClose) onClose();
               }}

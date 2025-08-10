@@ -73,8 +73,8 @@ function HomePage() {
                             <div className="w-12 h-12 sm:w-14 sm:h-14 bg-blue-100 rounded-lg flex items-center justify-center mb-4">
                                 <i className="fas fa-video text-blue-600 text-xl sm:text-2xl"></i>
                             </div>
-                            <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-3">Consultation en ligne</h3>
-                            <p className="text-gray-600 mb-4 text-sm sm:text-base">Discutez avec des médecins qualifiés en vidéo depuis chez vous, à tout moment.</p>
+                            <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-3">Integration des resultats d'examens</h3>
+                            <p className="text-gray-600 mb-4 text-sm sm:text-base">Recevez vos resultats d'examens directement dans votre dossier medical.</p>
                             <a href="#" className="text-blue-600 font-medium flex items-center text-sm sm:text-base">En savoir plus <i className="fas fa-arrow-right ml-2"></i></a>
                         </div>
                         <div className="feature-card bg-white rounded-xl shadow-md p-4 sm:p-6 transition duration-300 flex flex-col h-full">

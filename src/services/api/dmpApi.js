@@ -1,5 +1,6 @@
 import axios from "axios";
 
+// L'URL de base de votre API.
 const API_URL = "http://localhost:3000/api";
 
 const dmpApi = axios.create({
@@ -10,535 +11,348 @@ const dmpApi = axios.create({
     },
 });
 
-// Intercepteur d'authentification
+// L'intercepteur pour ajouter le token JWT à chaque requête.
 dmpApi.interceptors.request.use(
     (config) => {
         const jwtToken = localStorage.getItem('jwt');
-        const token = localStorage.getItem('token');
-        
-        console.log('🔐 Intercepteur - URL:', config.url);
-        console.log('🔐 Intercepteur - jwtToken:', jwtToken ? '✅ Présent' : '❌ Absent');
-        console.log('🔐 Intercepteur - token:', token ? '✅ Présent' : '❌ Absent');
-        
-        // Test JWT détaillé
-        if (jwtToken) {
-            try {
-                const parts = jwtToken.split('.');
-                if (parts.length === 3) {
-                    const header = JSON.parse(atob(parts[0]));
-                    const payload = JSON.parse(atob(parts[1]));
-                    
-                    console.log('🔐 JWT Header:', header);
-                    console.log('🔐 JWT Payload:', payload);
-                    
-                    // Vérifier l'expiration
-                    const now = Math.floor(Date.now() / 1000);
-                    const exp = payload.exp;
-                    const iat = payload.iat;
-                    
-                    console.log('🔐 Timestamp actuel:', now);
-                    console.log('🔐 Expiration JWT:', exp);
-                    console.log('🔐 Émis le:', iat);
-                    console.log('🔐 Token expiré:', now > exp ? '❌ OUI' : '✅ NON');
-                    
-                    if (now > exp) {
-                        console.log('⚠️ Le token a expiré !');
-                        console.log('🔐 Temps écoulé depuis expiration:', Math.floor((now - exp) / 60), 'minutes');
-                    } else {
-                        console.log('⏰ Temps restant:', Math.floor((exp - now) / 60), 'minutes');
-                    }
-                    
-                    // Vérifier le rôle
-                    console.log('🔐 Rôle dans le token:', payload.role);
-                    console.log('🔐 ID utilisateur dans le token:', payload.patient_id || payload.id);
-                    
-                } else {
-                    console.log('❌ Format JWT invalide');
-                }
-            } catch (error) {
-                console.log('❌ Erreur décodage JWT:', error);
-            }
-        }
-        
+        const generalToken = localStorage.getItem('token');
         if (jwtToken) {
             config.headers.Authorization = `Bearer ${jwtToken}`;
-            console.log('🔐 Intercepteur - Headers Authorization ajouté avec JWT');
-        } else if (token) {
-            config.headers.Authorization = `Bearer ${token}`;
-            console.log('🔐 Intercepteur - Headers Authorization ajouté avec token');
-        } else {
-            console.log('❌ Intercepteur - Aucun token trouvé');
+        } else if (generalToken) {
+            config.headers.Authorization = `Bearer ${generalToken}`;
         }
-        
         return config;
     },
     (error) => Promise.reject(error)
 );
 
-// Fonction utilitaire pour récupérer l'ID du patient
-const getPatientId = (patientId = null) => {
-    if (patientId) return patientId;
-    
+// =================================================================
+//                 FONCTIONS API CONNECTÉES
+// =================================================================
+
+// ===== PATIENT - Notifications & Accès =====
+// export const getDroitsAccesNotifications = () => dmpApi.get('/access/patient/pending');
+/**
+ * @description Récupère les demandes d'accès en attente pour le patient connecté.
+ * @returns {Promise<Array>} Une liste de notifications/demandes d'accès.
+ */
+export const getPendingAccessRequests = async () => {
     try {
-        console.log('🔍 getPatientId - Début de la récupération...');
-        
-        const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
-        const storedPatient = JSON.parse(localStorage.getItem('patient') || '{}');
-        
-        console.log('🔍 getPatientId - currentUser:', currentUser);
-        console.log('🔍 getPatientId - storedPatient:', storedPatient);
-        
-        // Essayer plusieurs propriétés possibles pour l'ID
-        const targetPatientId = storedPatient.id || storedPatient.id_patient || storedPatient.patient_id || 
-                               currentUser.id || currentUser.id_patient || currentUser.patient_id;
-        
-        console.log('🔍 getPatientId - targetPatientId:', targetPatientId);
-        
-        if (!targetPatientId) {
-            console.log('❌ getPatientId - Aucun ID patient trouvé');
-            throw new Error('Patient non connecté');
+        const response = await dmpApi.get('/access/patient/pending');
+        return response.data.data.pendingRequests;
+    } catch (error) {
+        console.error("Erreur lors de la récupération des demandes d'accès :", error.response?.data || error.message);
+        throw error.response?.data || new Error("Impossible de charger les demandes.");
+    }
+};
+export const marquerNotificationDroitsAccesLue = (notificationId) => dmpApi.patch(`/patient/notifications/${notificationId}/mark-as-read`);
+// export const repondreDemandeAcces = (autorisationId, reponse, commentaire = '') => dmpApi.patch(`/access/patient/reponse/${autorisationId}`, { response: reponse, comment: commentaire });
+/**
+ * @description Envoie la réponse du patient (acceptation ou refus) à une demande d'accès.
+ * @param {number} authorizationId - L'ID de la demande d'autorisation (reçu via getPendingAccessRequests).
+ * @param {'accept' | 'refuse'} response - La décision du patient.
+ * @param {string} [comment] - Un commentaire optionnel (surtout en cas de refus).
+ * @returns {Promise<Object>} L'objet autorisation mis à jour.
+ */
+export const respondToAccessRequest = async (authorizationId, decision, comment = '') => {
+    try {
+        const res = await dmpApi.patch(`/access/patient/response/${authorizationId}`, {
+            response: decision,
+            comment,
+        });
+        return res.data;
+    } catch (error) {
+        console.error("Erreur lors de la réponse à la demande d'accès :", error.response?.data || error.message);
+        throw error.response?.data || new Error("La réponse n'a pas pu être envoyée.");
+    }
+}
+export const getAutorisations = () => dmpApi.get('/access/patient/authorizations');
+
+// ===== PATIENT - Notifications avancées =====
+export const getNotificationsStats = () => dmpApi.get('/patient/notifications/stats');
+export const marquerToutesNotificationsLues = () => dmpApi.put('/patient/notifications/mark-all-read');
+export const getNotificationDetails = (notificationId) => dmpApi.get(`/patient/notifications/${notificationId}`);
+
+// ===== PATIENT - Données du DMP =====
+export const getDMP = async () => {
+    const res = await dmpApi.get('/patient/auth/me');
+    return { data: res.data };
+};
+export const updateDMP = async (dmpData) => {
+    try {
+        const res = await dmpApi.put('/patient/me/dmp', dmpData);
+        return res.data;
+    } catch (error) {
+        console.warn("updateDMP non supporté sur l'API actuelle");
+        throw error.response?.data || new Error('Mise à jour DMP non supportée');
+    }
+};
+export const getTableauDeBord = async () => {
+    try {
+        const res = await dmpApi.get('/patient/dashboard');
+        return res; // garder la forme AxiosResponse
+    } catch (error) {
+        // Fallback: construire un tableau minimal depuis le profil
+        const profil = await dmpApi.get('/patient/auth/me');
+        return { data: { tableau_de_bord: { patient: profil.data } } };
+    }
+};
+export const getHistoriqueMedical = () => dmpApi.get('/access/patient/history');
+export const addHistoriqueEntry = (entry) => dmpApi.post('/dossierMedical/patient/me/history', entry);
+export const getJournalActivite = (filters = {}) => dmpApi.get('/patient/me/activity-log', { params: filters });
+export const getDocumentsDMP = async (type = null) => {
+    const params = type ? { type } : {};
+    try {
+        const res = await dmpApi.get('/patient/me/documents', { params });
+        return res;
+    } catch (error) {
+        if (error.response?.status === 404) {
+            return { data: [] };
         }
-        
-        console.log('✅ getPatientId - ID patient trouvé:', targetPatientId);
-        return targetPatientId;
-    } catch (error) {
-        console.log('❌ getPatientId - Erreur:', error.message);
-        throw new Error('Patient non connecté');
-    }
-};
-
-// ===== FONCTIONS DMP PRINCIPALES =====
-
-// 1. Récupérer le DMP complet d'un patient
-export const getDMP = async (patientId = null) => {
-    try {
-        getPatientId(patientId); // Vérifier que le patient est connecté
-        const response = await dmpApi.get(`/patient/dmp`);
-        return response.data;
-    } catch (error) {
         throw error;
     }
 };
-
-// 2. Mettre à jour le DMP
-export const updateDMP = async (patientId, dmpData) => {
+export const getAutoMesuresDMP = async (type = null) => {
+    const params = type ? { type } : {};
     try {
-        const response = await dmpApi.put(`/patient/dmp`, dmpData);
-        return response.data;
+        const res = await dmpApi.get('/patient/me/automesures', { params });
+        return res;
     } catch (error) {
+        if (error.response?.status === 404) {
+            return { data: [] };
+        }
         throw error;
     }
 };
+export const getRappels = () => dmpApi.get('/patient/me/rappels');
+export const createAutoMesureDMP = (mesureData) => dmpApi.post('/patient/me/automesures', mesureData);
+export const uploadDocumentDMP = (formData) => dmpApi.post('/patient/me/documents/upload', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+});
 
-// 3. Récupérer l'historique médical
-export const getHistoriqueMedical = async (patientId = null) => {
-    try {
-        getPatientId(patientId); // Vérifier que le patient est connecté
-        const response = await dmpApi.get(`/patient/dmp/historique-medical`);
-        return response.data;
-    } catch (error) {
-        throw error;
+// ===== PATIENT - Droits d'accès =====
+export const getDroitsAcces = () => dmpApi.get('/patient/me/access-rights');
+export const updateDroitsAcces = (droits) => dmpApi.put('/patient/me/access-rights', droits);
+
+// ===== PATIENT - Rendez-vous =====
+export const getRendezVousDMP = () => dmpApi.get('/patient/me/appointments');
+export const createRendezVousDMP = (rdvData) => dmpApi.post('/patient/me/appointments', rdvData);
+
+// ===== PATIENT - Bibliothèque et statistiques =====
+export const getBibliothequeSante = () => dmpApi.get('/patient/me/health-library');
+export const getStatistiquesDMP = (periode = '30j') => dmpApi.get('/patient/me/statistics', { params: { periode } });
+
+// ===== PATIENT - Autorisations =====
+export const createDirectAutorisation = (autorisationData) => dmpApi.post('/patient/me/authorizations', autorisationData);
+export const accepterAutorisation = (autorisationId, commentaire = '') => dmpApi.post(`/patient/me/authorizations/${autorisationId}/accept`, { commentaire });
+export const refuserAutorisation = (autorisationId, raisonRefus) => dmpApi.post(`/patient/me/authorizations/${autorisationId}/refuse`, { raison_refus: raisonRefus });
+
+// ===== MÉDECIN - Authentification & Demande d'Accès =====
+export const authenticateCPS = async (cpsData) => {
+    const response = await dmpApi.post('/auth/authenticate-cps', cpsData);
+    if (response.data?.data?.token) {
+        console.log('✅ Nouveau token de session reçu, mise à jour du localStorage.');
+        localStorage.setItem('jwt', response.data.data.token);
     }
+    return response.data;
 };
+export const requestDMPAccess = (accessData) => dmpApi.post('/access/request-standard', accessData);
+export const requestStandardAccess = (accessData) => dmpApi.post('/access/request-standard', accessData);
+export const grantEmergencyAccess = (accessData) => dmpApi.post('/access/grant-emergency', accessData);
+export const grantSecretAccess = (accessData) => dmpApi.post('/access/grant-secret', accessData);
 
-// 4. Ajouter une entrée à l'historique
-export const addHistoriqueEntry = async (patientId, entry) => {
-    try {
-        const response = await dmpApi.post(`/patient/dmp/historique-medical`, entry);
-        return response.data;
-    } catch (error) {
-        throw error;
-    }
-};
+// ===== MÉDECIN - Sessions et accès =====
+export const testDMPSystem = () => dmpApi.get('/medecin/dmp/test/systeme');
+export const createDMPSession = (sessionData) => dmpApi.post('/medecin/dmp/creer-session', sessionData);
+export const getDMPNotifications = (sessionId) => dmpApi.get(`/medecin/dmp/notifications/${sessionId}`);
+export const validateDMPSession = (sessionId) => dmpApi.get(`/medecin/dmp/session/${sessionId}/statut`);
+export const closeDMPSession = (sessionId) => dmpApi.post(`/medecin/dmp/session/${sessionId}/fermer`);
+export const getAutorisationsDemandees = () => dmpApi.get('/medecin/dmp/autorisations');
 
-// 5. Récupérer le journal d'activité
-export const getJournalActivite = async (patientId, filters = {}) => {
-    try {
-        getPatientId(patientId); // Vérifier que le patient est connecté
-        const params = new URLSearchParams(filters);
-        const response = await dmpApi.get(`/patient/dmp/journal-activite?${params}`);
-        return response.data;
-    } catch (error) {
-        throw error;
-    }
-};
+// ===== GÉNÉRAL - Vérification d'accès =====
+export const verifierAcces = (professionnelId, patientId) => dmpApi.get('/dmp/verifier-acces', {
+    params: { professionnel_id: professionnelId, patient_id: patientId }
+});
+export const getDureeRestante = (autorisationId) => dmpApi.get(`/dmp/autorisations/${autorisationId}/duree-restante`);
+export const getDMPAccessHistory = (patientId) => dmpApi.get(`/history/patient/${patientId}`);
 
-// 6. Gestion des droits d'accès
-export const getDroitsAcces = async (patientId = null) => {
-    try {
-        getPatientId(patientId); // Vérifier que le patient est connecté
-        const response = await dmpApi.get(`/patient/dmp/droits-acces`);
-        return response.data;
-    } catch (error) {
-        throw error;
-    }
-};
+// ===== MÉDECIN - Statut d'accès au DMP =====
 
-export const updateDroitsAcces = async (patientId, droits) => {
+/**
+ * @description Récupère le statut d'accès actuel d'un professionnel pour un patient donné.
+ * @param {number} patientId L'ID du patient.
+ * @returns {Promise<{accessStatus: string, authorization: object|null}>} Un objet contenant le statut et l'autorisation.
+ */
+export const getAccessStatus = async (patientId) => {
     try {
-        const response = await dmpApi.put(`/patient/dmp/droits-acces`, droits);
-        return response.data;
-    } catch (error) {
-        throw error;
-    }
-};
-
-// 6.1. Notifications des droits d'accès pour les patients
-export const getDroitsAccesNotifications = async (patientId = null) => {
-    try {
-        getPatientId(patientId); // Vérifier que le patient est connecté
-        const response = await dmpApi.get(`/patient/dmp/droits-acces/notifications`);
-        return response.data;
-    } catch (error) {
-        console.error('Erreur lors de la récupération des notifications des droits d\'accès:', error);
-        throw error;
-    }
-};
-
-export const marquerNotificationDroitsAccesLue = async (notificationId, patientId = null) => {
-    try {
-        getPatientId(patientId); // Vérifier que le patient est connecté
-        const response = await dmpApi.put(`/patient/dmp/droits-acces/notifications/${notificationId}/lue`);
-        return response.data;
-    } catch (error) {
-        console.error('Erreur lors du marquage de la notification comme lue:', error);
-        throw error;
-    }
-};
-
-export const repondreDemandeAcces = async (demandeId, reponse, patientId = null) => {
-    try {
-        getPatientId(patientId); // Vérifier que le patient est connecté
-        const response = await dmpApi.post(`/patient/dmp/droits-acces/demandes/${demandeId}/reponse`, {
-            reponse: reponse // 'accepter' ou 'refuser'
+        // Revenir à la vérification via /dmp/verifier-acces si la route spécifique n'est pas disponible
+        const response = await dmpApi.get('/dmp/verifier-acces', {
+            params: { patient_id: patientId }
         });
-        return response.data;
+        const data = response?.data?.data || response?.data || {};
+        // Normaliser en status
+        const authorized = data.acces_autorise === true;
+        return { status: authorized ? 'authorized' : 'not_authorized', ...data };
     } catch (error) {
-        console.error('Erreur lors de la réponse à la demande d\'accès:', error);
-        throw error;
+        console.error("Erreur lors de la récupération du statut d'accès :", error.response?.data || error.message);
+        throw error.response?.data || new Error("Impossible de récupérer le statut d'accès.");
     }
 };
 
-// Nouvelles fonctions pour la gestion avancée des notifications
-export const getNotificationsStats = async (patientId = null) => {
-    try {
-        getPatientId(patientId);
-        const response = await dmpApi.get(`/patient/dmp/notifications/stats`);
-        return response.data;
-    } catch (error) {
-        console.error('Erreur lors de la récupération des statistiques des notifications:', error);
-        throw error;
+// ===== MÉDECIN - Récupération des données patient (après autorisation) =====
+/**
+ * Récupère le résumé DMP du patient pour affichage côté médecin.
+ * Selon l'implémentation backend, le patientId peut être passé en query.
+ */
+export const getPatientDMPForMedecin = async (patientId) => {
+    const params = patientId ? { patient_id: patientId } : {};
+    const res = await dmpApi.get('/patient/dmp', { params });
+    return res?.data?.data || res?.data || {};
+};
+
+/**
+ * Récupère les documents du patient côté médecin.
+ */
+export const getPatientDocumentsForMedecin = async (patientId, type = null) => {
+    const params = { ...(patientId ? { patient_id: patientId } : {}), ...(type ? { type } : {}) };
+    const res = await dmpApi.get('/patient/dmp/documents', { params });
+    return res?.data?.data?.documents || res?.data?.documents || res?.data || [];
+};
+
+/**
+ * Récupère les auto-mesures du patient côté médecin.
+ */
+export const getPatientAutoMesuresForMedecin = async (patientId, type = null) => {
+    const params = { ...(patientId ? { patient_id: patientId } : {}), ...(type ? { type } : {}) };
+    const res = await dmpApi.get('/patient/dmp/auto-mesures', { params });
+    return res?.data?.data?.mesures || res?.data?.mesures || res?.data || [];
+};
+
+/**
+ * Récupère les autorisations liées au patient (vue médecin).
+ */
+export const getPatientAutorisationsForMedecin = async (patientId) => {
+    const params = patientId ? { patient_id: patientId } : {};
+    const res = await dmpApi.get('/patient/dmp/autorisations', { params });
+    return res?.data?.data || res?.data || [];
+};
+
+// ===== FONCTIONS DE VALIDATION ET UTILITAIRES =====
+export const validateNewAccessRequest = (data) => {
+    const errors = [];
+    if (!data.patient_id) {
+        errors.push('L\'ID du patient est requis');
     }
-};
-
-export const marquerToutesNotificationsLues = async (patientId = null) => {
-    try {
-        getPatientId(patientId);
-        const response = await dmpApi.put(`/patient/dmp/droits-acces/notifications/marquer-toutes-lues`);
-        return response.data;
-    } catch (error) {
-        console.error('Erreur lors du marquage de toutes les notifications:', error);
-        throw error;
+    if (!data.raison_demande || data.raison_demande.length < 10) {
+        errors.push('La raison doit faire au moins 10 caractères');
     }
+    return { valid: errors.length === 0, errors };
 };
 
-export const getNotificationDetails = async (notificationId, patientId = null) => {
-    try {
-        getPatientId(patientId);
-        const response = await dmpApi.get(`/patient/dmp/droits-acces/notifications/${notificationId}`);
-        return response.data;
-    } catch (error) {
-        console.error('Erreur lors de la récupération des détails de la notification:', error);
-        throw error;
-    }
-};
-
-// 7. Auto-mesures DMP
-export const getAutoMesuresDMP = async (patientId = null, type = null) => {
-    try {
-        getPatientId(patientId); // Vérifier que le patient est connecté
-        const params = type ? `?type=${type}` : '';
-        const response = await dmpApi.get(`/patient/dmp/auto-mesures${params}`);
-        return response.data;
-    } catch (error) {
-        throw error;
-    }
-};
-
-export const createAutoMesureDMP = async (patientId, mesureData) => {
-    try {
-        const response = await dmpApi.post(`/patient/dmp/auto-mesures`, mesureData);
-        return response.data;
-    } catch (error) {
-        throw error;
-    }
-};
-
-// 8. Rendez-vous DMP
-export const getRendezVousDMP = async (patientId = null) => {
-    try {
-        getPatientId(patientId); // Vérifier que le patient est connecté
-        const response = await dmpApi.get(`/patient/dmp/rendez-vous`);
-        return response.data;
-    } catch (error) {
-        throw error;
-    }
-};
-
-export const createRendezVousDMP = async (patientId, rdvData) => {
-    try {
-        const response = await dmpApi.post(`/patient/dmp/rendez-vous`, rdvData);
-        return response.data;
-    } catch (error) {
-        throw error;
-    }
-};
-
-// 9. Documents DMP
-export const getDocumentsDMP = async (patientId = null, type = null) => {
-    try {
-        getPatientId(patientId); // Vérifier que le patient est connecté
-        const params = type ? `?type=${type}` : '';
-        const response = await dmpApi.get(`/patient/dmp/documents${params}`);
-        return response.data;
-    } catch (error) {
-        throw error;
-    }
-};
-
-export const uploadDocumentDMP = async (patientId, documentData) => {
-    try {
-        const formData = new FormData();
-        formData.append('file', documentData.file);
-        formData.append('type', documentData.type);
-        formData.append('description', documentData.description);
-        formData.append('categorie', documentData.categorie || 'general');
-        
-        const response = await dmpApi.post(`/patient/dmp/upload-document`, formData, {
-            headers: {
-                'Content-Type': 'multipart/form-data',
-            },
-        });
-        return response.data;
-    } catch (error) {
-        throw error;
-    }
-};
-
-// 10. Bibliothèque de santé
-export const getBibliothequeSante = async (patientId = null) => {
-    try {
-        getPatientId(patientId); // Vérifier que le patient est connecté
-        const response = await dmpApi.get(`/patient/dmp/bibliotheque-sante`);
-        return response.data;
-    } catch (error) {
-        throw error;
-    }
-};
-
-// 11. Statistiques DMP
-export const getStatistiquesDMP = async (patientId = null, periode = '30j') => {
-    try {
-        getPatientId(patientId); // Vérifier que le patient est connecté
-        const response = await dmpApi.get(`/patient/dmp/statistiques?periode=${periode}`);
-        return response.data;
-    } catch (error) {
-        throw error;
-    }
-};
-
-// 12. Tableau de bord DMP
-export const getTableauDeBord = async (patientId = null) => {
-    try {
-        getPatientId(patientId); // Vérifier que le patient est connecté
-        const response = await dmpApi.get(`/patient/dmp/tableau-de-bord`);
-        return response.data;
-    } catch (error) {
-        throw error;
-    }
-};
-
-// 13. Rappels DMP
-export const getRappels = async (patientId = null) => {
-    try {
-        getPatientId(patientId); // Vérifier que le patient est connecté
-        const response = await dmpApi.get(`/patient/dmp/rappels`);
-        return response.data;
-    } catch (error) {
-        throw error;
-    }
-};
-
-// ===== NOUVELLES FONCTIONS DMP ACCESS =====
-
-// Test du système DMP
-export const testDMPSystem = async () => {
-  try {
-    const response = await dmpApi.get('/medecin/dmp/test/systeme');
-    return response.data;
-  } catch (error) {
-    console.error('Erreur lors du test du système DMP:', error);
-    throw error;
-  }
-};
-
-// Authentification CPS
-export const authenticateCPS = async (credentials) => {
-  try {
-    const response = await dmpApi.post('/medecin/dmp/authentification-cps', credentials);
-    return response.data;
-  } catch (error) {
-    console.error('Erreur lors de l\'authentification CPS:', error);
-    throw error;
-  }
-};
-
-// Création de session d'accès
-export const createDMPSession = async (sessionData) => {
-  try {
-    const response = await dmpApi.post('/medecin/dmp/creer-session', sessionData);
-    return response.data;
-  } catch (error) {
-    console.error('Erreur lors de la création de session DMP:', error);
-    throw error;
-  }
-};
-
-// Demande d'accès au DMP
-export const requestDMPAccess = async (accessData) => {
-  try {
-    console.log('requestDMPAccess appelée avec:', accessData);
-    console.log('URL de l\'API:', dmpApi.defaults.baseURL);
-    
-    const response = await dmpApi.post('/medecin/dmp/demande-acces', accessData);
-    console.log('Réponse complète de l\'API:', response);
-    return response.data;
-  } catch (error) {
-    console.error('Erreur lors de la demande d\'accès DMP:', error);
-    console.error('Détails de l\'erreur:', {
-      message: error.message,
-      status: error.response?.status,
-      data: error.response?.data
-    });
-    throw error;
-  }
-};
-
-// Récupération des notifications DMP
-export const getDMPNotifications = async (sessionId) => {
-  try {
-    const response = await dmpApi.get(`/medecin/dmp/notifications/${sessionId}`);
-    return response.data;
-  } catch (error) {
-    console.error('Erreur lors de la récupération des notifications DMP:', error);
-    throw error;
-  }
-};
-
-// Validation du statut de session DMP
-export const validateDMPSession = async (sessionId) => {
-  try {
-    const response = await dmpApi.get(`/medecin/dmp/session/${sessionId}/statut`);
-    return response.data;
-  } catch (error) {
-    console.error('Erreur lors de la validation de session DMP:', error);
-    throw error;
-  }
-};
-
-// Fermeture de session DMP
-export const closeDMPSession = async (sessionId) => {
-  try {
-    const response = await dmpApi.post(`/medecin/dmp/session/${sessionId}/fermer`);
-    return response.data;
-  } catch (error) {
-    console.error('Erreur lors de la fermeture de session DMP:', error);
-    throw error;
-  }
-};
-
-// Récupération de l'historique des accès DMP
-export const getDMPAccessHistory = async (patientId = null) => {
-  try {
-    const url = patientId 
-      ? `/medecin/dmp/historique/${patientId}`
-      : '/medecin/dmp/historique';
-    
-    const response = await dmpApi.get(url);
-    return response.data;
-  } catch (error) {
-    console.error('Erreur lors de la récupération de l\'historique DMP:', error);
-    throw error;
-  }
-};
-
-// Validation des données d'accès
-export const validateAccessRequest = (data) => {
-  const errors = [];
-  
-  if (!data.mode_acces) {
-    errors.push('Le mode d\'accès est requis');
-  }
-  
-  if (!data.raison_acces || data.raison_acces.length < 10) {
-    errors.push('La raison d\'accès doit contenir au moins 10 caractères');
-  }
-  
-  if (!data.duree_acces || data.duree_acces < 15 || data.duree_acces > 480) {
-    errors.push('La durée d\'accès doit être entre 15 et 480 minutes');
-  }
-  
-  return {
-    valid: errors.length === 0,
-    errors
-  };
-};
-
-// Validation du code CPS
 export const validateCPS = (code) => {
-  if (!code || code.length !== 4) {
-    return { valid: false, message: 'Le code CPS doit contenir 4 chiffres' };
-  }
-  
-  if (!/^\d{4}$/.test(code)) {
-    return { valid: false, message: 'Le code CPS ne doit contenir que des chiffres' };
-  }
-  
-  return { valid: true };
+    return /^\d{4}$/.test(code);
 };
+
+export const validateDirectAutorisation = (data) => {
+    const errors = [];
+    if (!data.professionnel_id) {
+        errors.push('L\'ID du professionnel est requis');
+    }
+    if (!data.duree_validite) {
+        errors.push('La durée de validité est requise');
+    }
+    return { valid: errors.length === 0, errors };
+};
+
+export const verifierAutorisationExistence = async (autorisationId) => {
+    try {
+        const response = await dmpApi.get(`/dmp/autorisations/${autorisationId}/verifier`);
+        return response.data.exists;
+    } catch (error) {
+        console.error('Erreur lors de la vérification de l\'autorisation:', error);
+        return false;
+    }
+};
+
+export const findAutorisationIdFromNotification = async (notification) => {
+    try {
+        const response = await dmpApi.post('/dmp/notifications/find-autorisation', { notification });
+        return response.data.autorisation_id;
+    } catch (error) {
+        console.error('Erreur lors de la recherche de l\'autorisation:', error);
+        return null;
+    }
+};
+
+// =================================================================
+//      EXPORTATION PAR DÉFAUT
+// =================================================================
 
 const dmpApiExports = {
+    // Authentification et accès
+    authenticateCPS,
+    requestDMPAccess,
+    requestStandardAccess,
+    grantEmergencyAccess,
+    grantSecretAccess,
+    
+    // Notifications et autorisations
+    getPendingAccessRequests,
+    marquerNotificationDroitsAccesLue,
+    marquerToutesNotificationsLues,
+    getNotificationsStats,
+    getNotificationDetails,
+    respondToAccessRequest,
+    getAutorisations,
+    accepterAutorisation,
+    refuserAutorisation,
+    createDirectAutorisation,
+    
+    // Données DMP
     getDMP,
     updateDMP,
+    getTableauDeBord,
     getHistoriqueMedical,
     addHistoriqueEntry,
     getJournalActivite,
+    getDocumentsDMP,
+    getAutoMesuresDMP,
+    getRappels,
+    createAutoMesureDMP,
+    uploadDocumentDMP,
+    
+    // Droits d'accès
     getDroitsAcces,
     updateDroitsAcces,
-    getDroitsAccesNotifications,
-    marquerNotificationDroitsAccesLue,
-    repondreDemandeAcces,
-    getAutoMesuresDMP,
-    createAutoMesureDMP,
+    
+    // Rendez-vous
     getRendezVousDMP,
     createRendezVousDMP,
-    getDocumentsDMP,
-    uploadDocumentDMP,
+    
+    // Bibliothèque et statistiques
     getBibliothequeSante,
     getStatistiquesDMP,
-    getTableauDeBord,
-    getRappels,
-    // Nouvelles fonctions DMP Access
+    
+    // Sessions et accès
     testDMPSystem,
-    authenticateCPS,
     createDMPSession,
-    requestDMPAccess,
     getDMPNotifications,
     validateDMPSession,
     closeDMPSession,
+    getAutorisationsDemandees,
+    
+    // Vérifications
+    verifierAcces,
+    getDureeRestante,
     getDMPAccessHistory,
-    validateAccessRequest,
-    validateCPS
+    getAccessStatus,
+    verifierAutorisationExistence,
+    findAutorisationIdFromNotification,
+    
+    // Validation
+    validateNewAccessRequest,
+    validateCPS,
+    validateDirectAutorisation
 };
 
-export default dmpApiExports; 
+export default dmpApiExports;

@@ -10,7 +10,9 @@ import Medecin from './pages/medecin';
 import Consultation from './pages/consultation';
 import DossierPatient from './pages/dossierPatient';
 import DMPAccess from './pages/DMPAccess';
+import PatientAutorisations from './pages/PatientAutorisations';
 import FicheInscription from './pages/ficheInscription';
+import DMPPatientView from './pages/DMPPatientView';
 
 
 // protection des routes
@@ -36,13 +38,15 @@ function App() {
       {/* Routes pour les patients uniquement */}
       <Route path="/dossier-medical" element={<DossierMedical />} />
       <Route path="/dmp" element={<ProtectedPatientRoute><DMP /></ProtectedPatientRoute>} />
+      <Route path="/patient/autorisations" element={<PatientAutorisations />} />
       
-      {/* Routes accessibles aux médecins ET aux patients */}
-      <Route path="/rendezVous" element={<ProtectedMedecinOrPatientRoute><RendezVous /></ProtectedMedecinOrPatientRoute>}/>
+      {/* Prise de rendez-vous: publique (pas d'authentification requise) */}
+      <Route path="/rendezVous" element={<RendezVous />}/>
       <Route path='/dossier-patient' element={<ProtectedMedecinOrPatientRoute><DossierPatient /></ProtectedMedecinOrPatientRoute>}/>
       
       {/* Routes DMP pour les médecins */}
       <Route path='/dmp-access/:patientId' element={<ProtectedMedecinRoute><DMPAccess /></ProtectedMedecinRoute>}/>
+      <Route path='/dmp-patient-view/:patientId' element={<ProtectedMedecinRoute><DMPPatientView /></ProtectedMedecinRoute>}/>
       
       {/* Routes publiques */}
       <Route path='/fiche-inscription' element={<FicheInscription/>}/>

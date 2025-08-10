@@ -1,5 +1,5 @@
 import React from 'react';
-import { FaBell, FaClock, FaCheck, FaTimes, FaEye } from 'react-icons/fa';
+import { FaBell, FaClock, FaCheck, FaEye } from 'react-icons/fa';
 
 const NotificationsStats = ({ stats, onViewAll, onMarkAllAsRead }) => {
   if (!stats) return null;

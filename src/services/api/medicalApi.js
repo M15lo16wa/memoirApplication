@@ -13,19 +13,24 @@ const api = axios.create({
 // Intercepteur pour ajouter le token à chaque requête
 api.interceptors.request.use(
     (config) => {
-        // Prioriser le token JWT pour les patients
         const jwtToken = localStorage.getItem('jwt');
         const generalToken = localStorage.getItem('token');
-        
-        // Pour les routes médecin, utiliser le token général
-        if (config.url && config.url.includes('/ProfessionnelSante/')) {
-            if (generalToken) {
-                config.headers.Authorization = `Bearer ${generalToken}`;
-            }
-        } else if (jwtToken) {
-            // Pour les autres routes, prioriser le JWT
+        const hasMedecin = !!localStorage.getItem('medecin');
+
+        // Prioriser le token médecin quand il est présent (afin d'accéder aux routes back côté pro)
+        if (generalToken && hasMedecin) {
+            config.headers.Authorization = `Bearer ${generalToken}`;
+            return config;
+        }
+
+        // Sinon, fallback sur le JWT patient
+        if (jwtToken) {
             config.headers.Authorization = `Bearer ${jwtToken}`;
-        } else if (generalToken) {
+            return config;
+        }
+
+        // Dernier recours
+        if (generalToken) {
             config.headers.Authorization = `Bearer ${generalToken}`;
         }
         return config;

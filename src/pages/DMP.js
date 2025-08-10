@@ -3,9 +3,9 @@ import { useNavigate } from "react-router-dom";
 import { 
   FaUser, FaFileMedical, FaShieldAlt, 
   FaUpload, FaBell, FaQrcode, FaBook, FaChartBar,
-  FaSignOutAlt, FaPlus, FaDownload, FaTrash,
+  FaSignOutAlt, FaPlus, FaDownload,
   FaHeartbeat, FaPills, FaThermometerHalf, FaWeight,
-  FaTint, FaPrint
+  FaTint, FaPrint, FaUserShield, FaCheck, FaTimes
 } from "react-icons/fa";
 import { ProtectedPatientRoute } from "../services/api/protectedRoute";
 import { logoutPatient, getStoredPatient } from "../services/api/authApi";
@@ -14,6 +14,7 @@ import { useDMP } from "../hooks/useDMP";
 import DMPDashboard from "../components/dmp/DMPDashboard";
 import DMPMonEspaceSante from "../components/dmp/DMPMonEspaceSante";
 import DMPNotification from "../components/ui/DMPNotification";
+import AutorisationsEnAttente from "../components/dmp/AutorisationsEnAttente";
 import * as dmpApi from "../services/api/dmpApi";
 
 
@@ -23,9 +24,9 @@ const DMP = () => {
   const [error, setError] = useState(null);
   const [tableauDeBord, setTableauDeBord] = useState(null);
   const [historiqueMedical, setHistoriqueMedical] = useState([]);
-  const [droitsAcces, setDroitsAcces] = useState([]);
   const [rappels, setRappels] = useState([]);
   const [notificationsDroitsAcces, setNotificationsDroitsAcces] = useState([]);
+  const [, setAutorisationsValidees] = useState([]);
   const [showAutoMesureModal, setShowAutoMesureModal] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
@@ -53,6 +54,7 @@ const DMP = () => {
 
   useEffect(() => {
     loadInitialData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Fermer le menu du profil quand on clique en dehors
@@ -84,54 +86,60 @@ const DMP = () => {
       const tableauData = await dmpApi.getTableauDeBord();
       setTableauDeBord(tableauData.data?.tableau_de_bord);
 
-      // Charger les statistiques (utilise automatiquement l'ID du patient connecté)
-      // const statsData = await dmpApi.getStatistiques(); // Les statistiques sont maintenant gérées par le contexte DMP
+      // Charger les notifications des droits d'accès depuis l'API réelle
+      console.log('🔍 Chargement des notifications des droits d\'accès depuis l\'API...');
+      const pendingRequests = await dmpApi.getPendingAccessRequests(); 
+      
+      console.log('📄 Demandes reçues de l\'API:', pendingRequests);
+      setNotificationsDroitsAcces(pendingRequests || []);
 
-      // Charger les notifications des droits d'accès
-      console.log('🔍 Chargement des notifications des droits d\'accès...');
-      const notificationsData = await dmpApi.getDroitsAccesNotifications();
-      console.log('📄 Notifications reçues:', notificationsData);
-      setNotificationsDroitsAcces(notificationsData.notifications || []);
+      // Charger les autorisations validées
+      await loadAutorisationsValidees();
 
     } catch (error) {
-      console.warn("Mode développement: utilisation des données mock");
-      console.error("Erreur détaillée:", error);
-      
-      // Données mock pour les notifications en mode développement
-      const mockNotifications = [
-        {
-          id: 1,
-          patient_id: 5,
-          titre: "Nouvelle demande d'accès DMP",
-          message: "Le Dr. Martin a demandé l'accès à votre DMP pour une consultation d'urgence.",
-          type: "demande_acces",
-          demande_id: "access_1234567890_abc123",
-          lue: false,
-          repondue: false,
-          date_creation: new Date().toISOString(),
-          medecin_nom: "Dr. Martin",
-          medecin_id: 79
-        },
-        {
-          id: 2,
-          patient_id: 5,
-          titre: "Accès DMP autorisé",
-          message: "Vous avez autorisé l'accès au Dr. Dupont pour 30 minutes.",
-          type: "acces_autorise",
-          demande_id: "access_1234567891_def456",
-          lue: true,
-          repondue: true,
-          date_creation: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-          medecin_nom: "Dr. Dupont",
-          medecin_id: 80
-        }
-      ];
-      
-      setNotificationsDroitsAcces(mockNotifications);
-      console.log('✅ Données mock chargées pour les notifications');
+      console.error('❌ Erreur lors du chargement des données initiales:', error);
+      setError(`Erreur lors du chargement: ${error.message}`);
     } finally {
       setLoading(false);
     }
+  };
+
+  // Nouvelle fonction pour charger les autorisations validées
+  const loadAutorisationsValidees = async () => {
+    try {
+      console.log('🔍 Chargement des autorisations validées...');
+      const autorisationsData = await dmpApi.getAutorisations();
+      console.log('📄 Autorisations reçues de l\'API:', autorisationsData);
+
+      // Normaliser la réponse, en gérant différentes structures possibles
+      let autorisationsList = [];
+      const payload = autorisationsData?.data ?? autorisationsData;
+
+      if (Array.isArray(payload)) {
+        autorisationsList = payload;
+      } else if (Array.isArray(payload?.autorisations)) {
+        autorisationsList = payload.autorisations;
+      } else if (Array.isArray(payload?.authorizations)) {
+        autorisationsList = payload.authorizations;
+      } else if (Array.isArray(payload?.data)) {
+        autorisationsList = payload.data;
+      } else if (Array.isArray(payload?.data?.autorisations)) {
+        autorisationsList = payload.data.autorisations;
+      } else if (Array.isArray(payload?.data?.authorizations)) {
+        autorisationsList = payload.data.authorizations;
+      }
+
+      const autorisationsActives = (autorisationsList || []).filter(auth => auth.statut === 'actif');
+      setAutorisationsValidees(autorisationsActives);
+      console.log('✅ Autorisations validées chargées:', autorisationsActives.length);
+    } catch (error) {
+      console.error('❌ Erreur lors du chargement des autorisations validées:', error);
+    }
+  };
+
+  // Fonction pour obtenir les notifications à afficher
+  const getNotificationsToDisplay = () => {
+    return notificationsDroitsAcces;
   };
 
   const loadTabData = async (tab) => {
@@ -145,14 +153,14 @@ const DMP = () => {
           setHistoriqueMedical(historiqueData.data || []);
           break;
         case 'droits-acces':
-          const droitsData = await dmpApi.getDroitsAcces(); // Utilise automatiquement l'ID du patient connecté
-          setDroitsAcces(droitsData.data || []);
+          // Charger les notifications des droits d'accès depuis l'API réelle
+          console.log('🔍 Chargement des notifications (onglet droits-acces) depuis l\'API...');
+          const pendingRequests = await dmpApi.getPendingAccessRequests();
+          console.log('📄 Notifications reçues (onglet):', pendingRequests);
+          setNotificationsDroitsAcces(Array.isArray(pendingRequests) ? pendingRequests : []);
           
-          // Charger aussi les notifications des droits d'accès
-          console.log('🔍 Chargement des notifications (onglet droits-acces)...');
-          const notificationsData = await dmpApi.getDroitsAccesNotifications();
-          console.log('📄 Notifications reçues (onglet):', notificationsData);
-          setNotificationsDroitsAcces(notificationsData.notifications || []);
+          // Charger aussi les autorisations validées
+          await loadAutorisationsValidees();
           break;
         case 'rappels':
           const rappelsData = await dmpApi.getRappels(); // Utilise automatiquement l'ID du patient connecté
@@ -165,43 +173,8 @@ const DMP = () => {
           break;
       }
     } catch (error) {
-      console.warn("Mode développement: utilisation des données mock");
-      console.error("Erreur détaillée (loadTabData):", error);
-      
-      // Données mock pour les notifications en mode développement
-      if (tab === 'droits-acces') {
-        const mockNotifications = [
-          {
-            id: 1,
-            patient_id: 5,
-            titre: "Nouvelle demande d'accès DMP",
-            message: "Le Dr. Martin a demandé l'accès à votre DMP pour une consultation d'urgence.",
-            type: "demande_acces",
-            demande_id: "access_1234567890_abc123",
-            lue: false,
-            repondue: false,
-            date_creation: new Date().toISOString(),
-            medecin_nom: "Dr. Martin",
-            medecin_id: 79
-          },
-          {
-            id: 2,
-            patient_id: 5,
-            titre: "Accès DMP autorisé",
-            message: "Vous avez autorisé l'accès au Dr. Dupont pour 30 minutes.",
-            type: "acces_autorise",
-            demande_id: "access_1234567891_def456",
-            lue: true,
-            repondue: true,
-            date_creation: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-            medecin_nom: "Dr. Dupont",
-            medecin_id: 80
-          }
-        ];
-        
-        setNotificationsDroitsAcces(mockNotifications);
-        console.log('✅ Données mock chargées pour les notifications (onglet)');
-      }
+      console.error("Erreur lors du chargement des données de l'onglet:", error);
+      setError(`Erreur lors du chargement de l'onglet: ${error.message}`);
     } finally {
       setLoading(false);
     }
@@ -226,52 +199,74 @@ const DMP = () => {
   // Fonctions pour gérer les notifications des droits d'accès
   const handleMarquerNotificationLue = async (notificationId) => {
     try {
+      console.log('📝 DMP: Marquage de la notification comme lue, ID:', notificationId);
+      
+      // Appel API pour marquer comme lue
       await dmpApi.marquerNotificationDroitsAccesLue(notificationId);
-      // Mettre à jour la liste des notifications
-      setNotificationsDroitsAcces(prev => 
-        prev.map(notif => 
-          notif.id === notificationId 
-            ? { ...notif, lue: true }
-            : notif
-        )
-      );
+      
+      console.log('✅ DMP: Notification marquée comme lue avec succès');
+      
+      // Recharger les notifications depuis l'API pour avoir les données à jour
+      console.log('🔄 DMP: Rechargement des notifications après marquage...');
+      const pendingRequests = await dmpApi.getPendingAccessRequests();
+      console.log('📄 DMP: Nouvelles notifications reçues:', pendingRequests);
+      setNotificationsDroitsAcces(Array.isArray(pendingRequests) ? pendingRequests : []);
+
+      // Recharger aussi les autorisations validées
+      await loadAutorisationsValidees();
+      
+      // Afficher une confirmation
+      alert('Notification marquée comme lue');
+      
     } catch (error) {
-      console.error('Erreur lors du marquage de la notification:', error);
+      console.error('❌ DMP: Erreur lors du marquage de la notification:', error);
+      alert(`Erreur lors du marquage de la notification: ${error.message}`);
     }
   };
 
-  const handleRepondreDemandeAcces = async (demandeId, reponse) => {
+  const handleRepondreDemandeAcces = async (request, reponse) => {
     try {
-      // Afficher une confirmation avant de procéder
-      const confirmationMessage = reponse === 'accepter' 
-        ? 'Êtes-vous sûr de vouloir autoriser l\'accès à votre DMP ?'
-        : 'Êtes-vous sûr de vouloir refuser l\'accès à votre DMP ?';
+      const apiDecision = reponse === 'accepter' || reponse === 'accept' ? 'accept' : 'refuse';
+      const confirmationMessage = apiDecision === 'accept' 
+        ? `Êtes-vous sûr de vouloir autoriser l'accès au Dr. ${request.professionnel.prenom} ${request.professionnel.nom} ?`
+        : `Êtes-vous sûr de vouloir refuser l'accès ?`;
       
       if (!window.confirm(confirmationMessage)) {
         return;
       }
 
-      await dmpApi.repondreDemandeAcces(demandeId, reponse);
-      // Recharger les notifications
-      const notificationsData = await dmpApi.getDroitsAccesNotifications();
-      setNotificationsDroitsAcces(notificationsData.notifications || []);
-      
-      const message = reponse === 'accepter' 
-        ? 'Demande d\'accès acceptée avec succès' 
-        : 'Demande d\'accès refusée';
+      // L'ID est directement disponible dans l'objet 'request'
+      const autorisationId = request.id_acces_autorisation;
+      console.log(`🚀 Réponse à la demande ID: ${autorisationId}, Réponse: ${reponse}`);
+
+      // Appel direct à la nouvelle fonction API
+      await dmpApi.respondToAccessRequest(autorisationId, apiDecision);
+
+      const message = apiDecision === 'accept' 
+        ? 'Demande d\'accès acceptée avec succès !' 
+        : 'Demande d\'accès refusée.';
       alert(message);
+      rafraichirNotifications();
+
     } catch (error) {
-      console.error('Erreur lors de la réponse à la demande:', error);
-      alert('Erreur lors de la réponse à la demande d\'accès');
+      console.error('❌ Erreur lors de la réponse à la demande:', error);
+      alert(`Erreur : ${error.message || "Impossible de traiter votre réponse."}`);
     }
-  };
+};
 
   const rafraichirNotifications = async () => {
     try {
-      const notificationsData = await dmpApi.getDroitsAccesNotifications();
-      setNotificationsDroitsAcces(notificationsData.notifications || []);
+      console.log('🔄 DMP: Rafraîchissement des notifications depuis l\'API...');
+      const pendingRequests = await dmpApi.getPendingAccessRequests();
+      console.log('✅ DMP: Notifications reçues de l\'API:', pendingRequests);
+      setNotificationsDroitsAcces(Array.isArray(pendingRequests) ? pendingRequests : []);
+
+      // Recharger aussi les autorisations validées
+      await loadAutorisationsValidees();
+      
     } catch (error) {
-      console.error('Erreur lors du rafraîchissement des notifications:', error);
+      console.error('❌ DMP: Erreur lors du rafraîchissement des notifications:', error);
+      alert(`Erreur lors du rafraîchissement des notifications: ${error.message}`);
     }
   };
 
@@ -288,63 +283,217 @@ const DMP = () => {
   };
 
   // Fonction pour gérer l'acceptation d'une demande d'accès
-  const handleAcceptAccess = async (demandeId) => {
+  const handleAcceptAccess = async (notificationId) => {
     try {
-      await dmpApi.repondreDemandeAcces(demandeId, 'accepter');
-      // Recharger les notifications
-      const notificationsData = await dmpApi.getDroitsAccesNotifications();
-      setNotificationsDroitsAcces(notificationsData.notifications || []);
+      console.log('🎯 DMP: === DÉBUT ACCEPTATION DEMANDE D\'ACCÈS ===');
+      console.log('📋 DMP: notificationId reçu:', notificationId);
+      console.log('📋 DMP: Nombre total de notifications:', notificationsDroitsAcces.length);
       
-      // Afficher une confirmation
-      alert('Demande d\'accès acceptée avec succès');
+      // Trouver la notification correspondante
+      const notification = notificationsDroitsAcces.find(n => n.id_notification === notificationId);
+      if (!notification) {
+        console.error('❌ DMP: Notification non trouvée pour l\'ID:', notificationId);
+        console.log('🔍 DMP: Notifications disponibles:', notificationsDroitsAcces.map(n => ({ id: n.id_notification, type: n.type_notification })));
+        alert('Erreur: Notification non trouvée');
+        return;
+      }
+      
+      console.log('✅ DMP: Notification trouvée:', {
+        id_notification: notification.id_notification,
+        type_notification: notification.type_notification,
+        session_id: notification.session_id,
+        professionnel_id: notification.professionnel_id,
+        date_creation: notification.date_creation,
+        statut_envoi: notification.statut_envoi
+      });
+      
+      // Utiliser la fonction helper pour trouver l'ID d'autorisation
+      console.log('🔍 DMP: Recherche de l\'ID d\'autorisation pour la notification...');
+      const autorisationId = await dmpApi.findAutorisationIdFromNotification(notification);
+      
+      if (!autorisationId) {
+        console.error('❌ DMP: Impossible de trouver l\'ID d\'autorisation pour cette notification');
+        console.log('🔍 DMP: Détails de la notification pour debug:', notification);
+        
+        // Vérifier si l'autorisation existe
+        console.log('🔍 DMP: Vérification de l\'existence de l\'autorisation...');
+        const autorisation = await dmpApi.verifierAutorisationExistence(notificationId);
+        console.log('🔍 DMP: Résultat de la vérification:', autorisation);
+        
+        if (!autorisation) {
+          alert('Erreur: Impossible de trouver l\'autorisation correspondante. Veuillez réessayer ou contacter le support.');
+          return;
+        }
+      }
+
+      console.log('✅ DMP: ID d\'autorisation trouvé:', autorisationId);
+      
+      // Vérifier si l'autorisation existe
+      const autorisation = await dmpApi.verifierAutorisationExistence(autorisationId);
+      console.log('🔍 DMP: Vérification de l\'autorisation:', autorisation);
+      
+      if (!autorisation) {
+        console.error('❌ DMP: L\'autorisation trouvée n\'existe pas ou n\'est pas valide');
+        alert('Erreur: L\'autorisation trouvée n\'est pas valide. Veuillez réessayer ou contacter le support.');
+        return;
+      }
+      
+      console.log('✅ DMP: Acceptation de la demande d\'accès:', autorisationId);
+      const result = await dmpApi.accepterAutorisation(autorisationId, 'Accès autorisé par le patient');
+      
+      // Vérifier si l'autorisation était déjà active
+      if (result && result.success && result.message === 'L\'autorisation est déjà active') {
+        console.log('⚠️ DMP: L\'autorisation était déjà active');
+        alert('Cette autorisation est déjà active');
+      } else {
+        console.log('✅ DMP: Autorisation acceptée avec succès');
+        
+                            // Recharger les notifications depuis l'API
+                    console.log('🔄 DMP: Rechargement des notifications après acceptation...');
+                    const pendingRequests = await dmpApi.getPendingAccessRequests();
+                    console.log('📄 DMP: Nouvelles notifications reçues:', pendingRequests);
+                    setNotificationsDroitsAcces(Array.isArray(pendingRequests) ? pendingRequests : []);
+
+                    // Recharger aussi les autorisations validées
+                    await loadAutorisationsValidees();
+        
+        // Afficher une confirmation
+        alert('Demande d\'accès acceptée avec succès');
+      }
+      
+      console.log('🎯 DMP: === FIN ACCEPTATION DEMANDE D\'ACCÈS ===');
     } catch (error) {
-      console.error('Erreur lors de l\'acceptation:', error);
-      alert('Erreur lors de l\'acceptation de la demande d\'accès');
+      console.error('❌ DMP: Erreur lors de l\'acceptation:', error);
+      console.error('❌ DMP: Stack trace:', error.stack);
+      alert(`Erreur lors de l'acceptation de la demande d'accès: ${error.message}`);
     }
   };
 
   // Fonction pour gérer le refus d'une demande d'accès
-  const handleRejectAccess = async (demandeId) => {
+  const handleRejectAccess = async (notificationId) => {
     try {
-      await dmpApi.repondreDemandeAcces(demandeId, 'refuser');
-      // Recharger les notifications
-      const notificationsData = await dmpApi.getDroitsAccesNotifications();
-      setNotificationsDroitsAcces(notificationsData.notifications || []);
+      console.log('🎯 DMP: === DÉBUT REFUS DEMANDE D\'ACCÈS ===');
+      console.log('📋 DMP: notificationId reçu:', notificationId);
+      console.log('📋 DMP: Nombre total de notifications:', notificationsDroitsAcces.length);
       
-      // Afficher une confirmation
-      alert('Demande d\'accès refusée');
+      // Trouver la notification correspondante
+      const notification = notificationsDroitsAcces.find(n => n.id_notification === notificationId);
+      if (!notification) {
+        console.error('❌ DMP: Notification non trouvée pour l\'ID:', notificationId);
+        console.log('🔍 DMP: Notifications disponibles:', notificationsDroitsAcces.map(n => ({ id: n.id_notification, type: n.type_notification })));
+        alert('Erreur: Notification non trouvée');
+        return;
+      }
+      
+      console.log('✅ DMP: Notification trouvée:', {
+        id_notification: notification.id_notification,
+        type_notification: notification.type_notification,
+        session_id: notification.session_id,
+        professionnel_id: notification.professionnel_id,
+        date_creation: notification.date_creation,
+        statut_envoi: notification.statut_envoi
+      });
+      
+      // Utiliser la fonction helper pour trouver l'ID d'autorisation
+      console.log('🔍 DMP: Recherche de l\'ID d\'autorisation pour la notification...');
+      const autorisationId = await dmpApi.findAutorisationIdFromNotification(notification);
+      
+      if (!autorisationId) {
+        console.error('❌ DMP: Impossible de trouver l\'ID d\'autorisation pour cette notification');
+        console.log('🔍 DMP: Détails de la notification pour debug:', notification);
+        
+        // Vérifier si l'autorisation existe
+        console.log('🔍 DMP: Vérification de l\'existence de l\'autorisation...');
+        const autorisation = await dmpApi.verifierAutorisationExistence(notificationId);
+        console.log('🔍 DMP: Résultat de la vérification:', autorisation);
+        
+        if (!autorisation) {
+          alert('Erreur: Impossible de trouver l\'autorisation correspondante. Veuillez réessayer ou contacter le support.');
+          return;
+        }
+      }
+
+      console.log('✅ DMP: ID d\'autorisation trouvé:', autorisationId);
+      
+      // Vérifier si l'autorisation existe
+      const autorisation = await dmpApi.verifierAutorisationExistence(autorisationId);
+      console.log('🔍 DMP: Vérification de l\'autorisation:', autorisation);
+      
+      if (!autorisation) {
+        console.error('❌ DMP: L\'autorisation trouvée n\'existe pas ou n\'est pas valide');
+        alert('Erreur: L\'autorisation trouvée n\'est pas valide. Veuillez réessayer ou contacter le support.');
+        return;
+      }
+      
+      console.log('✅ DMP: Refus de la demande d\'accès:', autorisationId);
+      const result = await dmpApi.refuserAutorisation(autorisationId, 'Accès refusé par le patient');
+      
+      // Vérifier si l'autorisation était déjà refusée
+      if (result && result.success && result.message === 'L\'autorisation est déjà refusée') {
+        console.log('⚠️ DMP: L\'autorisation était déjà refusée');
+        alert('Cette autorisation est déjà refusée');
+      } else {
+        console.log('✅ DMP: Autorisation refusée avec succès');
+        
+                            // Recharger les notifications depuis l'API
+                    console.log('🔄 DMP: Rechargement des notifications après refus...');
+                    const pendingRequests = await dmpApi.getPendingAccessRequests();
+                    console.log('📄 DMP: Nouvelles notifications reçues:', pendingRequests);
+                    setNotificationsDroitsAcces(Array.isArray(pendingRequests) ? pendingRequests : []);
+
+                    // Recharger aussi les autorisations validées
+                    await loadAutorisationsValidees();
+        
+        // Afficher une confirmation
+        alert('Demande d\'accès refusée');
+      }
+      
+      console.log('🎯 DMP: === FIN REFUS DEMANDE D\'ACCÈS ===');
     } catch (error) {
-      console.error('Erreur lors du refus:', error);
-      alert('Erreur lors du refus de la demande d\'accès');
+      console.error('❌ DMP: Erreur lors du refus:', error);
+      console.error('❌ DMP: Stack trace:', error.stack);
+      alert(`Erreur lors du refus de la demande d'accès: ${error.message}`);
     }
   };
 
   // Fonction pour marquer une notification comme lue
   const handleMarkNotificationAsRead = async (notificationId) => {
     try {
+      console.log('📝 DMP: Marquage de la notification comme lue (handleMarkNotificationAsRead), ID:', notificationId);
+      
       await dmpApi.marquerNotificationDroitsAccesLue(notificationId);
+      
+      console.log('✅ DMP: Notification marquée comme lue avec succès (handleMarkNotificationAsRead)');
+      
       // Mettre à jour la liste des notifications
       setNotificationsDroitsAcces(prev => 
         prev.map(notif => 
-          notif.id === notificationId 
-            ? { ...notif, lue: true }
+          notif.id_notification === notificationId 
+            ? { ...notif, statut_envoi: 'envoyee' }
             : notif
         )
       );
+      
+      // Afficher une confirmation
+      alert('Notification marquée comme lue');
+      
     } catch (error) {
-      console.error('Erreur lors du marquage de la notification:', error);
+      console.error('❌ DMP: Erreur lors du marquage de la notification (handleMarkNotificationAsRead):', error);
+      alert(`Erreur lors du marquage de la notification: ${error.message}`);
     }
   };
+
+
 
   // Vérifier les nouvelles notifications périodiquement
   useEffect(() => {
     const checkNewNotifications = async () => {
       try {
-        const notificationsData = await dmpApi.getDroitsAccesNotifications();
-        const newNotifications = notificationsData.notifications || [];
+        const newNotifications = await dmpApi.getPendingAccessRequests();
+        const list = Array.isArray(newNotifications) ? newNotifications : [];
         
         // Trouver les nouvelles notifications non lues
-        const unreadNotifications = newNotifications.filter(n => !n.lue);
+        const unreadNotifications = list.filter(n => n.statut_envoi === 'en_attente');
         
         if (unreadNotifications.length > 0) {
           // Afficher la première notification non lue
@@ -368,35 +517,33 @@ const DMP = () => {
   // Fonction pour obtenir l'icône selon le type de notification
   const getNotificationIcon = (type) => {
     switch (type) {
-      case 'demande_acces':
-        return '🔔';
+      case 'demande_validation':
+        return <FaUserShield className="text-orange-600" />;
       case 'acces_autorise':
-        return '✅';
+        return <FaCheck className="text-green-600" />;
       case 'acces_refuse':
-        return '❌';
+        return <FaTimes className="text-red-600" />;
       default:
-        return '📋';
+        return <FaBell className="text-gray-600" />;
     }
   };
 
-  // Fonction pour obtenir la couleur selon le type de notification
   const getNotificationColor = (type) => {
     switch (type) {
-      case 'demande_acces':
-        return 'border-orange-200 bg-orange-50';
+      case 'demande_validation':
+        return 'bg-orange-50 border-orange-200';
       case 'acces_autorise':
-        return 'border-green-200 bg-green-50';
+        return 'bg-green-50 border-green-200';
       case 'acces_refuse':
-        return 'border-red-200 bg-red-50';
+        return 'bg-red-50 border-red-200';
       default:
-        return 'border-gray-200 bg-gray-50';
+        return 'bg-gray-50 border-gray-200';
     }
   };
 
-  // Fonction pour obtenir le statut en français
   const getStatusText = (type) => {
     switch (type) {
-      case 'demande_acces':
+      case 'demande_validation':
         return 'Demande en attente';
       case 'acces_autorise':
         return 'Accès autorisé';
@@ -704,7 +851,7 @@ const DMP = () => {
               </button>
               
               {/* Indicateur de notifications des droits d'accès */}
-              {notificationsDroitsAcces.filter(n => !n.lue).length > 0 && (
+              {notificationsDroitsAcces.filter(n => n.statut_envoi === 'en_attente').length > 0 && (
                 <div className="relative">
                   <button
                     onClick={() => setActiveTab('droits-acces')}
@@ -713,7 +860,7 @@ const DMP = () => {
                     <FaBell className="mr-2" />
                     Notifications
                     <span className="ml-2 bg-red-500 text-white text-xs rounded-full px-2 py-1">
-                      {notificationsDroitsAcces.filter(n => !n.lue).length}
+                      {notificationsDroitsAcces.filter(n => n.statut_envoi === 'en_attente').length}
                     </span>
                   </button>
                 </div>
@@ -741,33 +888,33 @@ const DMP = () => {
                       'P'
                     }
                   </div>
-                                     <div className="text-left">
-                     <p className="text-sm font-medium">
-                       {patientProfile ? 
-                         `${patientProfile.prenom || ''} ${patientProfile.nom || ''}` : 
-                         'Patient'
-                       }
-                     </p>
-                     <p className="text-xs text-gray-500">
-                       Dossier: {patientProfile?.numero_dossier || patientProfile?.id || 'N/A'}
-                     </p>
-                   </div>
+                  <div className="text-left">
+                    <p className="text-sm font-medium">
+                      {patientProfile ? 
+                        `${patientProfile.prenom || ''} ${patientProfile.nom || ''}` : 
+                        'Patient'
+                      }
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      Dossier: {patientProfile?.numero_dossier || patientProfile?.id || 'N/A'}
+                    </p>
+                  </div>
                 </button>
                 
                 {/* Menu déroulant du profil */}
                 {showProfileMenu && (
                   <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50 border">
-                                         <div className="px-4 py-2 border-b">
-                       <p className="text-sm font-medium text-gray-900">
-                         {patientProfile ? 
-                           `${patientProfile.prenom || ''} ${patientProfile.nom || ''}` : 
-                           'Patient'
-                         }
-                       </p>
-                       <p className="text-xs text-gray-500">
-                         Dossier: {patientProfile?.numero_dossier || patientProfile?.id || 'N/A'}
-                       </p>
-                     </div>
+                    <div className="px-4 py-2 border-b">
+                      <p className="text-sm font-medium text-gray-900">
+                        {patientProfile ? 
+                          `${patientProfile.prenom || ''} ${patientProfile.nom || ''}` : 
+                          'Patient'
+                        }
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        Dossier: {patientProfile?.numero_dossier || patientProfile?.id || 'N/A'}
+                      </p>
+                    </div>
                     <button
                       onClick={handleLogout}
                       className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
@@ -795,7 +942,7 @@ const DMP = () => {
                 id: 'droits-acces', 
                 label: 'Droits d\'accès', 
                 icon: FaShieldAlt,
-                badge: notificationsDroitsAcces.filter(n => !n.lue).length > 0 ? notificationsDroitsAcces.filter(n => !n.lue).length : null
+                badge: notificationsDroitsAcces.filter(n => n.statut_envoi === 'en_attente').length > 0 ? notificationsDroitsAcces.filter(n => n.statut_envoi === 'en_attente').length : null
               },
               { id: 'rappels', label: 'Rappels', icon: FaBell },
               { id: 'urgence', label: 'Fiche d\'urgence', icon: FaQrcode },
@@ -888,7 +1035,7 @@ const DMP = () => {
             {console.log('🔍 État des notifications dans le rendu:', notificationsDroitsAcces)}
             
             {/* Section des notifications améliorée */}
-            {notificationsDroitsAcces.length > 0 && (
+            {getNotificationsToDisplay().length > 0 && (
               <div className="p-6 border-b bg-gradient-to-r from-blue-50 to-indigo-50">
                 <div className="flex justify-between items-center mb-6">
                   <div className="flex items-center">
@@ -900,29 +1047,32 @@ const DMP = () => {
                         Notifications d'accès DMP
                       </h3>
                       <p className="text-sm text-gray-600">
-                        {notificationsDroitsAcces.filter(n => !n.lue).length} nouvelle(s) demande(s) en attente
+                        {getNotificationsToDisplay().filter(n => n.statut_envoi === 'en_attente').length} nouvelle(s) demande(s) en attente
                       </p>
                     </div>
                   </div>
-                  <button
-                    onClick={rafraichirNotifications}
-                    className="flex items-center px-3 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                  >
-                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                    </svg>
-                    Rafraîchir
-                  </button>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={rafraichirNotifications}
+                      className="flex items-center px-3 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                    >
+                      <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      Rafraîchir
+                    </button>
+
+                  </div>
                 </div>
                 
                 <div className="space-y-4">
-                  {notificationsDroitsAcces.map((notification, index) => (
-                    <div key={index} className={`border rounded-xl p-5 shadow-sm transition-all hover:shadow-md ${getNotificationColor(notification.type)} ${!notification.lue ? 'ring-2 ring-blue-200' : ''}`}>
+                  {getNotificationsToDisplay().map((notification, index) => (
+                    <div key={index} className={`border rounded-xl p-5 shadow-sm transition-all hover:shadow-md ${getNotificationColor(notification.type_notification)} ${notification.statut_envoi === 'en_attente' ? 'ring-2 ring-blue-200' : ''}`}>
                       <div className="flex items-start space-x-4">
                         {/* Icône de statut */}
                         <div className="flex-shrink-0">
-                          <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg ${notification.type === 'demande_acces' ? 'bg-orange-100' : notification.type === 'acces_autorise' ? 'bg-green-100' : 'bg-red-100'}`}>
-                            {getNotificationIcon(notification.type)}
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg ${notification.type_notification === 'demande_validation' ? 'bg-orange-100' : notification.type_notification === 'acces_autorise' ? 'bg-green-100' : 'bg-red-100'}`}>
+                            {getNotificationIcon(notification.type_notification)}
                           </div>
                         </div>
                         
@@ -931,23 +1081,23 @@ const DMP = () => {
                           <div className="flex items-center justify-between mb-2">
                             <div className="flex items-center space-x-2">
                               <h4 className="font-semibold text-gray-900">{notification.titre}</h4>
-                              {!notification.lue && (
+                              {notification.statut_envoi === 'en_attente' && (
                                 <span className="bg-red-500 text-white text-xs rounded-full px-2 py-1 font-medium">
                                   Nouveau
                                 </span>
                               )}
                               <span className={`text-xs px-2 py-1 rounded-full font-medium ${
-                                notification.type === 'demande_acces' ? 'bg-orange-100 text-orange-800' :
-                                notification.type === 'acces_autorise' ? 'bg-green-100 text-green-800' :
+                                notification.type_notification === 'demande_validation' ? 'bg-orange-100 text-orange-800' :
+                                notification.type_notification === 'acces_autorise' ? 'bg-green-100 text-green-800' :
                                 'bg-red-100 text-red-800'
                               }`}>
-                                {getStatusText(notification.type)}
+                                {getStatusText(notification.type_notification)}
                               </span>
                             </div>
                             <div className="flex items-center space-x-2">
-                              {!notification.lue && (
+                              {notification.statut_envoi === 'en_attente' && (
                                 <button
-                                  onClick={() => handleMarquerNotificationLue(notification.id)}
+                                  onClick={() => handleMarquerNotificationLue(notification.id_notification)}
                                   className="text-blue-600 hover:text-blue-800 text-sm font-medium hover:underline"
                                 >
                                   Marquer comme lue
@@ -970,10 +1120,10 @@ const DMP = () => {
                             </p>
                             
                             {/* Actions pour les demandes d'accès */}
-                            {notification.type === 'demande_acces' && !notification.repondue && (
+                            {notification.type_notification === 'demande_validation' && (
                               <div className="flex space-x-3">
                                 <button
-                                  onClick={() => handleRepondreDemandeAcces(notification.demande_id, 'accepter')}
+                                  onClick={() => handleRepondreDemandeAcces(notification, 'accepter')}
                                   className="flex items-center px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors shadow-sm"
                                 >
                                   <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -982,7 +1132,7 @@ const DMP = () => {
                                   Autoriser l'accès
                                 </button>
                                 <button
-                                  onClick={() => handleRepondreDemandeAcces(notification.demande_id, 'refuser')}
+                                  onClick={() => handleRepondreDemandeAcces(notification, 'refuser')}
                                   className="flex items-center px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors shadow-sm"
                                 >
                                   <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1002,7 +1152,7 @@ const DMP = () => {
             )}
             
             {/* Section quand il n'y a pas de notifications */}
-            {notificationsDroitsAcces.length === 0 && (
+            {getNotificationsToDisplay().length === 0 && (
               <div className="p-6 border-b bg-gray-50">
                 <div className="text-center py-8">
                   <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -1014,65 +1164,25 @@ const DMP = () => {
               </div>
             )}
             
-            {/* Section des professionnels autorisés améliorée */}
+            {/* Section des autorisations avec le nouveau composant */}
             <div className="p-6">
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900">Professionnels autorisés</h3>
-                  <p className="text-sm text-gray-600">Liste des médecins ayant accès à votre DMP</p>
+                  <h3 className="text-lg font-semibold text-gray-900">Gestion des autorisations DMP</h3>
+                  <p className="text-sm text-gray-600">Contrôlez l'accès à votre dossier médical</p>
                 </div>
-                <div className="flex items-center space-x-2">
-                  <span className="text-sm text-gray-500">
-                    {droitsAcces.length} professionnel(s) autorisé(s)
-                  </span>
+                <div className="flex items-center space-x-3">
+                  <button
+                    onClick={() => navigate('/patient/autorisations')}
+                    className="flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+                  >
+                    <FaShieldAlt className="w-4 h-4 mr-2" />
+                    Gérer les autorisations
+                  </button>
                 </div>
               </div>
               
-              {droitsAcces.length > 0 ? (
-                <div className="space-y-4">
-                  {droitsAcces.map((droit, index) => (
-                    <div key={index} className="border border-gray-200 rounded-xl p-5 bg-white shadow-sm hover:shadow-md transition-shadow">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-4">
-                          <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                            <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                            </svg>
-                          </div>
-                          <div>
-                            <h4 className="font-semibold text-gray-900">
-                              Dr. {droit.professionnel?.nom} {droit.professionnel?.prenom}
-                            </h4>
-                            <p className="text-sm text-gray-600">{droit.professionnel?.specialite}</p>
-                            <p className="text-xs text-gray-500">
-                              ✅ Autorisé le {new Date(droit.date_autorisation).toLocaleDateString('fr-FR')}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <button className="text-blue-600 hover:text-blue-800 text-sm font-medium">
-                            Voir détails
-                          </button>
-                          <button className="text-red-600 hover:text-red-800 p-2 rounded-lg hover:bg-red-50 transition-colors">
-                            <FaTrash className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-12">
-                  <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                    </svg>
-                  </div>
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">Aucun professionnel autorisé</h3>
-                  <p className="text-gray-600 mb-4">Aucun médecin n'a actuellement accès à votre dossier médical partagé.</p>
-                  <p className="text-sm text-gray-500">Les demandes d'accès apparaîtront dans la section notifications ci-dessus.</p>
-                </div>
-              )}
+              <AutorisationsEnAttente />
             </div>
           </div>
         )}

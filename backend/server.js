@@ -10,9 +10,24 @@ app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// Mock data for testing
-const mockSessions = new Map();
-const mockAccessHistory = [];
+// Middleware to verify JWT token (simplified)
+const verifyToken = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ 
+      success: false, 
+      error: 'Token d\'authentification manquant' 
+    });
+  }
+  
+  // For demo purposes, we'll accept any Bearer token
+  // In production, you would verify the JWT token here
+  next();
+};
+
+// ===== DONNÉES DE SIMULATION =====
+
+// Données simulées pour les notifications DMP
 const mockNotificationsDroitsAcces = [
   {
     id: 1,
@@ -39,321 +54,56 @@ const mockNotificationsDroitsAcces = [
     date_creation: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
     medecin_nom: "Dr. Dupont",
     medecin_id: 80
-  },
-  {
-    id: 3,
-    patient_id: 5,
-    titre: "Accès DMP refusé",
-    message: "Vous avez refusé l'accès au Dr. Bernard.",
-    type: "acces_refuse",
-    demande_id: "access_1234567892_ghi789",
-    lue: false,
-    repondue: true,
-    date_creation: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-    medecin_nom: "Dr. Bernard",
-    medecin_id: 81
   }
 ];
 
-// Middleware to verify JWT token (simplified)
-const verifyToken = (req, res, next) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ 
-      success: false, 
-      error: 'Token d\'authentification manquant' 
-    });
+// Données simulées pour les autorisations
+const mockAutorisations = [
+  {
+    id_acces: "AUTH001",
+    professionnel_id: "MED001",
+    professionnel_nom: "Dr. Martin",
+    professionnel_specialite: "Médecine générale",
+    type_acces: "lecture",
+    statut: "actif",
+    date_creation: "2024-01-10T09:00:00Z",
+    date_debut: "2024-01-10T09:00:00Z",
+    date_fin: "2024-01-10T11:00:00Z",
+    raison_demande: "Consultation de routine pour contrôle diabète",
+    session_id: "SESS001"
+  },
+  {
+    id_acces: "AUTH002",
+    professionnel_id: "MED002",
+    professionnel_nom: "Dr. Dubois",
+    professionnel_specialite: "Cardiologie",
+    type_acces: "lecture",
+    statut: "en_attente",
+    date_creation: "2024-01-15T14:30:00Z",
+    date_debut: null,
+    date_fin: null,
+    raison_demande: "Évaluation cardiologique pour douleur thoracique",
+    session_id: "SESS002"
   }
-  
-  // For demo purposes, we'll accept any Bearer token
-  // In production, you would verify the JWT token here
-  next();
-};
+];
 
-// Test DMP system endpoint
-app.get('/api/medecin/dmp/test/systeme', verifyToken, (req, res) => {
-  res.json({
-    success: true,
-    data: {
-      status: 'operational',
-      version: '1.0.0',
-      timestamp: new Date().toISOString()
-    }
-  });
-});
-
-// CPS Authentication endpoint
-app.post('/api/medecin/dmp/authentification-cps', verifyToken, (req, res) => {
-  const { numero_adeli, code_cps, patient_id } = req.body;
-  
-  // Mock validation - in production, validate against real CPS database
-  if (!numero_adeli || !code_cps || !patient_id) {
-    return res.status(400).json({
-      success: false,
-      error: 'Données d\'authentification incomplètes'
-    });
-  }
-  
-  // Mock CPS validation (4-digit code)
-  if (code_cps.length !== 4 || !/^\d{4}$/.test(code_cps)) {
-    return res.status(400).json({
-      success: false,
-      error: 'Code CPS invalide (4 chiffres requis)'
-    });
-  }
-  
-  // Mock successful authentication
-  const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  mockSessions.set(sessionId, {
-    session_id: sessionId,
-    medecin_id: 79, // From JWT token
-    patient_id: patient_id,
-    numero_adeli: numero_adeli,
-    authenticated_at: new Date().toISOString(),
-    expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString() // 30 minutes
-  });
-  
-  res.json({
-    success: true,
-    data: {
-      session_id: sessionId,
-      authenticated: true,
-      message: 'Authentification CPS réussie'
-    }
-  });
-});
-
-// Create DMP session endpoint
-app.post('/api/medecin/dmp/creer-session', verifyToken, (req, res) => {
-  const { patient_id, medecin_id } = req.body;
-  
-  if (!patient_id || !medecin_id) {
-    return res.status(400).json({
-      success: false,
-      error: 'Données de session incomplètes'
-    });
-  }
-  
-  const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  mockSessions.set(sessionId, {
-    session_id: sessionId,
-    medecin_id: medecin_id,
-    patient_id: patient_id,
-    created_at: new Date().toISOString(),
-    expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString() // 1 hour
-  });
-  
-  res.json({
-    success: true,
-    data: {
-      session_id: sessionId,
-      message: 'Session DMP créée avec succès'
-    }
-  });
-});
-
-// Request DMP access endpoint (the one that was missing)
-app.post('/api/medecin/dmp/demande-acces', verifyToken, (req, res) => {
-  const { session_id, mode_acces, duree_acces, raison_acces } = req.body;
-  
-  if (!session_id || !mode_acces || !duree_acces || !raison_acces) {
-    return res.status(400).json({
-      success: false,
-      error: 'Données de demande d\'accès incomplètes'
-    });
-  }
-  
-  // Validate session
-  const session = mockSessions.get(session_id);
-  if (!session) {
-    return res.status(400).json({
-      success: false,
-      error: 'Session invalide ou expirée'
-    });
-  }
-  
-  // Validate access mode
-  const validModes = ['autorise_par_patient', 'urgence', 'connexion_secrete'];
-  if (!validModes.includes(mode_acces)) {
-    return res.status(400).json({
-      success: false,
-      error: 'Mode d\'accès invalide'
-    });
-  }
-  
-  // Validate duration (1-1440 minutes)
-  if (duree_acces < 1 || duree_acces > 1440) {
-    return res.status(400).json({
-      success: false,
-      error: 'Durée d\'accès invalide (1-1440 minutes)'
-    });
-  }
-  
-  // Validate reason length
-  if (raison_acces.length < 10 || raison_acces.length > 500) {
-    return res.status(400).json({
-      success: false,
-      error: 'Raison d\'accès invalide (10-500 caractères)'
-    });
-  }
-  
-  // Create access request
-  const accessRequest = {
-    id: `access_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-    session_id: session_id,
-    medecin_id: session.medecin_id,
-    patient_id: session.patient_id,
-    mode_acces: mode_acces,
-    duree_acces: duree_acces,
-    raison_acces: raison_acces,
-    statut: 'en_attente',
-    created_at: new Date().toISOString(),
-    expires_at: new Date(Date.now() + duree_acces * 60 * 1000).toISOString()
-  };
-  
-  // Add to history
-  mockAccessHistory.push(accessRequest);
-  
-  res.json({
-    success: true,
-    data: {
-      access_id: accessRequest.id,
-      message: 'Demande d\'accès DMP créée avec succès',
-      notification_sent: true,
-      expires_at: accessRequest.expires_at
-    }
-  });
-});
-
-// Get DMP access history endpoint
-app.get('/api/medecin/dmp/historique/:patientId?', verifyToken, (req, res) => {
-  const { patientId } = req.params;
-  
-  let filteredHistory = mockAccessHistory;
-  
-  if (patientId) {
-    filteredHistory = mockAccessHistory.filter(access => 
-      access.patient_id.toString() === patientId.toString()
-    );
-  }
-  
-  res.json({
-    success: true,
-    data: filteredHistory.map(access => ({
-      id: access.id,
-      date: access.created_at,
-      medecin: `Dr. ${access.medecin_id}`,
-      patient: `Patient ${access.patient_id}`,
-      mode: access.mode_acces,
-      raison: access.raison_acces,
-      statut: access.statut,
-      expires_at: access.expires_at
-    }))
-  });
-});
-
-// Validate DMP session endpoint
-app.post('/api/medecin/dmp/valider-session', verifyToken, (req, res) => {
-  const { session_id } = req.body;
-  
-  if (!session_id) {
-    return res.status(400).json({
-      success: false,
-      error: 'ID de session manquant'
-    });
-  }
-  
-  const session = mockSessions.get(session_id);
-  if (!session) {
-    return res.status(400).json({
-      success: false,
-      error: 'Session invalide'
-    });
-  }
-  
-  const now = new Date();
-  const expiresAt = new Date(session.expires_at);
-  
-  if (now > expiresAt) {
-    return res.status(400).json({
-      success: false,
-      error: 'Session expirée'
-    });
-  }
-  
-  res.json({
-    success: true,
-    data: {
-      valid: true,
-      session: session
-    }
-  });
-});
-
-// Close DMP session endpoint
-app.post('/api/medecin/dmp/fermer-session', verifyToken, (req, res) => {
-  const { session_id } = req.body;
-  
-  if (!session_id) {
-    return res.status(400).json({
-      success: false,
-      error: 'ID de session manquant'
-    });
-  }
-  
-  const deleted = mockSessions.delete(session_id);
-  
-  if (!deleted) {
-    return res.status(400).json({
-      success: false,
-      error: 'Session non trouvée'
-    });
-  }
-  
-  res.json({
-    success: true,
-    data: {
-      message: 'Session fermée avec succès'
-    }
-  });
-});
-
-// Get DMP notifications endpoint
-app.get('/api/medecin/dmp/notifications', verifyToken, (req, res) => {
-  res.json({
-    success: true,
-    data: [
-      {
-        id: 1,
-        type: 'access_request',
-        message: 'Nouvelle demande d\'accès DMP',
-        created_at: new Date().toISOString(),
-        read: false
-      }
-    ]
-  });
-});
-
-// Mock data for patient DMP
+// Données simulées pour les documents
 const mockPatientDocuments = [
   {
     id: 1,
     patient_id: 5,
-    nom: "test API",
+    nom: "Ordonnance diabète",
     type: "ordonnance",
-    description: "document certificat",
+    description: "Ordonnance pour traitement diabète",
     url: "http://localhost:3000/uploads/documents/doc_1754310347742-817240231.pdf",
     taille: 1668173,
     format: "application/pdf",
     createdAt: "2025-08-04T12:25:47.803Z",
-    updatedAt: "2025-08-04T12:25:47.803Z",
-    patient: {
-      nom: "MOLOWA",
-      prenom: "ESSONGA"
-    }
+    updatedAt: "2025-08-04T12:25:47.803Z"
   }
 ];
 
+// Données simulées pour les auto-mesures
 const mockPatientAutoMesures = [
   {
     id: 1,
@@ -375,273 +125,831 @@ const mockPatientAutoMesures = [
   }
 ];
 
-const mockPatientAccessRights = [
-  {
-    id: 1,
-    patient_id: 5,
-    medecin_nom: "Dr. Martin",
-    medecin_id: 79,
-    type_acces: "consultation",
-    duree: 30,
-    date_autorisation: new Date().toISOString(),
-    statut: "actif"
+// ===== ROUTES DMP SIMULÉES =====
+
+// Test DMP system endpoint
+app.get('/api/medecin/dmp/test/systeme', verifyToken, (req, res) => {
+  console.log('📄 Simulation - Test système DMP');
+  res.json({
+    success: true,
+    data: {
+      status: 'operational',
+      version: '1.0.0',
+      timestamp: new Date().toISOString()
+    }
+  });
+});
+
+// CPS Authentication endpoint
+app.post('/api/medecin/dmp/authentification-cps', verifyToken, (req, res) => {
+  const { numero_adeli, code_cps, patient_id } = req.body;
+  
+  console.log('📄 Simulation - Authentification CPS:', { numero_adeli, code_cps, patient_id });
+  
+  // Mock validation
+  if (!numero_adeli || !code_cps || !patient_id) {
+    return res.status(400).json({
+      success: false,
+      error: 'Données d\'authentification incomplètes'
+    });
   }
-];
-
-const mockPatientStats = {
-  patient_id: 5,
-  total_documents: 1,
-  total_auto_mesures: 2,
-  derniere_connexion: new Date().toISOString(),
-  notifications_non_lues: 2
-};
-
-// General patient DMP endpoints
-app.get('/api/patient/dmp', verifyToken, (req, res) => {
-  const patientId = req.query.patient_id || 5;
+  
+  // Mock CPS validation (4-digit code)
+  if (code_cps.length !== 4 || !/^\d{4}$/.test(code_cps)) {
+    return res.status(400).json({
+      success: false,
+      error: 'Code CPS invalide (4 chiffres requis)'
+    });
+  }
+  
+  // Mock successful authentication
+  const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   
   res.json({
     success: true,
     data: {
-      patient_id: patientId,
-      statut: "actif",
+      session_id: sessionId,
+      authenticated: true,
+      message: 'Authentification CPS réussie (simulation)'
+    }
+  });
+});
+
+// Create DMP session endpoint
+app.post('/api/medecin/dmp/creer-session', verifyToken, (req, res) => {
+  const { patient_id, medecin_id } = req.body;
+  
+  console.log('📄 Simulation - Création session DMP:', { patient_id, medecin_id });
+  
+  if (!patient_id || !medecin_id) {
+    return res.status(400).json({
+      success: false,
+      error: 'Données de session incomplètes'
+    });
+  }
+  
+  const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  
+  res.json({
+    success: true,
+    data: {
+      session_id: sessionId,
+      message: 'Session DMP créée avec succès (simulation)'
+    }
+  });
+});
+
+// Request DMP access endpoint
+app.post('/api/medecin/dmp/demande-acces', verifyToken, (req, res) => {
+  const { patient_id, type_acces, duree, raison_demande } = req.body;
+  
+  console.log('📄 Simulation - Demande d\'accès DMP:', { patient_id, type_acces, duree, raison_demande });
+  
+  if (!patient_id || !type_acces || !duree || !raison_demande) {
+    return res.status(400).json({
+      success: false,
+      error: 'Données de demande d\'accès incomplètes'
+    });
+  }
+  
+  const accessId = `access_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  
+  res.json({
+    success: true,
+    data: {
+      access_id: accessId,
+      message: 'Demande d\'accès DMP créée avec succès (simulation)',
+      notification_sent: true,
+      expires_at: new Date(Date.now() + duree * 60 * 1000).toISOString()
+    }
+  });
+});
+
+// Get DMP access history endpoint
+app.get('/api/medecin/dmp/historique/:patientId?', verifyToken, (req, res) => {
+  const { patientId } = req.params;
+  
+  console.log('📄 Simulation - Historique DMP pour patient:', patientId);
+  
+  res.json({
+    success: true,
+    data: [
+      {
+        id: "HIST001",
+        date: new Date().toISOString(),
+        medecin: "Dr. Martin",
+        patient: `Patient ${patientId || '5'}`,
+        mode: "lecture",
+        raison: "Consultation de routine",
+        statut: "termine",
+        expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString()
+      }
+    ]
+  });
+});
+
+// Validate DMP session endpoint
+app.post('/api/medecin/dmp/valider-session', verifyToken, (req, res) => {
+  const { session_id } = req.body;
+  
+  console.log('📄 Simulation - Validation session DMP:', session_id);
+  
+  if (!session_id) {
+    return res.status(400).json({
+      success: false,
+      error: 'ID de session manquant'
+    });
+  }
+  
+  res.json({
+    success: true,
+    data: {
+      valid: true,
+      session: {
+        session_id: session_id,
+        medecin_id: 79,
+        patient_id: 5,
+        created_at: new Date().toISOString(),
+        expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString()
+      }
+    }
+  });
+});
+
+// Close DMP session endpoint
+app.post('/api/medecin/dmp/fermer-session', verifyToken, (req, res) => {
+  const { session_id } = req.body;
+  
+  console.log('📄 Simulation - Fermeture session DMP:', session_id);
+  
+  if (!session_id) {
+    return res.status(400).json({
+      success: false,
+      error: 'ID de session manquant'
+    });
+  }
+  
+  res.json({
+    success: true,
+    data: {
+      message: 'Session fermée avec succès (simulation)'
+    }
+  });
+});
+
+// Get DMP notifications endpoint
+app.get('/api/medecin/dmp/notifications/:sessionId', verifyToken, (req, res) => {
+  const { sessionId } = req.params;
+  
+  console.log('📄 Simulation - Notifications DMP pour session:', sessionId);
+  
+  res.json({
+    success: true,
+    data: {
+      session_id: sessionId,
+      notifications: [
+        {
+          id: "NOTIF001",
+          type: "acces_autorise",
+          message: "Accès autorisé au DMP",
+          date: new Date().toISOString(),
+          statut: "non_lu"
+        }
+      ]
+    }
+  });
+});
+
+// Validate DMP session status endpoint
+app.get('/api/medecin/dmp/session/:sessionId/statut', verifyToken, (req, res) => {
+  const { sessionId } = req.params;
+  
+  console.log('📄 Simulation - Statut session DMP:', sessionId);
+  
+  res.json({
+    success: true,
+    data: {
+      session_id: sessionId,
+      statut: "active",
+      date_creation: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
+      duree_restante_minutes: 30,
+      acces_autorise: true
+    }
+  });
+});
+
+// Close DMP session endpoint
+app.post('/api/medecin/dmp/session/:sessionId/fermer', verifyToken, (req, res) => {
+  const { sessionId } = req.params;
+  
+  console.log('📄 Simulation - Fermeture session DMP:', sessionId);
+  
+  res.json({
+    success: true,
+    data: {
+      message: "Session DMP fermée avec succès (simulation)",
+      session_id: sessionId,
+      date_fermeture: new Date().toISOString()
+    }
+  });
+});
+
+// ===== ROUTES PATIENT DMP SIMULÉES =====
+
+// General patient DMP endpoint
+app.get('/api/patient/dmp', verifyToken, (req, res) => {
+  console.log('📄 Simulation - DMP patient');
+  
+  res.json({
+    success: true,
+    data: {
+      patient_id: 5,
+      nom: "Dupont",
+      prenom: "Jean",
+      date_naissance: "1985-03-15",
+      groupe_sanguin: "A+",
+      allergies: ["Pénicilline", "Latex"],
+      antecedents: [
+        {
+          id: 1,
+          type: "Chirurgie",
+          description: "Appendicectomie",
+          date: "2010-05-20",
+          etablissement: "Hôpital Central"
+        }
+      ],
+      traitements_actuels: [
+        {
+          id: 1,
+          medicament: "Metformine",
+          dosage: "500mg",
+          frequence: "2x/jour",
+          date_debut: "2015-08-15",
+          prescripteur: "Dr. Martin"
+        }
+      ],
       derniere_mise_a_jour: new Date().toISOString()
     }
   });
 });
 
-app.get('/api/patient/dmp/tableau-de-bord', verifyToken, (req, res) => {
-  const patientId = req.query.patient_id || 5;
+// Update DMP endpoint
+app.put('/api/patient/dmp', verifyToken, (req, res) => {
+  const dmpData = req.body;
+  
+  console.log('📄 Simulation - Mise à jour DMP:', dmpData);
   
   res.json({
     success: true,
     data: {
-      patient_id: patientId,
-      documents_count: mockPatientDocuments.length,
-      auto_mesures_count: mockPatientAutoMesures.length,
-      notifications_count: mockNotificationsDroitsAcces.filter(n => !n.lue).length,
-      derniere_activite: new Date().toISOString()
+      message: "DMP mis à jour avec succès (simulation)",
+      data: dmpData
     }
   });
 });
 
-app.get('/api/patient/dmp/documents', verifyToken, (req, res) => {
-  const patientId = req.query.patient_id || 5;
-  
-  const patientDocs = mockPatientDocuments.filter(
-    doc => doc.patient_id.toString() === patientId.toString()
-  );
+// Historique médical endpoint
+app.get('/api/patient/dmp/historique-medical', verifyToken, (req, res) => {
+  console.log('📄 Simulation - Historique médical');
   
   res.json({
     success: true,
-    data: patientDocs
+    data: {
+      patient_id: 5,
+      consultations: [
+        {
+          id: 1,
+          date: "2024-01-15",
+          medecin: "Dr. Martin",
+          motif: "Contrôle diabète",
+          diagnostic: "Diabète stable",
+          prescription: "Continuer Metformine",
+          notes: "Glycémie à jeun: 1.26 g/l"
+        }
+      ],
+      examens: [
+        {
+          id: 1,
+          date: "2024-01-12",
+          type: "Analyse sanguine",
+          resultats: "Glycémie: 1.26 g/l, HbA1c: 6.8%",
+          laboratoire: "Labo Central"
+        }
+      ]
+    }
   });
 });
 
-app.get('/api/patient/dmp/auto-mesures', verifyToken, (req, res) => {
-  const patientId = req.query.patient_id || 5;
+// Add historique entry endpoint
+app.post('/api/patient/dmp/historique-medical', verifyToken, (req, res) => {
+  const entry = req.body;
   
-  const patientAutoMesures = mockPatientAutoMesures.filter(
-    mesure => mesure.patient_id.toString() === patientId.toString()
-  );
+  console.log('📄 Simulation - Ajout entrée historique:', entry);
   
   res.json({
     success: true,
-    data: patientAutoMesures
+    data: {
+      message: "Entrée ajoutée à l'historique (simulation)",
+      data: entry
+    }
   });
 });
 
+// Journal activité endpoint
+app.get('/api/patient/dmp/journal-activite', verifyToken, (req, res) => {
+  const filters = req.query;
+  
+  console.log('📄 Simulation - Journal activité avec filtres:', filters);
+  
+  res.json({
+    success: true,
+    data: {
+      activites: [
+        {
+          id: 1,
+          type: "consultation",
+          date: "2024-01-15T10:00:00Z",
+          description: "Consultation Dr. Martin",
+          statut: "termine"
+        },
+        {
+          id: 2,
+          type: "autorisation",
+          date: "2024-01-15T14:30:00Z",
+          description: "Demande d'accès Dr. Dubois",
+          statut: "en_attente"
+        }
+      ]
+    }
+  });
+});
+
+// Droits d'accès endpoint
 app.get('/api/patient/dmp/droits-acces', verifyToken, (req, res) => {
-  const patientId = req.query.patient_id || 5;
-  
-  const patientAccessRights = mockPatientAccessRights.filter(
-    access => access.patient_id.toString() === patientId.toString()
-  );
-  
-  res.json({
-    success: true,
-    data: patientAccessRights
-  });
-});
-
-app.get('/api/patient/dmp/statistiques', verifyToken, (req, res) => {
-  const patientId = req.query.patient_id || 5;
+  console.log('📄 Simulation - Droits d\'accès');
   
   res.json({
     success: true,
     data: {
-      ...mockPatientStats,
-      patient_id: patientId
+      droits: {
+        lecture: true,
+        ecriture: false,
+        administration: false,
+        partage: true
+      }
     }
   });
 });
 
-// Patient DMP access rights notifications endpoints
-app.get('/api/patient/dmp/droits-acces/notifications', verifyToken, (req, res) => {
-  // Get patient ID from token or query parameter
-  const patientId = req.query.patient_id || 5; // Default for demo
+// Update droits d'accès endpoint
+app.put('/api/patient/dmp/droits-acces', verifyToken, (req, res) => {
+  const droits = req.body;
   
-  const patientNotifications = mockNotificationsDroitsAcces.filter(
-    notification => notification.patient_id.toString() === patientId.toString()
-  );
+  console.log('📄 Simulation - Mise à jour droits d\'accès:', droits);
   
   res.json({
     success: true,
-    notifications: patientNotifications
+    data: {
+      message: "Droits d'accès mis à jour (simulation)",
+      data: droits
+    }
   });
 });
 
+// Notifications droits d'accès endpoint
+app.get('/api/patient/dmp/droits-acces/notifications', verifyToken, (req, res) => {
+  console.log('📄 Simulation - Notifications droits d\'accès');
+  
+  res.json({
+    success: true,
+    notifications: mockNotificationsDroitsAcces
+  });
+});
+
+// Marquer notification comme lue endpoint
 app.put('/api/patient/dmp/droits-acces/notifications/:notificationId/lue', verifyToken, (req, res) => {
   const { notificationId } = req.params;
   
-  const notification = mockNotificationsDroitsAcces.find(
-    n => n.id.toString() === notificationId.toString()
-  );
-  
-  if (!notification) {
-    return res.status(404).json({
-      success: false,
-      error: 'Notification non trouvée'
-    });
-  }
-  
-  // Mark as read
-  notification.lue = true;
+  console.log('📄 Simulation - Marquer notification comme lue:', notificationId);
   
   res.json({
     success: true,
     data: {
-      message: 'Notification marquée comme lue',
-      notification: notification
+      message: "Notification marquée comme lue (simulation)",
+      notification_id: notificationId
     }
   });
 });
 
+// Répondre à une demande d'accès endpoint
 app.post('/api/patient/dmp/droits-acces/demandes/:demandeId/reponse', verifyToken, (req, res) => {
   const { demandeId } = req.params;
-  const { reponse } = req.body; // 'accepter' ou 'refuser'
+  const { reponse } = req.body;
   
-  if (!reponse || !['accepter', 'refuser'].includes(reponse)) {
-    return res.status(400).json({
-      success: false,
-      error: 'Réponse invalide. Doit être "accepter" ou "refuser"'
-    });
-  }
-  
-  const notification = mockNotificationsDroitsAcces.find(
-    n => n.demande_id === demandeId
-  );
-  
-  if (!notification) {
-    return res.status(404).json({
-      success: false,
-      error: 'Demande d\'accès non trouvée'
-    });
-  }
-  
-  if (notification.repondue) {
-    return res.status(400).json({
-      success: false,
-      error: 'Cette demande a déjà été répondue'
-    });
-  }
-  
-  // Update notification
-  notification.repondue = true;
-  notification.lue = true;
-  
-  if (reponse === 'accepter') {
-    notification.type = 'acces_autorise';
-    notification.titre = 'Accès DMP autorisé';
-    notification.message = `Vous avez autorisé l'accès au ${notification.medecin_nom}.`;
-  } else {
-    notification.type = 'acces_refuse';
-    notification.titre = 'Accès DMP refusé';
-    notification.message = `Vous avez refusé l'accès au ${notification.medecin_nom}.`;
-  }
-  
-  // Update corresponding access request in mockAccessHistory
-  const accessRequest = mockAccessHistory.find(
-    access => access.id === demandeId
-  );
-  
-  if (accessRequest) {
-    accessRequest.statut = reponse === 'accepter' ? 'autorise' : 'refuse';
-  }
+  console.log('📄 Simulation - Réponse demande d\'accès:', { demandeId, reponse });
   
   res.json({
     success: true,
     data: {
-      message: `Demande d'accès ${reponse === 'accepter' ? 'autorisée' : 'refusée'}`,
-      notification: notification
+      message: `Demande ${reponse} avec succès (simulation)`,
+      demande_id: demandeId,
+      reponse: reponse
     }
   });
 });
 
-// Nouveau endpoint pour obtenir les statistiques des notifications
+// Statistiques notifications endpoint
 app.get('/api/patient/dmp/notifications/stats', verifyToken, (req, res) => {
-  const patientId = req.query.patient_id || 5;
-  
-  const patientNotifications = mockNotificationsDroitsAcces.filter(
-    notification => notification.patient_id.toString() === patientId.toString()
-  );
-  
-  const stats = {
-    total: patientNotifications.length,
-    non_lues: patientNotifications.filter(n => !n.lue).length,
-    demandes_en_attente: patientNotifications.filter(n => n.type === 'demande_acces' && !n.repondue).length,
-    acces_autorises: patientNotifications.filter(n => n.type === 'acces_autorise').length,
-    acces_refuses: patientNotifications.filter(n => n.type === 'acces_refuse').length
-  };
-  
-  res.json({
-    success: true,
-    data: stats
-  });
-});
-
-// Nouveau endpoint pour marquer toutes les notifications comme lues
-app.put('/api/patient/dmp/droits-acces/notifications/marquer-toutes-lues', verifyToken, (req, res) => {
-  const patientId = req.query.patient_id || 5;
-  
-  const patientNotifications = mockNotificationsDroitsAcces.filter(
-    notification => notification.patient_id.toString() === patientId.toString()
-  );
-  
-  // Marquer toutes les notifications comme lues
-  patientNotifications.forEach(notification => {
-    notification.lue = true;
-  });
+  console.log('📄 Simulation - Statistiques notifications');
   
   res.json({
     success: true,
     data: {
-      message: 'Toutes les notifications ont été marquées comme lues',
-      count: patientNotifications.length
+      total: 1,
+      non_lues: 1,
+      lues: 0,
+      en_attente: 1,
+      acceptees: 0,
+      refusees: 0
     }
   });
 });
 
-// Nouveau endpoint pour obtenir les détails d'une notification spécifique
+// Marquer toutes notifications comme lues endpoint
+app.put('/api/patient/dmp/droits-acces/notifications/marquer-toutes-lues', verifyToken, (req, res) => {
+  console.log('📄 Simulation - Marquer toutes notifications comme lues');
+  
+  res.json({
+    success: true,
+    data: {
+      message: "Toutes les notifications marquées comme lues (simulation)",
+      notifications_marquees: 1
+    }
+  });
+});
+
+// Détails notification endpoint
 app.get('/api/patient/dmp/droits-acces/notifications/:notificationId', verifyToken, (req, res) => {
   const { notificationId } = req.params;
-  const patientId = req.query.patient_id || 5;
   
-  const notification = mockNotificationsDroitsAcces.find(
-    n => n.id.toString() === notificationId.toString() && 
-         n.patient_id.toString() === patientId.toString()
-  );
+  console.log('📄 Simulation - Détails notification:', notificationId);
   
-  if (!notification) {
-    return res.status(404).json({
-      success: false,
-      error: 'Notification non trouvée'
-    });
+  const notification = mockNotificationsDroitsAcces.find(n => n.id.toString() === notificationId);
+  
+  res.json({
+    success: true,
+    data: notification || {
+      id_notification: notificationId,
+      type_notification: "demande_acces",
+      professionnel_id: "MED001",
+      professionnel_nom: "Dr. Test",
+      date_creation: "2024-01-15T10:00:00Z",
+      statut_envoi: "non_lu"
+    }
+  });
+});
+
+// Auto-mesures endpoint
+app.get('/api/patient/dmp/auto-mesures', verifyToken, (req, res) => {
+  const { type } = req.query;
+  
+  console.log('📄 Simulation - Auto-mesures, type:', type);
+  
+  let mesures = mockPatientAutoMesures;
+  if (type) {
+    mesures = mockPatientAutoMesures.filter(m => m.type === type);
   }
   
   res.json({
     success: true,
-    data: notification
+    data: {
+      mesures: mesures
+    }
+  });
+});
+
+// Create auto-mesure endpoint
+app.post('/api/patient/dmp/auto-mesures', verifyToken, (req, res) => {
+  const mesureData = req.body;
+  
+  console.log('📄 Simulation - Création auto-mesure:', mesureData);
+  
+  res.json({
+    success: true,
+    data: {
+      message: "Auto-mesure créée avec succès (simulation)",
+      data: { id: Date.now(), ...mesureData, date_mesure: new Date().toISOString() }
+    }
+  });
+});
+
+// Rendez-vous endpoint
+app.get('/api/patient/dmp/rendez-vous', verifyToken, (req, res) => {
+  console.log('📄 Simulation - Rendez-vous');
+  
+  res.json({
+    success: true,
+    data: {
+      rendez_vous: [
+        {
+          id: 1,
+          date: "2024-01-20T10:00:00Z",
+          medecin: "Dr. Martin",
+          specialite: "Médecine générale",
+          motif: "Contrôle diabète",
+          statut: "confirme"
+        },
+        {
+          id: 2,
+          date: "2024-01-25T14:30:00Z",
+          medecin: "Dr. Dubois",
+          specialite: "Cardiologie",
+          motif: "Évaluation cardiologique",
+          statut: "en_attente"
+        }
+      ]
+    }
+  });
+});
+
+// Create rendez-vous endpoint
+app.post('/api/patient/dmp/rendez-vous', verifyToken, (req, res) => {
+  const rdvData = req.body;
+  
+  console.log('📄 Simulation - Création rendez-vous:', rdvData);
+  
+  res.json({
+    success: true,
+    data: {
+      message: "Rendez-vous créé avec succès (simulation)",
+      data: { id: Date.now(), ...rdvData }
+    }
+  });
+});
+
+// Documents endpoint
+app.get('/api/patient/dmp/documents', verifyToken, (req, res) => {
+  const { type } = req.query;
+  
+  console.log('📄 Simulation - Documents, type:', type);
+  
+  let documents = mockPatientDocuments;
+  if (type) {
+    documents = mockPatientDocuments.filter(d => d.type === type);
+  }
+  
+  res.json({
+    success: true,
+    data: {
+      documents: documents
+    }
+  });
+});
+
+// Upload document endpoint
+app.post('/api/patient/dmp/upload-document', verifyToken, (req, res) => {
+  const documentData = req.body;
+  
+  console.log('📄 Simulation - Upload document:', documentData);
+  
+  res.json({
+    success: true,
+    data: {
+      message: "Document uploadé avec succès (simulation)",
+      data: {
+        id: Date.now(),
+        nom: documentData.file?.name || "Document",
+        type: documentData.type,
+        date_upload: new Date().toISOString()
+      }
+    }
+  });
+});
+
+// Bibliothèque santé endpoint
+app.get('/api/patient/dmp/bibliotheque-sante', verifyToken, (req, res) => {
+  console.log('📄 Simulation - Bibliothèque santé');
+  
+  res.json({
+    success: true,
+    data: {
+      ressources: [
+        {
+          id: 1,
+          titre: "Guide du diabète",
+          type: "guide",
+          description: "Informations sur la gestion du diabète",
+          url: "#"
+        },
+        {
+          id: 2,
+          titre: "Conseils nutritionnels",
+          type: "conseil",
+          description: "Recommandations alimentaires",
+          url: "#"
+        }
+      ]
+    }
+  });
+});
+
+// Statistiques endpoint
+app.get('/api/patient/dmp/statistiques', verifyToken, (req, res) => {
+  const { periode } = req.query;
+  
+  console.log('📄 Simulation - Statistiques, période:', periode);
+  
+  res.json({
+    success: true,
+    data: {
+      periode: periode || '30j',
+      consultations: 2,
+      autorisations: 2,
+      auto_mesures: 5,
+      documents: 3,
+      activite_moyenne: "2.5 consultations/mois"
+    }
+  });
+});
+
+// Tableau de bord endpoint
+app.get('/api/patient/dmp/tableau-de-bord', verifyToken, (req, res) => {
+  console.log('📄 Simulation - Tableau de bord');
+  
+  res.json({
+    success: true,
+    data: {
+      resume: {
+        derniere_consultation: "2024-01-15",
+        prochain_rdv: "2024-01-20",
+        autorisations_actives: 1,
+        notifications_non_lues: 1
+      },
+      alertes: [
+        {
+          type: "glycemie",
+          message: "Glycémie élevée détectée",
+          niveau: "modere"
+        }
+      ],
+      activites_recentes: [
+        {
+          type: "consultation",
+          date: "2024-01-15",
+          description: "Consultation Dr. Martin"
+        }
+      ]
+    }
+  });
+});
+
+// Rappels endpoint
+app.get('/api/patient/dmp/rappels', verifyToken, (req, res) => {
+  console.log('📄 Simulation - Rappels');
+  
+  res.json({
+    success: true,
+    data: {
+      rappels: [
+        {
+          id: 1,
+          type: "consultation",
+          titre: "Rendez-vous Dr. Martin",
+          date: "2024-01-20T10:00:00Z",
+          description: "Contrôle diabète",
+          statut: "a_venir"
+        },
+        {
+          id: 2,
+          type: "mesure",
+          titre: "Mesure glycémie",
+          date: "2024-01-16T08:00:00Z",
+          description: "Mesure à jeun",
+          statut: "a_venir"
+        }
+      ]
+    }
+  });
+});
+
+// Autorisations endpoint
+app.get('/api/patient/dmp/autorisations', verifyToken, (req, res) => {
+  console.log('📄 Simulation - Autorisations');
+  
+  res.json({
+    success: true,
+    data: mockAutorisations
+  });
+});
+
+// Create autorisation endpoint
+app.post('/api/patient/dmp/autorisations', verifyToken, (req, res) => {
+  const autorisationData = req.body;
+  
+  console.log('📄 Simulation - Création autorisation:', autorisationData);
+  
+  res.json({
+    success: true,
+    data: {
+      message: "Autorisation directe créée avec succès (simulation)",
+      autorisation_id: "AUTH_" + Date.now(),
+      statut: "actif",
+      date_creation: new Date().toISOString(),
+      data: autorisationData
+    }
+  });
+});
+
+// Accepter autorisation endpoint
+app.post('/api/patient/dmp/autorisations/:autorisationId/accepter', verifyToken, (req, res) => {
+  const { autorisationId } = req.params;
+  const { commentaire } = req.body;
+  
+  console.log('📄 Simulation - Acceptation autorisation:', { autorisationId, commentaire });
+  
+  res.json({
+    success: true,
+    data: {
+      message: "Autorisation acceptée avec succès (simulation)",
+      autorisation_id: autorisationId,
+      statut: "actif",
+      date_acceptation: new Date().toISOString()
+    }
+  });
+});
+
+// Refuser autorisation endpoint
+app.post('/api/patient/dmp/autorisations/:autorisationId/refuser', verifyToken, (req, res) => {
+  const { autorisationId } = req.params;
+  const { raison_refus } = req.body;
+  
+  console.log('📄 Simulation - Refus autorisation:', { autorisationId, raison_refus });
+  
+  res.json({
+    success: true,
+    data: {
+      message: "Autorisation refusée avec succès (simulation)",
+      autorisation_id: autorisationId,
+      statut: "refuse",
+      raison_refus: raison_refus,
+      date_refus: new Date().toISOString()
+    }
+  });
+});
+
+// Vérifier accès endpoint
+app.get('/api/dmp/verifier-acces', verifyToken, (req, res) => {
+  const { professionnel_id, patient_id } = req.query;
+  
+  console.log('📄 Simulation - Vérification accès:', { professionnel_id, patient_id });
+  
+  res.json({
+    success: true,
+    data: {
+      acces_autorise: true,
+      type_acces: "lecture",
+      date_expiration: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
+      session_id: "SESS_" + Date.now()
+    }
+  });
+});
+
+// Durée restante endpoint
+app.get('/api/dmp/autorisations/:autorisationId/duree-restante', verifyToken, (req, res) => {
+  const { autorisationId } = req.params;
+  
+  console.log('📄 Simulation - Durée restante autorisation:', autorisationId);
+  
+  res.json({
+    success: true,
+    data: {
+      autorisation_id: autorisationId,
+      duree_restante_minutes: 45,
+      date_expiration: new Date(Date.now() + 45 * 60 * 1000).toISOString(),
+      statut: "actif"
+    }
+  });
+});
+
+// Autorisations demandées endpoint (médecin)
+app.get('/api/medecin/dmp/autorisations', verifyToken, (req, res) => {
+  console.log('📄 Simulation - Autorisations demandées (médecin)');
+  
+  res.json({
+    success: true,
+    data: {
+      demandes: [
+        {
+          id: "DEM001",
+          patient_id: "PAT001",
+          patient_nom: "Dupont Jean",
+          type_acces: "lecture",
+          statut: "en_attente",
+          date_demande: "2024-01-15T14:30:00Z",
+          raison_demande: "Consultation de routine"
+        }
+      ]
+    }
   });
 });
 
@@ -649,14 +957,14 @@ app.get('/api/patient/dmp/droits-acces/notifications/:notificationId', verifyTok
 app.get('/api/health', (req, res) => {
   res.json({
     success: true,
-    message: 'DMP Backend API is running',
+    message: 'DMP Backend API is running (simulation mode)',
     timestamp: new Date().toISOString()
   });
 });
 
 // Start server
 app.listen(PORT, () => {
-  console.log(`DMP Backend server running on port ${PORT}`);
+  console.log(`DMP Backend server running on port ${PORT} (simulation mode)`);
   console.log(`Health check: http://localhost:${PORT}/api/health`);
 });
 
