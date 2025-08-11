@@ -2,43 +2,7 @@ import React, { createContext, useContext, useReducer, useEffect, useMemo } from
 import { getCurrentUser, getStoredPatient } from '../services/api/authApi';
 import * as dmpApi from '../services/api/dmpApi';
 
-// Fonction pour récupérer les données mock (copiée depuis dmpApi.js)
-const getMockDataForPatient = (patientId) => {
-    // Note: patientId parameter is not used, using localStorage instead
-    
-    return {
-        auto_mesures: [
-            {
-                id: 1,
-                type: "poids",
-                valeur: 75,
-                unite: "kg",
-                date_mesure: "2024-01-15",
-                heure_mesure: "08:30",
-                commentaire: "Poids stable"
-            },
-            {
-                id: 2,
-                type: "tension",
-                valeur: 120,
-                valeur_secondaire: 80,
-                unite: "mmHg",
-                date_mesure: "2024-01-14",
-                heure_mesure: "09:15",
-                commentaire: "Tension normale"
-            },
-            {
-                id: 3,
-                type: "temperature",
-                valeur: 36.8,
-                unite: "°C",
-                date_mesure: "2024-01-13",
-                heure_mesure: "18:45",
-                commentaire: "Température normale"
-            }
-        ]
-    };
-};
+
 
 const DMPContext = createContext();
 
@@ -197,11 +161,9 @@ export const DMPProvider = ({ children }) => {
                     dispatch({ type: 'SET_AUTO_MESURES', payload: autoMesures });
                 } catch (error) {
                     console.error('❌ Erreur lors du chargement des auto-mesures dans le contexte:', error);
-                    // En cas d'erreur, utiliser les données mock
-                    console.warn("Mode développement: utilisation des données mock pour les auto-mesures");
-                    const storedPatient = JSON.parse(localStorage.getItem('patient') || '{}');
-                    const mockData = getMockDataForPatient(storedPatient.id_patient || storedPatient.id);
-                    dispatch({ type: 'SET_AUTO_MESURES', payload: mockData.auto_mesures || [] });
+                    // En cas d'erreur, initialiser avec un tableau vide
+                    console.warn("Erreur API: initialisation des auto-mesures avec tableau vide");
+                    dispatch({ type: 'SET_AUTO_MESURES', payload: [] });
                 }
             };
 
@@ -294,11 +256,9 @@ export const DMPProvider = ({ children }) => {
                 dispatch({ type: 'SET_AUTO_MESURES', payload: autoMesures });
             } catch (error) {
                 console.error('❌ Erreur lors du chargement des auto-mesures via actions:', error);
-                // En cas d'erreur, utiliser les données mock
-                console.warn("Mode développement: utilisation des données mock pour les auto-mesures");
-                const storedPatient = JSON.parse(localStorage.getItem('patient') || '{}');
-                const mockData = getMockDataForPatient(storedPatient.id_patient || storedPatient.id);
-                dispatch({ type: 'SET_AUTO_MESURES', payload: mockData.auto_mesures || [] });
+                // En cas d'erreur, initialiser avec un tableau vide
+                console.warn("Erreur API: initialisation des auto-mesures avec tableau vide");
+                dispatch({ type: 'SET_AUTO_MESURES', payload: [] });
             }
         },
 

@@ -27,11 +27,17 @@ const AutorisationsEnAttente = () => {
         if (Array.isArray(payload)) {
           return payload;
         }
+        if (Array.isArray(payload?.authorizationAccess)) {
+          return payload.authorizationAccess;
+        }
         if (Array.isArray(payload?.autorisations)) {
           return payload.autorisations;
         }
         if (Array.isArray(payload?.authorizations)) {
           return payload.authorizations;
+        }
+        if (Array.isArray(payload?.data?.authorizationAccess)) {
+          return payload.data.authorizationAccess;
         }
         if (Array.isArray(payload?.data?.autorisations)) {
           return payload.data.autorisations;
@@ -55,9 +61,30 @@ const AutorisationsEnAttente = () => {
         ...a,
         professionnel: a.professionnel || a.professionnelDemandeur || a.professionnel_demandeur || a.demandeur || a.professional || {},
         date_creation: a.date_creation || a.createdAt || a.date_debut || a.date_validation || a.updatedAt,
+        // Gérer les cas où les données sont dans des objets imbriqués
+        ...(a.professionnelDemandeur && {
+          professionnel: {
+            ...a.professionnelDemandeur,
+            nom: a.professionnelDemandeur.nom || a.professionnelDemandeur.nom_professionnel,
+            prenom: a.professionnelDemandeur.prenom || a.professionnelDemandeur.prenom_professionnel,
+            specialite: a.professionnelDemandeur.specialite || a.professionnelDemandeur.specialite_professionnel
+          }
+        }),
+        ...(a.patientConcerne && {
+          patient: {
+            ...a.patientConcerne,
+            nom: a.patientConcerne.nom || a.patientConcerne.nom_patient,
+            prenom: a.patientConcerne.prenom || a.patientConcerne.prenom_patient
+          }
+        })
       }));
 
       console.log('📋 AutorisationsEnAttente: Données normalisées:', autorisationsData);
+      console.log('🔍 AutorisationsEnAttente: Structure des données après normalisation:', {
+        total: autorisationsData.length,
+        premier: autorisationsData[0],
+        statuts: autorisationsData.map(a => ({ id: a.id_acces, statut: a.statut, professionnel: a.professionnel }))
+      });
       setAutorisations(autorisationsData);
     } catch (error) {
       console.error('❌ AutorisationsEnAttente: Erreur lors du chargement:', error);

@@ -19,24 +19,18 @@ const DMPPatientView = () => {
 
         // 1) Vérifier le statut d'accès
         const statusRes = await dmpApi.getAccessStatus(patientId);
-        setAccessStatus(statusRes?.status || statusRes?.accessStatus || 'not_authorized');
+        setAccessStatus(statusRes?.accessStatus || statusRes?.status || 'not_authorized');
 
-        if ((statusRes?.status || statusRes?.accessStatus) !== 'authorized') {
+        if ((statusRes?.status || statusRes?.accessStatus) !== 'authorized' && (statusRes?.status || statusRes?.accessStatus) !== 'active') {
           setLoading(false);
-          return; // ne pas charger les données si non autorisé
+          return; // ne pas charger les données si non autorisé ou non actif
         }
 
-        // 2) Charger les données patient
-        const patientData = await dmpApi.getPatientDMPForMedecin(patientId);
-        setPatient(patientData?.patient || patientData);
-
-        // 3) Charger documents et auto-mesures
-        const [docs, mesures] = await Promise.all([
-          dmpApi.getPatientDocumentsForMedecin(patientId),
-          dmpApi.getPatientAutoMesuresForMedecin(patientId)
-        ]);
-        setDocuments(Array.isArray(docs) ? docs : []);
-        setAutoMesures(Array.isArray(mesures) ? mesures : []);
+        // 2) Charger l'ensemble des données du dossier de manière sécurisée
+        const dossierData = await dmpApi.getSecureDossierForMedecin(patientId);
+        setPatient(dossierData?.patient || dossierData);
+        setDocuments(Array.isArray(dossierData?.documents) ? dossierData.documents : []);
+        setAutoMesures(Array.isArray(dossierData?.autoMesures) ? dossierData.autoMesures : []);
       } catch (e) {
         setError(e.message || 'Erreur de chargement');
       } finally {
@@ -65,7 +59,7 @@ const DMPPatientView = () => {
     );
   }
 
-  if (accessStatus !== 'authorized') {
+  if (accessStatus !== 'authorized' && accessStatus !== 'active') {
     return (
       <div className="flex flex-col items-center justify-center h-screen p-4">
         <p className="text-lg font-medium mb-2">Accès non autorisé</p>

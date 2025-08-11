@@ -107,10 +107,10 @@ const AutorisationCard = ({ autorisation, onUpdate }) => {
             </div>
             <div>
               <h3 className="font-semibold text-gray-900">
-                Dr. {autorisation.professionnel?.prenom || 'Prénom'} {autorisation.professionnel?.nom || 'Nom'}
+                Dr. {autorisation.professionnel?.prenom || autorisation.professionnelDemandeur?.prenom || 'Prénom'} {autorisation.professionnel?.nom || autorisation.professionnelDemandeur?.nom || 'Nom'}
               </h3>
               <p className="text-sm text-gray-600">
-                {autorisation.professionnel?.specialite || 'Spécialité non définie'}
+                {autorisation.professionnel?.specialite || autorisation.professionnelDemandeur?.specialite || 'Spécialité non définie'}
               </p>
             </div>
           </div>

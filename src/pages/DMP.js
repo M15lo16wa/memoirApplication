@@ -83,15 +83,33 @@ const DMP = () => {
       }
 
       // Charger le tableau de bord (utilise automatiquement l'ID du patient connecté)
-      const tableauData = await dmpApi.getTableauDeBord();
-      setTableauDeBord(tableauData.data?.tableau_de_bord);
+      try {
+        const tableauData = await dmpApi.getTableauDeBord();
+        setTableauDeBord(tableauData.data?.tableau_de_bord);
+      } catch (tableauError) {
+        console.warn('⚠️ Tableau de bord non disponible:', tableauError.message);
+        setTableauDeBord(null);
+      }
 
       // Charger les notifications des droits d'accès depuis l'API réelle
       console.log('🔍 Chargement des notifications des droits d\'accès depuis l\'API...');
-      const pendingRequests = await dmpApi.getPendingAccessRequests(); 
-      
-      console.log('📄 Demandes reçues de l\'API:', pendingRequests);
-      setNotificationsDroitsAcces(pendingRequests || []);
+      try {
+        // Récupérer l'ID du patient connecté
+        const storedPatient = getStoredPatient();
+        const patientId = storedPatient?.id_patient || storedPatient?.id;
+        
+        if (!patientId) {
+          console.warn('⚠️ ID patient non disponible pour charger les notifications');
+          setNotificationsDroitsAcces([]);
+        } else {
+          const pendingRequests = await dmpApi.getMedecinAccessRequests(patientId); 
+          console.log('📄 Demandes reçues de l\'API:', pendingRequests);
+          setNotificationsDroitsAcces(pendingRequests || []);
+        }
+      } catch (notificationsError) {
+        console.warn('⚠️ Notifications non disponibles:', notificationsError.message);
+        setNotificationsDroitsAcces([]);
+      }
 
       // Charger les autorisations validées
       await loadAutorisationsValidees();
@@ -134,6 +152,8 @@ const DMP = () => {
       console.log('✅ Autorisations validées chargées:', autorisationsActives.length);
     } catch (error) {
       console.error('❌ Erreur lors du chargement des autorisations validées:', error);
+      // En cas d'erreur, initialiser avec un tableau vide
+      setAutorisationsValidees([]);
     }
   };
 
@@ -149,22 +169,46 @@ const DMP = () => {
 
       switch (tab) {
         case 'historique':
-          const historiqueData = await dmpApi.getHistoriqueMedical(); // Utilise automatiquement l'ID du patient connecté
-          setHistoriqueMedical(historiqueData.data || []);
+          try {
+            const historiqueData = await dmpApi.getHistoriqueMedical(); // Utilise automatiquement l'ID du patient connecté
+            setHistoriqueMedical(historiqueData.data || []);
+          } catch (historiqueError) {
+            console.warn('⚠️ Historique médical non disponible:', historiqueError.message);
+            setHistoriqueMedical([]);
+          }
           break;
         case 'droits-acces':
           // Charger les notifications des droits d'accès depuis l'API réelle
           console.log('🔍 Chargement des notifications (onglet droits-acces) depuis l\'API...');
-          const pendingRequests = await dmpApi.getPendingAccessRequests();
-          console.log('📄 Notifications reçues (onglet):', pendingRequests);
-          setNotificationsDroitsAcces(Array.isArray(pendingRequests) ? pendingRequests : []);
+          try {
+            // Récupérer l'ID du patient connecté
+            const storedPatient = getStoredPatient();
+            const patientId = storedPatient?.id_patient || storedPatient?.id;
+            
+            if (!patientId) {
+              console.warn('⚠️ ID patient non disponible pour charger les notifications');
+              setNotificationsDroitsAcces([]);
+            } else {
+              const pendingRequests = await dmpApi.getMedecinAccessRequests(patientId);
+              console.log('📄 Notifications reçues (onglet):', pendingRequests);
+              setNotificationsDroitsAcces(Array.isArray(pendingRequests) ? pendingRequests : []);
+            }
+          } catch (notificationsError) {
+            console.warn('⚠️ Notifications non disponibles:', notificationsError.message);
+            setNotificationsDroitsAcces([]);
+          }
           
           // Charger aussi les autorisations validées
           await loadAutorisationsValidees();
           break;
         case 'rappels':
-          const rappelsData = await dmpApi.getRappels(); // Utilise automatiquement l'ID du patient connecté
-          setRappels(rappelsData.data || []);
+          try {
+            const rappelsData = await dmpApi.getRappels(); // Utilise automatiquement l'ID du patient connecté
+            setRappels(rappelsData.data || []);
+          } catch (rappelsError) {
+            console.warn('⚠️ Rappels non disponibles:', rappelsError.message);
+            setRappels([]);
+          }
           break;
         case 'mon-espace-sante':
           // Documents are now handled by DMPMonEspaceSante component
@@ -208,9 +252,14 @@ const DMP = () => {
       
       // Recharger les notifications depuis l'API pour avoir les données à jour
       console.log('🔄 DMP: Rechargement des notifications après marquage...');
-      const pendingRequests = await dmpApi.getPendingAccessRequests();
-      console.log('📄 DMP: Nouvelles notifications reçues:', pendingRequests);
-      setNotificationsDroitsAcces(Array.isArray(pendingRequests) ? pendingRequests : []);
+      const storedPatient = getStoredPatient();
+      const patientId = storedPatient?.id_patient || storedPatient?.id;
+      
+      if (patientId) {
+        const pendingRequests = await dmpApi.getMedecinAccessRequests(patientId);
+        console.log('📄 DMP: Nouvelles notifications reçues:', pendingRequests);
+        setNotificationsDroitsAcces(Array.isArray(pendingRequests) ? pendingRequests : []);
+      }
 
       // Recharger aussi les autorisations validées
       await loadAutorisationsValidees();
@@ -254,13 +303,13 @@ const DMP = () => {
     }
 };
 
-  const rafraichirNotifications = async () => {
+    const rafraichirNotifications = async () => {
     try {
       console.log('🔄 DMP: Rafraîchissement des notifications depuis l\'API...');
-      const pendingRequests = await dmpApi.getPendingAccessRequests();
+      const pendingRequests = await dmpApi.getMedecinAccessRequests();
       console.log('✅ DMP: Notifications reçues de l\'API:', pendingRequests);
       setNotificationsDroitsAcces(Array.isArray(pendingRequests) ? pendingRequests : []);
-
+      
       // Recharger aussi les autorisations validées
       await loadAutorisationsValidees();
       
@@ -350,7 +399,7 @@ const DMP = () => {
         
                             // Recharger les notifications depuis l'API
                     console.log('🔄 DMP: Rechargement des notifications après acceptation...');
-                    const pendingRequests = await dmpApi.getPendingAccessRequests();
+                    const pendingRequests = await dmpApi.getMedecinAccessRequests();
                     console.log('📄 DMP: Nouvelles notifications reçues:', pendingRequests);
                     setNotificationsDroitsAcces(Array.isArray(pendingRequests) ? pendingRequests : []);
 
@@ -437,7 +486,7 @@ const DMP = () => {
         
                             // Recharger les notifications depuis l'API
                     console.log('🔄 DMP: Rechargement des notifications après refus...');
-                    const pendingRequests = await dmpApi.getPendingAccessRequests();
+                    const pendingRequests = await dmpApi.getMedecinAccessRequests();
                     console.log('📄 DMP: Nouvelles notifications reçues:', pendingRequests);
                     setNotificationsDroitsAcces(Array.isArray(pendingRequests) ? pendingRequests : []);
 
@@ -489,7 +538,8 @@ const DMP = () => {
   useEffect(() => {
     const checkNewNotifications = async () => {
       try {
-        const newNotifications = await dmpApi.getPendingAccessRequests();
+        // Utiliser l'endpoint approprié pour les médecins
+        const newNotifications = await dmpApi.getMedecinAccessRequests();
         const list = Array.isArray(newNotifications) ? newNotifications : [];
         
         // Trouver les nouvelles notifications non lues
