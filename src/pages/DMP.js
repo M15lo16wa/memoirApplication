@@ -616,12 +616,12 @@ const HistoriqueMedical = () => {
                           
                           {prescription.redacteur && (
                             <div className="space-y-1">
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs font-medium text-gray-600">Rédacteur :</span>
-                                <span className="text-xs text-gray-900">
-                                  Dr. {prescription.redacteur.compteUtilisateur?.prenom || 'N/A'} {prescription.redacteur.compteUtilisateur?.nom || 'N/A'}
-                                </span>
-                              </div>
+                                           <div className="flex items-center gap-2">
+               <span className="text-xs font-medium text-gray-600">Rédacteur :</span>
+               <span className="text-xs text-gray-900">
+                 Dr. {prescription.redacteur.nom_complet || `${prescription.redacteur.prenom || ''} ${prescription.redacteur.nom || ''}`.trim() || 'N/A'}
+               </span>
+             </div>
                               {prescription.redacteur.specialite && (
                                 <div className="flex items-center gap-2 ml-4">
                                   <span className="text-xs text-gray-500">Spécialité :</span>
