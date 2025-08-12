@@ -315,6 +315,16 @@ const HistoriqueMedical = () => {
                               Détails
                             </span>
                           )}
+                          
+                          {/* Badge pour indiquer qu'il y a un QR Code */}
+                          {prescription.qrCode && (
+                            <span className="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                              <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V6a1 1 0 00-1-1H5a1 1 0 00-1 1v1a1 1 0 001 1zm12 0h2a1 1 0 001-1V6a1 1 0 00-1-1h-2a1 1 0 00-1 1v1a1 1 0 001 1zM5 20h2a1 1 0 001-1v-1a1 1 0 00-1-1H5a1 1 0 00-1 1v1a1 1 0 001 1z" />
+                              </svg>
+                              QR Code
+                            </span>
+                          )}
                         </h3>
                         <p className="text-sm text-gray-600">
                           Prescrit le {formatDate(prescription.date_prescription)}
@@ -378,6 +388,27 @@ const HistoriqueMedical = () => {
                                   <span className="text-sm text-blue-900">{prescription.quantite} {prescription.unite}</span>
                                 </div>
                               )}
+                              
+                              {prescription.forme_pharmaceutique && (
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs font-medium text-blue-700">Forme :</span>
+                                  <span className="text-sm text-blue-900">{prescription.forme_pharmaceutique}</span>
+                                </div>
+                              )}
+                              
+                              {prescription.code_cip && (
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs font-medium text-blue-700">Code CIP :</span>
+                                  <span className="text-sm text-blue-900 font-mono">{prescription.code_cip}</span>
+                                </div>
+                              )}
+                              
+                              {prescription.atc && (
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs font-medium text-blue-700">Code ATC :</span>
+                                  <span className="text-sm text-blue-900 font-mono">{prescription.atc}</span>
+                                </div>
+                              )}
                             </div>
                             {prescription.posologie && (
                               <div className="mt-2 pt-2 border-t border-blue-200">
@@ -395,6 +426,56 @@ const HistoriqueMedical = () => {
                               <div className="mt-2 pt-2 border-t border-blue-200">
                                 <span className="text-xs font-medium text-orange-700">Effets indésirables :</span>
                                 <span className="text-sm text-orange-800 ml-2">{prescription.effets_indesirables}</span>
+                              </div>
+                            )}
+                            
+                            {/* QR Code et informations de traitement */}
+                            {(prescription.qrCode || prescription.duree_traitement || prescription.renouvelable !== null) && (
+                              <div className="mt-3 pt-3 border-t border-blue-200">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                  {/* QR Code */}
+                                  {prescription.qrCode && (
+                                    <div className="flex flex-col items-center">
+                                      <span className="text-xs font-medium text-blue-700 mb-2">QR Code</span>
+                                      <img 
+                                        src={prescription.qrCode} 
+                                        alt="QR Code de la prescription"
+                                        className="w-20 h-20 border border-blue-300 rounded-lg"
+                                        title="QR Code de la prescription"
+                                      />
+                                    </div>
+                                  )}
+                                  
+                                  {/* Informations de traitement */}
+                                  <div className="space-y-2">
+                                    {prescription.duree_traitement && (
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-xs font-medium text-blue-700">Durée :</span>
+                                        <span className="text-sm text-blue-900">{prescription.duree_traitement}</span>
+                                      </div>
+                                    )}
+                                    {prescription.renouvelable !== null && (
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-xs font-medium text-blue-700">Renouvelable :</span>
+                                        <span className={`text-xs px-2 py-1 rounded-full ${
+                                          prescription.renouvelable 
+                                            ? 'bg-green-100 text-green-800' 
+                                            : 'bg-red-100 text-red-800'
+                                        }`}>
+                                          {prescription.renouvelable ? 'Oui' : 'Non'}
+                                        </span>
+                                      </div>
+                                    )}
+                                    {prescription.nb_renouvellements > 0 && (
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-xs font-medium text-blue-700">Renouvellements :</span>
+                                        <span className="text-sm text-blue-900">
+                                          {prescription.renouvellements_effectues}/{prescription.nb_renouvellements}
+                                        </span>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
                               </div>
                             )}
                           </>
@@ -490,54 +571,161 @@ const HistoriqueMedical = () => {
                     
                     {/* Informations complémentaires */}
                     <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        <div className="flex items-center gap-2">
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(prescription.statut)}`}>
-                            {prescription.statut || 'Statut inconnu'}
-                          </span>
-                        </div>
-                        
-                        {prescription.medecin && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* Première colonne - Statut et dates */}
+                        <div className="space-y-2">
                           <div className="flex items-center gap-2">
-                            <span className="text-xs font-medium text-gray-600">Médecin :</span>
-                            <span className="text-xs text-gray-900">
-                              Dr. {prescription.medecin.prenom} {prescription.medecin.nom}
+                            <span className="text-xs font-medium text-gray-600">Statut :</span>
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(prescription.statut)}`}>
+                              {prescription.statut || 'Statut inconnu'}
                             </span>
                           </div>
-                        )}
+                          
+                          {prescription.date_debut && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-medium text-gray-600">Début :</span>
+                              <span className="text-xs text-gray-900">{formatDate(prescription.date_debut)}</span>
+                            </div>
+                          )}
+                          
+                          {prescription.date_fin && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-medium text-gray-600">Fin :</span>
+                              <span className="text-xs text-gray-900">{formatDate(prescription.date_fin)}</span>
+                            </div>
+                          )}
+                          
+                          {prescription.date_arret && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-medium text-gray-600">Arrêt :</span>
+                              <span className="text-xs text-gray-900">{formatDate(prescription.date_arret)}</span>
+                            </div>
+                          )}
+                        </div>
                         
-                        {prescription.date_debut && (
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-medium text-gray-600">Début :</span>
-                            <span className="text-xs text-gray-900">{formatDate(prescription.date_debut)}</span>
-                          </div>
-                        )}
+                        {/* Deuxième colonne - Médecin et établissement */}
+                        <div className="space-y-2">
+                          {prescription.medecin && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-medium text-gray-600">Médecin :</span>
+                              <span className="text-xs text-gray-900">
+                                Dr. {prescription.medecin.prenom} {prescription.medecin.nom}
+                              </span>
+                            </div>
+                          )}
+                          
+                          {prescription.redacteur && (
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-medium text-gray-600">Rédacteur :</span>
+                                <span className="text-xs text-gray-900">
+                                  Dr. {prescription.redacteur.compteUtilisateur?.prenom || 'N/A'} {prescription.redacteur.compteUtilisateur?.nom || 'N/A'}
+                                </span>
+                              </div>
+                              {prescription.redacteur.specialite && (
+                                <div className="flex items-center gap-2 ml-4">
+                                  <span className="text-xs text-gray-500">Spécialité :</span>
+                                  <span className="text-xs text-gray-700">{prescription.redacteur.specialite}</span>
+                                </div>
+                              )}
+                              {prescription.redacteur.numero_adeli && (
+                                <div className="flex items-center gap-2 ml-4">
+                                  <span className="text-xs text-gray-500">N° ADELI :</span>
+                                  <span className="text-xs text-gray-700 font-mono">{prescription.redacteur.numero_adeli}</span>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                          
+                          {prescription.etablissement && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-medium text-gray-600">Établissement :</span>
+                              <span className="text-xs text-gray-900">{prescription.etablissement}</span>
+                            </div>
+                          )}
+                        </div>
                       </div>
                       
-                      {prescription.etablissement && (
-                        <div className="mt-2 pt-2 border-t border-gray-200">
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-medium text-gray-600">Établissement :</span>
-                            <span className="text-xs text-gray-900">{prescription.etablissement}</span>
-                          </div>
+                      {/* Informations supplémentaires */}
+                      {(prescription.instructions_speciales || prescription.pharmacieDelivrance || prescription.signatureElectronique) && (
+                        <div className="mt-3 pt-3 border-t border-gray-200 space-y-2">
+                          {prescription.instructions_speciales && (
+                            <div className="flex items-start gap-2">
+                              <span className="text-xs font-medium text-gray-600">Instructions spéciales :</span>
+                              <span className="text-xs text-gray-900">{prescription.instructions_speciales}</span>
+                            </div>
+                          )}
+                          
+                          {prescription.pharmacieDelivrance && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-medium text-gray-600">Pharmacie de délivrance :</span>
+                              <span className="text-xs text-gray-900">{prescription.pharmacieDelivrance}</span>
+                            </div>
+                          )}
+                          
+                          {prescription.signatureElectronique && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-medium text-gray-600">Signature électronique :</span>
+                              <span className="text-xs text-gray-500 font-mono truncate">
+                                {prescription.signatureElectronique.substring(0, 20)}...
+                              </span>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
                   </div>
                   
-                  <div className="flex space-x-2 ml-4" onClick={(e) => e.stopPropagation()}>
-                    <button 
-                      className="text-blue-600 hover:text-blue-800 p-2 rounded hover:bg-blue-50"
-                      title="Télécharger"
-                    >
-                      <FaDownload />
-                    </button>
-                    <button 
-                      className="text-green-600 hover:text-green-800 p-2 rounded hover:bg-green-50"
-                      title="Imprimer"
-                    >
-                      <FaPrint />
-                    </button>
+                  <div className="flex flex-col space-y-2 ml-4" onClick={(e) => e.stopPropagation()}>
+                    {/* Boutons d'action principaux */}
+                    <div className="flex space-x-2">
+                      <button 
+                        className="text-blue-600 hover:text-blue-800 p-2 rounded hover:bg-blue-50"
+                        title="Télécharger"
+                      >
+                        <FaDownload />
+                      </button>
+                      <button 
+                        className="text-green-600 hover:text-green-800 p-2 rounded hover:bg-green-50"
+                        title="Imprimer"
+                      >
+                        <FaPrint />
+                      </button>
+                    </div>
+                    
+                    {/* Boutons spécifiques au QR Code */}
+                    {prescription.qrCode && (
+                      <div className="flex space-x-2 pt-2 border-t border-gray-200">
+                        <button 
+                          className="text-purple-600 hover:text-purple-800 p-2 rounded hover:bg-purple-50 text-xs"
+                          title="Télécharger QR Code"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const link = document.createElement('a');
+                            link.href = prescription.qrCode;
+                            link.download = `QR_${prescription.prescriptionNumber || 'prescription'}.png`;
+                            link.click();
+                          }}
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V6a1 1 0 00-1-1H5a1 1 0 00-1 1v1a1 1 0 001 1zm12 0h2a1 1 0 001-1V6a1 1 0 00-1-1h-2a1 1 0 00-1 1v1a1 1 0 001 1zM5 20h2a1 1 0 001-1v-1a1 1 0 00-1-1H5a1 1 0 00-1 1v1a1 1 0 001 1z" />
+                          </svg>
+                        </button>
+                        <button 
+                          className="text-indigo-600 hover:text-indigo-800 p-2 rounded hover:bg-indigo-50 text-xs"
+                          title="Voir QR Code en grand"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            // Ouvrir le QR code dans une nouvelle fenêtre
+                            window.open(prescription.qrCode, '_blank');
+                          }}
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+                          </svg>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
