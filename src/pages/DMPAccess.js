@@ -251,9 +251,20 @@ function DMPAccess() {
             
             <div className="space-y-4">
                 <button
-                    onClick={() => {
-                        // Ici vous pouvez implémenter la logique d'envoi de la demande
-                        console.log('Demande envoyée:', { selectedMode, raisonAcces, patientId });
+                    onClick={async () => {
+                        try {
+                            const accessData = {
+                                mode: selectedMode,
+                                raison: raisonAcces,
+                                patient_id: Number(patientId)
+                            };
+                            await dmpApi.requestStandardAccess(accessData);
+                            alert('Demande envoyée avec succès !');
+                            setCurrentStep('cps');
+                        } catch (error) {
+                            console.error('Erreur lors de l\'envoi de la demande d\'accès:', error);
+                            alert('Erreur lors de l\'envoi de la demande d\'accès');
+                        }
                     }}
                     className="w-full bg-green-600 text-white py-3 px-4 rounded-lg hover:bg-green-700"
                 >

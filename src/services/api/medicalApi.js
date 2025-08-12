@@ -104,20 +104,39 @@ const createExamen = async (examen) => {
 };
 
 // 6-) Récupération de toutes les prescriptions
-const getAllPrescriptions = async () => {
+const getAllPrescriptions = async (patient_id) => {
     try {
-        const response = await api.get(`/prescription/`);
+        const response = await api.get(`/prescription/patient/${patient_id}`);
+            console.log('Réponse prescriptions:', response);
         return response.data;
     } catch (error) {
-        console.error('Erreur lors de la récupération des prescriptions:', error);
+            if (error.response) {
+                console.error('Erreur lors de la récupération des prescriptions:', error.response.data);
+                console.error('Status:', error.response.status);
+                console.error('Headers:', error.response.headers);
+            } else {
+                console.error('Erreur lors de la récupération des prescriptions:', error.message);
+            }
         throw error;
     }
 };
-
-// 7-) Récupération des ordonnances récentes
-const getOrdonnancesRecentes = async (page = 1, limit = 10, jours = 7) => {
+// -6-) Récupération des ordonnances récentes
+const getOrdonnancesRecentes = async (filters = {}) => {
     try {
-        const response = await api.get(`/prescription/ordonnances-recentes?page=${page}&limit=${limit}&jours=${jours}`);
+        const { limit, type, professionnel_id, patient_id } = filters;
+        
+        // Construction des paramètres de requête
+        const params = new URLSearchParams();
+        if (limit){ params.append('limit', limit)};
+        if (type){ params.append('type', type)};
+        if (professionnel_id){ params.append('professionnel_id', professionnel_id)};
+        if (patient_id) {params.append('patient_id', patient_id)};
+        
+        const queryString = params.toString();
+        const url = `/prescription/ordonnances-recentes${queryString ? `?${queryString}` : ''}`;
+        
+        const response = await api.get(url);
+        console.log('Réponse ordonnances récentes:', response);
         return response.data;
     } catch (error) {
         console.error('Erreur lors de la récupération des ordonnances récentes:', error);

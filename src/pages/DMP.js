@@ -16,14 +16,779 @@ import DMPMonEspaceSante from "../components/dmp/DMPMonEspaceSante";
 import DMPNotification from "../components/ui/DMPNotification";
 import AutorisationsEnAttente from "../components/dmp/AutorisationsEnAttente";
 import * as dmpApi from "../services/api/dmpApi";
+import * as patientApi from "../services/api/patientApi";
 
+// Composant HistoriqueMedical qui utilise les fonctions de patientApi
+const HistoriqueMedical = () => {
+  const [prescriptions, setPrescriptions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [activeFilter, setActiveFilter] = useState('all');
+  const [patientId, setPatientId] = useState(null);
+  const [stats, setStats] = useState(null);
+  const [selectedPrescription, setSelectedPrescription] = useState(null);
+  const [showPrescriptionModal, setShowPrescriptionModal] = useState(false);
+
+  useEffect(() => {
+    loadPatientData();
+  }, []);
+
+  const loadPatientData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      // Récupérer l'ID du patient connecté
+      const storedPatient = getStoredPatient();
+      const currentPatientId = storedPatient?.id_patient || storedPatient?.id;
+      
+      if (!currentPatientId) {
+        throw new Error('ID du patient non disponible');
+      }
+
+      setPatientId(currentPatientId);
+      
+      // Charger toutes les prescriptions du patient
+      const result = await patientApi.getAllPrescriptionsByPatient(currentPatientId);
+      
+      if (result.success) {
+        setPrescriptions(result.prescriptions || []);
+        setStats(result.stats);
+        console.log('✅ Historique médical chargé:', result.prescriptions.length, 'prescriptions');
+      } else {
+        throw new Error(result.message || 'Erreur lors du chargement des prescriptions');
+      }
+
+    } catch (error) {
+      console.error('❌ Erreur lors du chargement de l\'historique médical:', error);
+      setError(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleFilterChange = async (filter) => {
+    try {
+      setLoading(true);
+      setActiveFilter(filter);
+      
+      let result;
+      switch (filter) {
+        case 'all':
+          result = await patientApi.getAllPrescriptionsByPatient(patientId);
+          break;
+        case 'active':
+          result = await patientApi.getActivePrescriptionsByPatient(patientId);
+          break;
+        case 'ordonnances':
+          result = await patientApi.getOrdonnancesByPatient(patientId);
+          break;
+        case 'examens':
+          result = await patientApi.getExamensByPatient(patientId);
+          break;
+        default:
+          result = await patientApi.getAllPrescriptionsByPatient(patientId);
+      }
+
+      if (result.success) {
+        setPrescriptions(result.prescriptions || []);
+        setStats(result.stats);
+      } else {
+        throw new Error(result.message || 'Erreur lors du filtrage');
+      }
+
+    } catch (error) {
+      console.error('❌ Erreur lors du filtrage:', error);
+      setError(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return 'Date non disponible';
+    try {
+      return new Date(dateString).toLocaleDateString('fr-FR', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+    } catch {
+      return 'Date invalide';
+    }
+  };
+
+  const getStatusColor = (statut) => {
+    switch (statut?.toLowerCase()) {
+      case 'active':
+        return 'bg-green-100 text-green-800';
+      case 'terminee':
+        return 'bg-blue-100 text-blue-800';
+      case 'annulee':
+        return 'bg-red-100 text-red-800';
+      case 'en_cours':
+        return 'bg-yellow-100 text-yellow-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const getTypeIcon = (type) => {
+    switch (type?.toLowerCase()) {
+      case 'ordonnance':
+        return <FaPills className="text-blue-600" />;
+      case 'examen':
+        return <FaFileMedical className="text-green-600" />;
+      case 'consultation':
+        return <FaUser className="text-purple-600" />;
+      default:
+        return <FaFileMedical className="text-gray-600" />;
+    }
+  };
+
+  const handlePrescriptionClick = (prescription) => {
+    setSelectedPrescription(prescription);
+    setShowPrescriptionModal(true);
+  };
+
+  const closePrescriptionModal = () => {
+    setShowPrescriptionModal(false);
+    setSelectedPrescription(null);
+  };
+
+  // Fermer le modal avec la touche Escape
+  useEffect(() => {
+    const handleEscapeKey = (event) => {
+      if (event.key === 'Escape' && showPrescriptionModal) {
+        closePrescriptionModal();
+      }
+    };
+
+    if (showPrescriptionModal) {
+      document.addEventListener('keydown', handleEscapeKey);
+      // Empêcher le scroll du body quand le modal est ouvert
+      document.body.style.overflow = 'hidden';
+    }
+
+    return () => {
+      document.removeEventListener('keydown', handleEscapeKey);
+      document.body.style.overflow = 'unset';
+    };
+  }, [showPrescriptionModal]);
+
+  if (loading) {
+    return (
+      <div className="bg-white rounded-lg shadow">
+        <div className="p-6 border-b">
+          <h2 className="text-xl font-semibold">Historique médical</h2>
+          <p className="text-gray-600">Consultez votre historique médical complet</p>
+        </div>
+        <div className="p-6">
+          <div className="flex justify-center items-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-white rounded-lg shadow">
+        <div className="p-6 border-b">
+          <h2 className="text-xl font-semibold">Historique médical</h2>
+          <p className="text-gray-600">Consultez votre historique médical complet</p>
+        </div>
+        <div className="p-6">
+          <div className="text-center py-8">
+            <div className="text-red-600 mb-4">
+              <FaFileMedical className="text-4xl mx-auto mb-2" />
+              <p className="font-medium">Erreur lors du chargement</p>
+            </div>
+            <p className="text-gray-600 mb-4">{error}</p>
+            <button
+              onClick={loadPatientData}
+              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+            >
+              Réessayer
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white rounded-lg shadow">
+      <div className="p-6 border-b">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div>
+            <h2 className="text-xl font-semibold">Historique médical</h2>
+            <p className="text-gray-600">Consultez votre historique médical complet</p>
+            {stats && (
+              <p className="text-sm text-gray-500 mt-1">
+                {stats.totalPrescriptions} prescription(s) au total
+              </p>
+            )}
+          </div>
+          
+          {/* Statistiques rapides */}
+          {stats && (
+            <div className="flex flex-wrap gap-2">
+              {stats.parType && Object.entries(stats.parType).map(([type, count]) => (
+                <span key={type} className="px-3 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
+                  {type}: {count}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Filtres */}
+      <div className="p-4 border-b bg-gray-50">
+        <div className="flex flex-wrap gap-2">
+          {[
+            { key: 'all', label: 'Toutes', count: prescriptions.length },
+            { key: 'active', label: 'Actives', count: stats?.parStatut?.active || 0 },
+            { key: 'ordonnances', label: 'Ordonnances', count: stats?.parType?.ordonnance || 0 },
+            { key: 'examens', label: 'Examens', count: stats?.parType?.examen || 0 }
+          ].map((filter) => (
+            <button
+              key={filter.key}
+              onClick={() => handleFilterChange(filter.key)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                activeFilter === filter.key
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
+              }`}
+            >
+              {filter.label}
+              <span className="ml-2 bg-opacity-20 bg-black text-inherit px-2 py-1 rounded-full text-xs">
+                {filter.count}
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="p-6">
+        {prescriptions.length > 0 ? (
+          <div className="space-y-4">
+            {prescriptions.map((prescription, index) => (
+              <div 
+                key={index} 
+                className="border rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer group focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
+                onClick={() => handlePrescriptionClick(prescription)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    handlePrescriptionClick(prescription);
+                  }
+                }}
+                tabIndex={0}
+                role="button"
+                aria-label={`Voir les détails de la prescription ${prescription.type_prescription} du ${formatDate(prescription.date_prescription)}`}
+              >
+                <div className="flex justify-between items-start">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      {getTypeIcon(prescription.type_prescription)}
+                      <div>
+                        <h3 className="font-medium text-gray-900 group-hover:text-blue-600 transition-colors">
+                          {prescription.type_prescription === 'ordonnance' ? 'Ordonnance médicale' :
+                           prescription.type_prescription === 'examen' ? 'Demande d\'examen' :
+                           prescription.type_prescription === 'consultation' ? 'Consultation' :
+                           prescription.type_prescription}
+                          <span className="ml-2 text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <svg className="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            </svg>
+                          </span>
+                          {/* Badge pour indiquer qu'il y a des détails */}
+                          {(prescription.nom_commercial || prescription.principe_actif || prescription.dosage || prescription.medicaments || prescription.examens) && (
+                            <span className="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                              <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                              </svg>
+                              Détails
+                            </span>
+                          )}
+                        </h3>
+                        <p className="text-sm text-gray-600">
+                          Prescrit le {formatDate(prescription.date_prescription)}
+                        </p>
+                        {prescription.prescriptionNumber && (
+                          <p className="text-xs text-gray-500 font-mono">
+                            N° {prescription.prescriptionNumber}
+                          </p>
+                        )}
+                        <p className="text-xs text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity mt-1">
+                          Cliquez pour voir les détails
+                        </p>
+                      </div>
+                    </div>
+                    
+                    {/* Description */}
+                    {prescription.description && (
+                      <p className="text-sm text-gray-700 mb-3">{prescription.description}</p>
+                    )}
+                    
+                    {/* Détails spécifiques selon le type de prescription */}
+                    {prescription.type_prescription === 'ordonnance' && (
+                      <div className="mb-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                        <h4 className="text-sm font-semibold text-blue-900 mb-2">Détails de l'ordonnance</h4>
+                        {(prescription.nom_commercial || prescription.principe_actif || prescription.dosage || prescription.frequence || prescription.voie_administration || prescription.quantite || prescription.posologie || prescription.contre_indications || prescription.effets_indesirables) ? (
+                          <>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                              {prescription.nom_commercial && (
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs font-medium text-blue-700">Médicament :</span>
+                                  <span className="text-sm text-blue-900 font-medium">{prescription.nom_commercial}</span>
+                                </div>
+                              )}
+                              {prescription.principe_actif && (
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs font-medium text-blue-700">Principe actif :</span>
+                                  <span className="text-sm text-blue-900">{prescription.principe_actif}</span>
+                                </div>
+                              )}
+                              {prescription.dosage && (
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs font-medium text-blue-700">Dosage :</span>
+                                  <span className="text-sm text-blue-900">{prescription.dosage}</span>
+                                </div>
+                              )}
+                              {prescription.frequence && (
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs font-medium text-blue-700">Fréquence :</span>
+                                  <span className="text-sm text-blue-900">{prescription.frequence}</span>
+                                </div>
+                              )}
+                              {prescription.voie_administration && (
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs font-medium text-blue-700">Voie :</span>
+                                  <span className="text-sm text-blue-900">{prescription.voie_administration}</span>
+                                </div>
+                              )}
+                              {prescription.quantite && prescription.unite && (
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs font-medium text-blue-700">Quantité :</span>
+                                  <span className="text-sm text-blue-900">{prescription.quantite} {prescription.unite}</span>
+                                </div>
+                              )}
+                            </div>
+                            {prescription.posologie && (
+                              <div className="mt-2 pt-2 border-t border-blue-200">
+                                <span className="text-xs font-medium text-blue-700">Posologie :</span>
+                                <span className="text-sm text-blue-900 ml-2">{prescription.posologie}</span>
+                              </div>
+                            )}
+                            {prescription.contre_indications && (
+                              <div className="mt-2 pt-2 border-t border-blue-200">
+                                <span className="text-xs font-medium text-red-700">Contre-indications :</span>
+                                <span className="text-sm text-red-800 ml-2">{prescription.contre_indications}</span>
+                              </div>
+                            )}
+                            {prescription.effets_indesirables && (
+                              <div className="mt-2 pt-2 border-t border-blue-200">
+                                <span className="text-xs font-medium text-orange-700">Effets indésirables :</span>
+                                <span className="text-sm text-orange-800 ml-2">{prescription.effets_indesirables}</span>
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <p className="text-sm text-blue-600 italic">Aucun détail spécifique disponible pour cette ordonnance</p>
+                        )}
+                      </div>
+                    )}
+                    
+                    {/* Médicaments (pour les prescriptions avec structure medicaments) */}
+                    {prescription.medicaments && prescription.medicaments.length > 0 ? (
+                      <div className="mb-3">
+                        <p className="text-xs font-medium text-gray-600 mb-2">Médicaments prescrits :</p>
+                        <div className="space-y-2">
+                          {prescription.medicaments.map((med, idx) => (
+                            <div key={idx} className="p-2 bg-blue-50 rounded border border-blue-200">
+                              <div className="flex items-center justify-between">
+                                <span className="text-sm font-medium text-blue-900">{med.nom}</span>
+                                {med.quantite && (
+                                  <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                                    Qté: {med.quantite}
+                                  </span>
+                                )}
+                              </div>
+                              {med.posologie && (
+                                <p className="text-xs text-blue-700 mt-1">
+                                  <span className="font-medium">Posologie :</span> {med.posologie}
+                                </p>
+                              )}
+                              {med.duree && (
+                                <p className="text-xs text-blue-700 mt-1">
+                                  <span className="font-medium">Durée :</span> {med.duree}
+                                </p>
+                              )}
+                              {med.instructions && (
+                                <p className="text-xs text-blue-600 mt-1 italic">
+                                  {med.instructions}
+                                </p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : prescription.type_prescription === 'ordonnance' && (
+                      <div className="mb-3 p-2 bg-gray-50 rounded border border-gray-200">
+                        <p className="text-xs text-gray-500 italic">Aucun médicament spécifique listé</p>
+                      </div>
+                    )}
+                    
+                    {/* Examens (pour les prescriptions avec structure examens) */}
+                    {prescription.examens && prescription.examens.length > 0 ? (
+                      <div className="mb-3">
+                        <p className="text-xs font-medium text-gray-600 mb-2">Examens demandés :</p>
+                        <div className="space-y-2">
+                          {prescription.examens.map((exam, idx) => (
+                            <div key={idx} className="p-2 bg-green-50 rounded border border-green-200">
+                              <div className="flex items-center justify-between">
+                                <span className="text-sm font-medium text-green-900">{exam.nom}</span>
+                                {exam.urgence && (
+                                  <span className={`text-xs px-2 py-1 rounded-full ${
+                                    exam.urgence === 'urgent' 
+                                      ? 'bg-red-100 text-red-800' 
+                                      : 'bg-green-100 text-green-800'
+                                  }`}>
+                                    {exam.urgence === 'urgent' ? 'URGENT' : exam.urgence}
+                                  </span>
+                                )}
+                              </div>
+                              {exam.type && (
+                                <p className="text-xs text-green-700 mt-1">
+                                  <span className="font-medium">Type :</span> {exam.type}
+                                </p>
+                              )}
+                              {exam.instructions && (
+                                <p className="text-xs text-green-600 mt-1 italic">
+                                  {exam.instructions}
+                                </p>
+                              )}
+                              {exam.preparation && (
+                                <p className="text-xs text-green-600 mt-1">
+                                  <span className="font-medium">Préparation :</span> {exam.preparation}
+                                </p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : prescription.type_prescription === 'examen' && (
+                      <div className="mb-3 p-2 bg-gray-50 rounded border border-gray-200">
+                        <p className="text-xs text-gray-500 italic">Aucun examen spécifique listé</p>
+                      </div>
+                    )}
+                    
+                    {/* Informations complémentaires */}
+                    <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div className="flex items-center gap-2">
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(prescription.statut)}`}>
+                            {prescription.statut || 'Statut inconnu'}
+                          </span>
+                        </div>
+                        
+                        {prescription.medecin && (
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-medium text-gray-600">Médecin :</span>
+                            <span className="text-xs text-gray-900">
+                              Dr. {prescription.medecin.prenom} {prescription.medecin.nom}
+                            </span>
+                          </div>
+                        )}
+                        
+                        {prescription.date_debut && (
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-medium text-gray-600">Début :</span>
+                            <span className="text-xs text-gray-900">{formatDate(prescription.date_debut)}</span>
+                          </div>
+                        )}
+                      </div>
+                      
+                      {prescription.etablissement && (
+                        <div className="mt-2 pt-2 border-t border-gray-200">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-medium text-gray-600">Établissement :</span>
+                            <span className="text-xs text-gray-900">{prescription.etablissement}</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div className="flex space-x-2 ml-4" onClick={(e) => e.stopPropagation()}>
+                    <button 
+                      className="text-blue-600 hover:text-blue-800 p-2 rounded hover:bg-blue-50"
+                      title="Télécharger"
+                    >
+                      <FaDownload />
+                    </button>
+                    <button 
+                      className="text-green-600 hover:text-green-800 p-2 rounded hover:bg-green-50"
+                      title="Imprimer"
+                    >
+                      <FaPrint />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-8">
+            <FaFileMedical className="text-4xl text-gray-400 mx-auto mb-4" />
+            <p className="text-gray-500 text-lg font-medium mb-2">
+              Aucune prescription trouvée
+            </p>
+            <p className="text-gray-400">
+              {activeFilter === 'all' 
+                ? 'Vous n\'avez pas encore de prescriptions dans votre historique médical.'
+                : `Aucune prescription de type "${activeFilter}" trouvée.`
+              }
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Modal pour afficher les détails de la prescription */}
+      {showPrescriptionModal && selectedPrescription && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          onClick={closePrescriptionModal}
+        >
+          <div 
+            className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header du modal */}
+            <div className="flex justify-between items-center p-6 border-b">
+              <div className="flex items-center gap-3">
+                {getTypeIcon(selectedPrescription.type_prescription)}
+                <div>
+                  <h3 className="text-xl font-semibold text-gray-900">
+                    {selectedPrescription.type_prescription === 'ordonnance' ? 'Ordonnance médicale' :
+                     selectedPrescription.type_prescription === 'examen' ? 'Demande d\'examen' :
+                     selectedPrescription.type_prescription === 'consultation' ? 'Consultation' :
+                     selectedPrescription.type_prescription}
+                  </h3>
+                  <p className="text-sm text-gray-600">
+                    Prescrit le {formatDate(selectedPrescription.date_prescription)}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={closePrescriptionModal}
+                className="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-100"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Contenu du modal */}
+            <div className="p-6">
+              {/* Description */}
+              {selectedPrescription.description && (
+                <div className="mb-6">
+                  <h4 className="text-lg font-medium text-gray-900 mb-2">Description</h4>
+                  <p className="text-gray-700 bg-gray-50 p-4 rounded-lg">
+                    {selectedPrescription.description}
+                  </p>
+                </div>
+              )}
+
+              {/* Médicaments */}
+              {selectedPrescription.medicaments && selectedPrescription.medicaments.length > 0 && (
+                <div className="mb-6">
+                  <h4 className="text-lg font-medium text-gray-900 mb-3">Médicaments prescrits</h4>
+                  <div className="space-y-3">
+                    {selectedPrescription.medicaments.map((med, idx) => (
+                      <div key={idx} className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h5 className="font-medium text-blue-900">{med.nom}</h5>
+                            {med.posologie && (
+                              <p className="text-blue-700 text-sm mt-1">
+                                <span className="font-medium">Posologie :</span> {med.posologie}
+                              </p>
+                            )}
+                            {med.duree && (
+                              <p className="text-blue-700 text-sm mt-1">
+                                <span className="font-medium">Durée :</span> {med.duree}
+                              </p>
+                            )}
+                          </div>
+                          {med.quantite && (
+                            <span className="bg-blue-100 text-blue-800 text-xs font-medium px-3 py-1 rounded-full">
+                              Qté: {med.quantite}
+                            </span>
+                          )}
+                        </div>
+                        {med.instructions && (
+                          <p className="text-blue-600 text-sm mt-2 italic">
+                            {med.instructions}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Examens */}
+              {selectedPrescription.examens && selectedPrescription.examens.length > 0 && (
+                <div className="mb-6">
+                  <h4 className="text-lg font-medium text-gray-900 mb-3">Examens demandés</h4>
+                  <div className="space-y-3">
+                    {selectedPrescription.examens.map((exam, idx) => (
+                      <div key={idx} className="bg-green-50 p-4 rounded-lg border border-green-200">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h5 className="font-medium text-green-900">{exam.nom}</h5>
+                            {exam.type && (
+                              <p className="text-green-700 text-sm mt-1">
+                                <span className="font-medium">Type :</span> {exam.type}
+                              </p>
+                            )}
+                          </div>
+                          {exam.urgence && (
+                            <span className="bg-green-100 text-green-800 text-xs font-medium px-3 py-1 rounded-full">
+                              {exam.urgence === 'urgent' ? 'URGENT' : exam.urgence}
+                            </span>
+                          )}
+                        </div>
+                        {exam.instructions && (
+                          <p className="text-green-600 text-sm mt-2 italic">
+                            {exam.instructions}
+                          </p>
+                        )}
+                        {exam.preparation && (
+                          <p className="text-green-600 text-sm mt-2">
+                            <span className="font-medium">Préparation :</span> {exam.preparation}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Informations complémentaires */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Statut et médecin */}
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <h4 className="text-lg font-medium text-gray-900 mb-3">Informations générales</h4>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-600">Statut :</span>
+                      <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(selectedPrescription.statut)}`}>
+                        {selectedPrescription.statut || 'Statut inconnu'}
+                      </span>
+                    </div>
+                    {selectedPrescription.medecin && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-600">Médecin :</span>
+                        <span className="text-gray-900 font-medium">
+                          Dr. {selectedPrescription.medecin.prenom} {selectedPrescription.medecin.nom}
+                        </span>
+                      </div>
+                    )}
+                    {selectedPrescription.etablissement && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-600">Établissement :</span>
+                        <span className="text-gray-900 font-medium">
+                          {selectedPrescription.etablissement}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Dates et validité */}
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <h4 className="text-lg font-medium text-gray-900 mb-3">Dates et validité</h4>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-600">Date de prescription :</span>
+                      <span className="text-gray-900 font-medium">
+                        {formatDate(selectedPrescription.date_prescription)}
+                      </span>
+                    </div>
+                    {selectedPrescription.date_debut && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-600">Date de début :</span>
+                        <span className="text-gray-900 font-medium">
+                          {formatDate(selectedPrescription.date_debut)}
+                        </span>
+                      </div>
+                    )}
+                    {selectedPrescription.date_fin && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-600">Date de fin :</span>
+                        <span className="text-gray-900 font-medium">
+                          {formatDate(selectedPrescription.date_fin)}
+                        </span>
+                      </div>
+                    )}
+                    {selectedPrescription.validite && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-600">Validité :</span>
+                        <span className="text-gray-900 font-medium">
+                          {selectedPrescription.validite}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex justify-end gap-3 mt-6 pt-6 border-t">
+                <button
+                  onClick={closePrescriptionModal}
+                  className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                >
+                  Fermer
+                </button>
+                <button 
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+                  title="Télécharger"
+                >
+                  <FaDownload />
+                  Télécharger
+                </button>
+                <button 
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
+                  title="Imprimer"
+                >
+                  <FaPrint />
+                  Imprimer
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const DMP = () => {
   const [activeTab, setActiveTab] = useState('tableau-de-bord');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [tableauDeBord, setTableauDeBord] = useState(null);
-  const [historiqueMedical, setHistoriqueMedical] = useState([]);
+
   const [rappels, setRappels] = useState([]);
   const [notificationsDroitsAcces, setNotificationsDroitsAcces] = useState([]);
   const [, setAutorisationsValidees] = useState([]);
@@ -169,13 +934,7 @@ const DMP = () => {
 
       switch (tab) {
         case 'historique':
-          try {
-            const historiqueData = await dmpApi.getHistoriqueMedical(); // Utilise automatiquement l'ID du patient connecté
-            setHistoriqueMedical(historiqueData.data || []);
-          } catch (historiqueError) {
-            console.warn('⚠️ Historique médical non disponible:', historiqueError.message);
-            setHistoriqueMedical([]);
-          }
+          // L'historique médical est maintenant géré par le composant HistoriqueMedical
           break;
         case 'droits-acces':
           // Charger les notifications des droits d'accès depuis l'API réelle
@@ -1038,39 +1797,7 @@ const DMP = () => {
 
         {/* Historique Médical */}
         {activeTab === 'historique' && (
-          <div className="bg-white rounded-lg shadow">
-            <div className="p-6 border-b">
-              <h2 className="text-xl font-semibold">Historique médical</h2>
-              <p className="text-gray-600">Consultez votre historique médical complet</p>
-            </div>
-            <div className="p-6">
-              {historiqueMedical.length > 0 ? (
-                <div className="space-y-4">
-                  {historiqueMedical.map((item, index) => (
-                    <div key={index} className="border rounded-lg p-4">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h3 className="font-medium">{item.type}</h3>
-                          <p className="text-sm text-gray-600">{item.date}</p>
-                          <p className="text-sm text-gray-500">{item.description}</p>
-                        </div>
-                        <div className="flex space-x-2">
-                          <button className="text-blue-600 hover:text-blue-800">
-                            <FaDownload />
-                          </button>
-                          <button className="text-green-600 hover:text-green-800">
-                            <FaPrint />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-gray-500 text-center py-8">Aucun historique disponible</p>
-              )}
-            </div>
-          </div>
+          <HistoriqueMedical />
         )}
 
         {/* Droits d'Accès */}

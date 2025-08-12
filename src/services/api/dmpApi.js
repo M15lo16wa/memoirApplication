@@ -79,6 +79,9 @@ export const getMedecinAccessRequests = async (patientId) => {
     return response.data.data;
 };
 
+//---- Gestion des demande d'acces pour le medecin ----
+
+
 // =================================================================
 //                 FONCTIONS MANQUANTES POUR LES COMPOSANTS
 // =================================================================

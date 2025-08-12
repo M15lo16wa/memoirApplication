@@ -1140,21 +1140,45 @@ function DossierPatient() {
       setNotificationsLoading(false);
     }
   };
-
-  const loadOrdonnancesRecentes = async (page = 1, limit = 10, jours = 7) => {
-    setOrdonnancesRecentesLoading(true);
-    try {
-      // Récupérer les ordonnances récentes depuis l'API
-      const ordonnancesData = await getOrdonnancesRecentes(page, limit, jours);
-      console.log('Ordonnances récentes récupérées depuis l\'API:', ordonnancesData);
-      setOrdonnancesRecentes(ordonnancesData || []);
-    } catch (error) {
-      console.error('Erreur lors du chargement des ordonnances récentes:', error);
+// affichage des ordonnances récentes
+const loadOrdonnancesRecentes = useCallback(async () => {
+  setOrdonnancesRecentesLoading(true);
+  try {
+    // On récupère l'id du patient affiché
+    const patientId = selectedPatientForPrescription?.id_patient || selectedPatientForPrescription?.rawData?.id_patient || selectedPatientForPrescription?.id;
+    
+    if (!patientId) {
+      console.warn("Aucun patient sélectionné, impossible de charger les ordonnances récentes.");
       setOrdonnancesRecentes([]);
-    } finally {
       setOrdonnancesRecentesLoading(false);
+      return;
     }
-  };
+    
+    // Appel à l'API avec les nouveaux paramètres
+    const ordonnancesData = await getOrdonnancesRecentes({
+      patient_id: patientId,
+      limit: 20, // Limite par défaut pour afficher suffisamment d'ordonnances
+      type: 'tous' // Récupère tous les types (ordonnances + examens)
+    });
+    
+    // Mise à jour avec la nouvelle structure de réponse
+    setOrdonnancesRecentes(ordonnancesData?.data?.prescriptions || []);
+    console.log("Ordonnances récentes chargées avec succès:", ordonnancesData?.data?.prescriptions || []);
+    
+    // Log des informations supplémentaires disponibles
+    if (ordonnancesData?.data) {
+      console.log("Total des prescriptions:", ordonnancesData.data.total);
+      console.log("Limite appliquée:", ordonnancesData.data.limit);
+      console.log("Période couverte:", ordonnancesData.data.periode);
+    }
+    
+  } catch (error) {
+    console.error("Erreur lors du chargement des ordonnances récentes:", error);
+    setOrdonnancesRecentes([]);
+  } finally {
+    setOrdonnancesRecentesLoading(false);
+  }
+}, [selectedPatientForPrescription]);
 
   const loadResumeAujourdhui = async () => {
     setResumeLoading(true);
@@ -4297,4 +4321,3 @@ Dr. Dupont`
 }
 
 export default DossierPatient;
-
