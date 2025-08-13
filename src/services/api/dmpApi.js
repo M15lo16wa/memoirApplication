@@ -52,8 +52,63 @@ export const requestStandardAccess = (accessData) => dmpApi.post('/access/reques
  * @returns {Promise<{accessStatus: string, authorization: object|null}>}
  */
 export const getAccessStatus = async (patientId) => {
-    const response = await dmpApi.get(`/access/status/${patientId}`);
-    return response.data.data; // Renvoie { accessStatus, authorization }
+    try {
+        if (patientId && patientId !== 'undefined') {
+            // Pour les médecins : vérifier le statut d'accès à un patient spécifique
+            const response = await dmpApi.get(`/access/status/${patientId}`);
+            return {
+                accessStatus: response.data.data.status,
+                authorization: null // Le statut est déjà filtré côté backend
+            };
+        } else {
+            // Pour les patients : récupérer leur propre statut d'accès
+            const response = await dmpApi.get('/access/patient/status');
+            const data = response.data.data;
+            
+            // Retourner une structure cohérente
+            return {
+                accessStatus: data.activeAuthorizations.length > 0 ? 'active' : 'no_access',
+                authorization: data.activeAuthorizations[0] || null,
+                // Informations supplémentaires disponibles
+                summary: data.summary,
+                allRequests: data.allRequests
+            };
+        }
+    } catch (error) {
+        console.error('Erreur lors de la récupération du statut d\'accès:', error);
+        throw error;
+    }
+};
+
+/**
+ * Fonction pour filtrer les accès par patient ID (si nécessaire côté frontend)
+ * Note: Cette fonction peut être redondante car le backend filtre déjà les données
+ */
+const filterAccessByPatient = (accessData, patientId) => {
+    if (!accessData || !patientId) return [];
+    
+    // Vérifier la structure des données
+    let arr;
+    if (Array.isArray(accessData)) {
+        arr = accessData;
+    } else if (accessData.authorizationAccess && Array.isArray(accessData.authorizationAccess)) {
+        arr = accessData.authorizationAccess;
+    } else if (accessData.allRequests && Array.isArray(accessData.allRequests)) {
+        arr = accessData.allRequests;
+    } else {
+        console.warn('Structure de données inattendue:', accessData);
+        return [];
+    }
+    
+    console.log("Accès bruts:", arr);
+    arr.forEach(acc => console.log("Clés accès:", Object.keys(acc), acc));
+    
+    // Filtrage par patient_id avec conversion en nombre
+    return arr.filter(access => {
+        const accessPatientId = Number(access.patient_id);
+        const targetPatientId = Number(patientId);
+        return accessPatientId === targetPatientId;
+    });
 };
 
 /**
@@ -75,8 +130,86 @@ export const getSentAccessRequests = async () => {
 
 // --- Gestion des demandes d'accès pour les médecins ---
 export const getMedecinAccessRequests = async (patientId) => {
-    const response = await dmpApi.get(`/access/status/${patientId}`);
-    return response.data.data;
+    try {
+        // Utiliser la nouvelle route pour les patients
+        const response = await dmpApi.get('/access/patient/status');
+        const {data} = response.data.data;
+        
+        // Si nous avons un patientId spécifique, filtrer les résultats
+        if (patientId && data && data.authorizationAccess) {
+            const filteredAccess = data.authorizationAccess.filter(access => 
+                access.patient_id === parseInt(patientId)
+            );
+            
+            // Retourner la structure filtrée
+            return {
+                ...data,
+                authorizationAccess: filteredAccess,
+                total: filteredAccess.length
+            };
+        }
+        
+        return data;
+    } catch (error) {
+        console.error('Erreur lors de la récupération des accès:', error);
+        // En cas d'erreur, retourner un tableau vide
+        return { authorizationAccess: [], total: 0 };
+    }
+};
+
+// --- Gestion des demandes d'accès envoyées par le patient ---
+export const getPatientSentAccessRequests = async (patientId) => {
+    try {
+        // Récupérer toutes les demandes d'accès
+        const response = await dmpApi.get('/access/authorization');
+        const allRequests = response.data.data;
+        
+        // Filtrer pour ne retourner que celles envoyées par le patient connecté
+        if (Array.isArray(allRequests)) {
+            return allRequests.filter(request => 
+                request.patient_id === parseInt(patientId)
+            );
+        }
+        
+        return [];
+    } catch (error) {
+        console.error('Erreur lors de la récupération des demandes envoyées:', error);
+        return [];
+    }
+};
+
+// --- Récupération des accès d'un patient spécifique ---
+export const getPatientAccessStatus = async (patientId) => {
+    try {
+        // Utiliser la route spécifique au patient si disponible
+        const response = await dmpApi.get(`/access/patient/status/${patientId}`);
+        return response.data.data;
+    } catch (error) {
+        console.error('Erreur lors de la récupération du statut d\'accès du patient:', error);
+        // Fallback vers la route générale
+        try {
+            const generalResponse = await dmpApi.get('/access/patient/status');
+            const {data} = generalResponse.data.data;
+            
+            // Filtrer pour le patient spécifique
+            if (data && data.authorizationAccess) {
+                const patientAccess = data.authorizationAccess.filter(access => 
+                    access.patient_id === parseInt(patientId)
+                );
+                
+                return {
+                    ...data,
+                    authorizationAccess: patientAccess,
+                    total: patientAccess.length
+                };
+            }
+            
+            return data;
+        } catch (fallbackError) {
+            console.error('Erreur lors du fallback:', fallbackError);
+            return { authorizationAccess: [], total: 0 };
+        }
+    }
 };
 
 //---- Gestion des demande d'acces pour le medecin ----
@@ -373,6 +506,8 @@ const dmpApiExports = {
     getSecureDossierForMedecin,
     getSentAccessRequests,
     getMedecinAccessRequests,
+    getPatientSentAccessRequests,
+    getPatientAccessStatus,
     getAutorisations,
     accepterAutorisation,
     refuserAutorisation,

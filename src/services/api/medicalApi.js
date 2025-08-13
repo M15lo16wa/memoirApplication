@@ -401,7 +401,7 @@ const getDossiersPatients = async (patientId = null) => {
         
         // Backend returns: { status: 'success', results: N, data: { dossiers: [...] } }
         if (response.data.status === 'success' && response.data.data && Array.isArray(response.data.data.dossiers)) {
-            const dossiers = response.data.data.dossiers;
+            const {dossiers} = response.data.data.dossiers;
             console.log('Found dossiers in getDossiersPatients:', dossiers);
             
             // Debug: Log the first dossier structure to see what fields are available

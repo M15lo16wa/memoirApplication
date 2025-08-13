@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { 
-  FaUser, FaFileMedical, FaShieldAlt, 
+import {
+  FaUser, FaFileMedical, FaShieldAlt,
   FaUpload, FaBell, FaQrcode, FaBook, FaChartBar,
   FaSignOutAlt, FaPlus, FaDownload,
   FaHeartbeat, FaPills, FaThermometerHalf, FaWeight,
@@ -11,6 +11,7 @@ import { ProtectedPatientRoute } from "../services/api/protectedRoute";
 import { logoutPatient, getStoredPatient } from "../services/api/authApi";
 import { DMPProvider } from "../context/DMPContext";
 import { useDMP } from "../hooks/useDMP";
+import { usePDFGenerator } from "../hooks/usePDFGenerator";
 import DMPDashboard from "../components/dmp/DMPDashboard";
 import DMPMonEspaceSante from "../components/dmp/DMPMonEspaceSante";
 import DMPNotification from "../components/ui/DMPNotification";
@@ -28,6 +29,15 @@ const HistoriqueMedical = () => {
   const [stats, setStats] = useState(null);
   const [selectedPrescription, setSelectedPrescription] = useState(null);
   const [showPrescriptionModal, setShowPrescriptionModal] = useState(false);
+  const [selectedPrescriptionsForPDF, setSelectedPrescriptionsForPDF] = useState([]);
+  const [showPDFSelectionModal, setShowPDFSelectionModal] = useState(false);
+
+  // Hook pour la génération de PDF
+  const {
+    isGenerating,
+    downloadPrescriptionPDF,
+    printPrescriptionPDF
+  } = usePDFGenerator();
 
   useEffect(() => {
     loadPatientData();
@@ -41,26 +51,26 @@ const HistoriqueMedical = () => {
       // Récupérer l'ID du patient connecté
       const storedPatient = getStoredPatient();
       const currentPatientId = storedPatient?.id_patient || storedPatient?.id;
-      
+
       if (!currentPatientId) {
         throw new Error('ID du patient non disponible');
       }
 
       setPatientId(currentPatientId);
-      
+
       // Charger toutes les prescriptions du patient
       const result = await patientApi.getAllPrescriptionsByPatient(currentPatientId);
-      
+
       if (result.success) {
         setPrescriptions(result.prescriptions || []);
         setStats(result.stats);
-        console.log('✅ Historique médical chargé:', result.prescriptions.length, 'prescriptions');
+        console.log(' Historique médical chargé:', result.prescriptions.length, 'prescriptions');
       } else {
         throw new Error(result.message || 'Erreur lors du chargement des prescriptions');
       }
 
     } catch (error) {
-      console.error('❌ Erreur lors du chargement de l\'historique médical:', error);
+      console.error('Erreur lors du chargement de l\'historique médical:', error);
       setError(error.message);
     } finally {
       setLoading(false);
@@ -71,7 +81,7 @@ const HistoriqueMedical = () => {
     try {
       setLoading(true);
       setActiveFilter(filter);
-      
+
       let result;
       switch (filter) {
         case 'all':
@@ -98,7 +108,7 @@ const HistoriqueMedical = () => {
       }
 
     } catch (error) {
-      console.error('❌ Erreur lors du filtrage:', error);
+      console.error('Erreur lors du filtrage:', error);
       setError(error.message);
     } finally {
       setLoading(false);
@@ -106,7 +116,7 @@ const HistoriqueMedical = () => {
   };
 
   const formatDate = (dateString) => {
-    if (!dateString) return 'Date non disponible';
+    if (!dateString) {return 'Date non disponible'};
     try {
       return new Date(dateString).toLocaleDateString('fr-FR', {
         year: 'numeric',
@@ -154,6 +164,112 @@ const HistoriqueMedical = () => {
   const closePrescriptionModal = () => {
     setShowPrescriptionModal(false);
     setSelectedPrescription(null);
+  };
+
+  const togglePrescriptionSelection = (prescription) => {
+    setSelectedPrescriptionsForPDF(prev => {
+      const isSelected = prev.find(p => p.id_prescription === prescription.id_prescription);
+      if (isSelected) {
+        return prev.filter(p => p.id_prescription !== prescription.id_prescription);
+      } else {
+        return [...prev, prescription];
+      }
+    });
+  };
+
+  const openPDFSelectionModal = () => {
+    if (selectedPrescriptionsForPDF.length === 0) {
+      alert('Veuillez sélectionner au moins une prescription pour générer le PDF');
+      return;
+    }
+    setShowPDFSelectionModal(true);
+  };
+
+  const closePDFSelectionModal = () => {
+    setShowPDFSelectionModal(false);
+    setSelectedPrescriptionsForPDF([]);
+  };
+
+  // Fonctions pour la génération de PDF
+  const handleGeneratePrescriptionPDF = async (prescription) => {
+    try {
+      setLoading(true);
+      await downloadPrescriptionPDF(prescription);
+      alert('PDF téléchargé avec succès !');
+    } catch (error) {
+      console.error('Erreur lors de la génération du PDF:', error);
+      alert('Erreur lors de la génération du PDF: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePrintPrescriptionPDF = async (prescription) => {
+    try {
+      setLoading(true);
+      await printPrescriptionPDF(prescription);
+      alert('Impression lancée avec succès !');
+    } catch (error) {
+      console.error('Erreur lors de l\'impression:', error);
+      alert('Erreur lors de l\'impression: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGenerateMultiplePrescriptionsPDF = async () => {
+    try {
+      if (selectedPrescriptionsForPDF.length === 1) {
+        // Une seule prescription, utiliser la fonction existante
+        await downloadPrescriptionPDF(selectedPrescriptionsForPDF[0]);
+      } else {
+        // Plusieurs prescriptions, générer un PDF combiné
+        // Pour l'instant, on génère un PDF par prescription
+        for (const prescription of selectedPrescriptionsForPDF) {
+          await downloadPrescriptionPDF(prescription);
+        }
+      }
+      closePDFSelectionModal();
+    } catch (error) {
+      console.error('Erreur lors de la génération du PDF:', error);
+      alert('Erreur lors de la génération du PDF');
+    }
+  };
+
+  const handlePrintMultiplePrescriptionsPDF = async () => {
+    try {
+      if (selectedPrescriptionsForPDF.length === 1) {
+        // Une seule prescription, utiliser la fonction existante
+        await printPrescriptionPDF(selectedPrescriptionsForPDF[0]);
+      } else {
+        // Plusieurs prescriptions, imprimer un PDF par prescription
+        for (const prescription of selectedPrescriptionsForPDF) {
+          await printPrescriptionPDF(prescription);
+        }
+      }
+      closePDFSelectionModal();
+    } catch (error) {
+      console.error('Erreur lors de l\'impression:', error);
+      alert('Erreur lors de l\'impression');
+    }
+  };
+
+  const handleGenerateMedicalHistoryPDF = async () => {
+    try {
+      alert('Fonctionnalité d\'historique médical PDF en cours de développement');
+    } catch (error) {
+      console.error('Erreur lors de la génération de l\'historique PDF:', error);
+      alert('Erreur lors de la génération de l\'historique PDF');
+    }
+  };
+
+  const handlePrintMedicalHistoryPDF = async () => {
+    try {
+      alert('Fonctionnalité d\'impression d\'historique médical PDF en cours de développement');
+    } catch (error) {
+      console.error('Erreur lors de l\'impression de l\'historique:', error);
+      alert('Erreur lors de l\'impression de l\'historique');
+    }
   };
 
   // Fermer le modal avec la touche Escape
@@ -231,44 +347,94 @@ const HistoriqueMedical = () => {
               </p>
             )}
           </div>
-          
-          {/* Statistiques rapides */}
-          {stats && (
-            <div className="flex flex-wrap gap-2">
-              {stats.parType && Object.entries(stats.parType).map(([type, count]) => (
-                <span key={type} className="px-3 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
-                  {type}: {count}
-                </span>
-              ))}
+
+          <div className="flex flex-col sm:flex-row items-center gap-3">
+            {/* Statistiques rapides */}
+            {stats && (
+              <div className="flex flex-wrap gap-2">
+                {stats.parType && Object.entries(stats.parType).map(([type, count]) => (
+                  <span key={type} className="px-3 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
+                    {type}: {count}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {/* Boutons PDF */}
+            <div className="flex space-x-2">
+              <button
+                onClick={handleGenerateMedicalHistoryPDF}
+                disabled={isGenerating || prescriptions.length === 0}
+                className="flex items-center px-3 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                title="Générer l'historique médical en PDF"
+              >
+                <FaDownload className="w-4 h-4 mr-2" />
+                {isGenerating ? 'Génération...' : 'PDF'}
+              </button>
+              <button
+                onClick={handlePrintMedicalHistoryPDF}
+                disabled={isGenerating || prescriptions.length === 0}
+                className="flex items-center px-3 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                title="Imprimer l'historique médical"
+              >
+                <FaPrint className="w-4 h-4 mr-2" />
+                {isGenerating ? 'Préparation...' : 'Imprimer'}
+              </button>
             </div>
-          )}
+          </div>
         </div>
       </div>
 
-      {/* Filtres */}
+      {/* Filtres et sélection PDF */}
       <div className="p-4 border-b bg-gray-50">
-        <div className="flex flex-wrap gap-2">
-          {[
-            { key: 'all', label: 'Toutes', count: prescriptions.length },
-            { key: 'active', label: 'Actives', count: stats?.parStatut?.active || 0 },
-            { key: 'ordonnances', label: 'Ordonnances', count: stats?.parType?.ordonnance || 0 },
-            { key: 'examens', label: 'Examens', count: stats?.parType?.examen || 0 }
-          ].map((filter) => (
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+          <div className="flex flex-wrap gap-2">
+            {[
+              { key: 'all', label: 'Toutes', count: prescriptions.length },
+              { key: 'active', label: 'Actives', count: stats?.parStatut?.active || 0 },
+              { key: 'ordonnances', label: 'Ordonnances', count: stats?.parType?.ordonnance || 0 },
+              { key: 'examens', label: 'Examens', count: stats?.parType?.examen || 0 }
+            ].map((filter) => (
+              <button
+                key={filter.key}
+                onClick={() => handleFilterChange(filter.key)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeFilter === filter.key
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
+                  }`}
+              >
+                {filter.label}
+                <span className="ml-2 bg-opacity-20 bg-black text-inherit px-2 py-1 rounded-full text-xs">
+                  {filter.count}
+                </span>
+              </button>
+            ))}
+          </div>
+
+          {/* Boutons de sélection PDF */}
+          <div className="flex items-center gap-3 pt-3 border-t border-gray-200">
+            <span className="text-sm text-gray-600">Sélectionner pour PDF :</span>
             <button
-              key={filter.key}
-              onClick={() => handleFilterChange(filter.key)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                activeFilter === filter.key
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
-              }`}
+              onClick={() => setSelectedPrescriptionsForPDF(prescriptions)}
+              className="px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
             >
-              {filter.label}
-              <span className="ml-2 bg-opacity-20 bg-black text-inherit px-2 py-1 rounded-full text-xs">
-                {filter.count}
-              </span>
+              Tout sélectionner
             </button>
-          ))}
+            <button
+              onClick={() => setSelectedPrescriptionsForPDF([])}
+              className="px-3 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+            >
+              Désélectionner
+            </button>
+            {selectedPrescriptionsForPDF.length > 0 && (
+              <button
+                onClick={openPDFSelectionModal}
+                className="px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700"
+              >
+                Générer PDF ({selectedPrescriptionsForPDF.length})
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -276,8 +442,8 @@ const HistoriqueMedical = () => {
         {prescriptions.length > 0 ? (
           <div className="space-y-4">
             {prescriptions.map((prescription, index) => (
-              <div 
-                key={index} 
+              <div
+                key={index}
                 className="border rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer group focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
                 onClick={() => handlePrescriptionClick(prescription)}
                 onKeyDown={(e) => {
@@ -291,15 +457,27 @@ const HistoriqueMedical = () => {
                 aria-label={`Voir les détails de la prescription ${prescription.type_prescription} du ${formatDate(prescription.date_prescription)}`}
               >
                 <div className="flex justify-between items-start">
+                  {/* Checkbox de sélection */}
+                  <div className="flex items-center mr-3">
+                    <input
+                      type="checkbox"
+                      checked={selectedPrescriptionsForPDF.some(p => p.id_prescription === prescription.id_prescription)}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        togglePrescriptionSelection(prescription);
+                      }}
+                      className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+                    />
+                  </div>
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
                       {getTypeIcon(prescription.type_prescription)}
                       <div>
                         <h3 className="font-medium text-gray-900 group-hover:text-blue-600 transition-colors">
                           {prescription.type_prescription === 'ordonnance' ? 'Ordonnance médicale' :
-                           prescription.type_prescription === 'examen' ? 'Demande d\'examen' :
-                           prescription.type_prescription === 'consultation' ? 'Consultation' :
-                           prescription.type_prescription}
+                            prescription.type_prescription === 'examen' ? 'Demande d\'examen' :
+                              prescription.type_prescription === 'consultation' ? 'Consultation' :
+                                prescription.type_prescription}
                           <span className="ml-2 text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity">
                             <svg className="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -315,7 +493,7 @@ const HistoriqueMedical = () => {
                               Détails
                             </span>
                           )}
-                          
+
                           {/* Badge pour indiquer qu'il y a un QR Code */}
                           {prescription.qrCode && (
                             <span className="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
@@ -339,12 +517,12 @@ const HistoriqueMedical = () => {
                         </p>
                       </div>
                     </div>
-                    
+
                     {/* Description */}
                     {prescription.description && (
                       <p className="text-sm text-gray-700 mb-3">{prescription.description}</p>
                     )}
-                    
+
                     {/* Détails spécifiques selon le type de prescription */}
                     {prescription.type_prescription === 'ordonnance' && (
                       <div className="mb-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
@@ -388,21 +566,21 @@ const HistoriqueMedical = () => {
                                   <span className="text-sm text-blue-900">{prescription.quantite} {prescription.unite}</span>
                                 </div>
                               )}
-                              
+
                               {prescription.forme_pharmaceutique && (
                                 <div className="flex items-center gap-2">
                                   <span className="text-xs font-medium text-blue-700">Forme :</span>
                                   <span className="text-sm text-blue-900">{prescription.forme_pharmaceutique}</span>
                                 </div>
                               )}
-                              
+
                               {prescription.code_cip && (
                                 <div className="flex items-center gap-2">
                                   <span className="text-xs font-medium text-blue-700">Code CIP :</span>
                                   <span className="text-sm text-blue-900 font-mono">{prescription.code_cip}</span>
                                 </div>
                               )}
-                              
+
                               {prescription.atc && (
                                 <div className="flex items-center gap-2">
                                   <span className="text-xs font-medium text-blue-700">Code ATC :</span>
@@ -428,7 +606,7 @@ const HistoriqueMedical = () => {
                                 <span className="text-sm text-orange-800 ml-2">{prescription.effets_indesirables}</span>
                               </div>
                             )}
-                            
+
                             {/* QR Code et informations de traitement */}
                             {(prescription.qrCode || prescription.duree_traitement || prescription.renouvelable !== null) && (
                               <div className="mt-3 pt-3 border-t border-blue-200">
@@ -437,15 +615,15 @@ const HistoriqueMedical = () => {
                                   {prescription.qrCode && (
                                     <div className="flex flex-col items-center">
                                       <span className="text-xs font-medium text-blue-700 mb-2">QR Code</span>
-                                      <img 
-                                        src={prescription.qrCode} 
+                                      <img
+                                        src={prescription.qrCode}
                                         alt="QR Code de la prescription"
                                         className="w-20 h-20 border border-blue-300 rounded-lg"
                                         title="QR Code de la prescription"
                                       />
                                     </div>
                                   )}
-                                  
+
                                   {/* Informations de traitement */}
                                   <div className="space-y-2">
                                     {prescription.duree_traitement && (
@@ -457,11 +635,10 @@ const HistoriqueMedical = () => {
                                     {prescription.renouvelable !== null && (
                                       <div className="flex items-center gap-2">
                                         <span className="text-xs font-medium text-blue-700">Renouvelable :</span>
-                                        <span className={`text-xs px-2 py-1 rounded-full ${
-                                          prescription.renouvelable 
-                                            ? 'bg-green-100 text-green-800' 
+                                        <span className={`text-xs px-2 py-1 rounded-full ${prescription.renouvelable
+                                            ? 'bg-green-100 text-green-800'
                                             : 'bg-red-100 text-red-800'
-                                        }`}>
+                                          }`}>
                                           {prescription.renouvelable ? 'Oui' : 'Non'}
                                         </span>
                                       </div>
@@ -484,7 +661,7 @@ const HistoriqueMedical = () => {
                         )}
                       </div>
                     )}
-                    
+
                     {/* Médicaments (pour les prescriptions avec structure medicaments) */}
                     {prescription.medicaments && prescription.medicaments.length > 0 ? (
                       <div className="mb-3">
@@ -524,7 +701,7 @@ const HistoriqueMedical = () => {
                         <p className="text-xs text-gray-500 italic">Aucun médicament spécifique listé</p>
                       </div>
                     )}
-                    
+
                     {/* Examens (pour les prescriptions avec structure examens) */}
                     {prescription.examens && prescription.examens.length > 0 ? (
                       <div className="mb-3">
@@ -535,11 +712,10 @@ const HistoriqueMedical = () => {
                               <div className="flex items-center justify-between">
                                 <span className="text-sm font-medium text-green-900">{exam.nom}</span>
                                 {exam.urgence && (
-                                  <span className={`text-xs px-2 py-1 rounded-full ${
-                                    exam.urgence === 'urgent' 
-                                      ? 'bg-red-100 text-red-800' 
+                                  <span className={`text-xs px-2 py-1 rounded-full ${exam.urgence === 'urgent'
+                                      ? 'bg-red-100 text-red-800'
                                       : 'bg-green-100 text-green-800'
-                                  }`}>
+                                    }`}>
                                     {exam.urgence === 'urgent' ? 'URGENT' : exam.urgence}
                                   </span>
                                 )}
@@ -568,7 +744,7 @@ const HistoriqueMedical = () => {
                         <p className="text-xs text-gray-500 italic">Aucun examen spécifique listé</p>
                       </div>
                     )}
-                    
+
                     {/* Informations complémentaires */}
                     <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -580,21 +756,21 @@ const HistoriqueMedical = () => {
                               {prescription.statut || 'Statut inconnu'}
                             </span>
                           </div>
-                          
+
                           {prescription.date_debut && (
                             <div className="flex items-center gap-2">
                               <span className="text-xs font-medium text-gray-600">Début :</span>
                               <span className="text-xs text-gray-900">{formatDate(prescription.date_debut)}</span>
                             </div>
                           )}
-                          
+
                           {prescription.date_fin && (
                             <div className="flex items-center gap-2">
                               <span className="text-xs font-medium text-gray-600">Fin :</span>
                               <span className="text-xs text-gray-900">{formatDate(prescription.date_fin)}</span>
                             </div>
                           )}
-                          
+
                           {prescription.date_arret && (
                             <div className="flex items-center gap-2">
                               <span className="text-xs font-medium text-gray-600">Arrêt :</span>
@@ -602,7 +778,7 @@ const HistoriqueMedical = () => {
                             </div>
                           )}
                         </div>
-                        
+
                         {/* Deuxième colonne - Médecin et établissement */}
                         <div className="space-y-2">
                           {prescription.medecin && (
@@ -613,15 +789,15 @@ const HistoriqueMedical = () => {
                               </span>
                             </div>
                           )}
-                          
+
                           {prescription.redacteur && (
                             <div className="space-y-1">
-                                           <div className="flex items-center gap-2">
-               <span className="text-xs font-medium text-gray-600">Rédacteur :</span>
-               <span className="text-xs text-gray-900">
-                 Dr. {prescription.redacteur.nom_complet || `${prescription.redacteur.prenom || ''} ${prescription.redacteur.nom || ''}`.trim() || 'N/A'}
-               </span>
-             </div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-medium text-gray-600">Rédacteur :</span>
+                                <span className="text-xs text-gray-900">
+                                  Dr. {prescription.redacteur.nom_complet || `${prescription.redacteur.prenom || ''} ${prescription.redacteur.nom || ''}`.trim() || 'N/A'}
+                                </span>
+                              </div>
                               {prescription.redacteur.specialite && (
                                 <div className="flex items-center gap-2 ml-4">
                                   <span className="text-xs text-gray-500">Spécialité :</span>
@@ -636,7 +812,7 @@ const HistoriqueMedical = () => {
                               )}
                             </div>
                           )}
-                          
+
                           {prescription.etablissement && (
                             <div className="flex items-center gap-2">
                               <span className="text-xs font-medium text-gray-600">Établissement :</span>
@@ -645,7 +821,7 @@ const HistoriqueMedical = () => {
                           )}
                         </div>
                       </div>
-                      
+
                       {/* Informations supplémentaires */}
                       {(prescription.instructions_speciales || prescription.pharmacieDelivrance || prescription.signatureElectronique) && (
                         <div className="mt-3 pt-3 border-t border-gray-200 space-y-2">
@@ -655,14 +831,14 @@ const HistoriqueMedical = () => {
                               <span className="text-xs text-gray-900">{prescription.instructions_speciales}</span>
                             </div>
                           )}
-                          
+
                           {prescription.pharmacieDelivrance && (
                             <div className="flex items-center gap-2">
                               <span className="text-xs font-medium text-gray-600">Pharmacie de délivrance :</span>
                               <span className="text-xs text-gray-900">{prescription.pharmacieDelivrance}</span>
                             </div>
                           )}
-                          
+
                           {prescription.signatureElectronique && (
                             <div className="flex items-center gap-2">
                               <span className="text-xs font-medium text-gray-600">Signature électronique :</span>
@@ -675,28 +851,46 @@ const HistoriqueMedical = () => {
                       )}
                     </div>
                   </div>
-                  
+
                   <div className="flex flex-col space-y-2 ml-4" onClick={(e) => e.stopPropagation()}>
                     {/* Boutons d'action principaux */}
                     <div className="flex space-x-2">
-                      <button 
-                        className="text-blue-600 hover:text-blue-800 p-2 rounded hover:bg-blue-50"
-                        title="Télécharger"
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (prescription.type_prescription === 'ordonnance') {
+                            handleGeneratePrescriptionPDF(prescription);
+                          } else {
+                            handleGeneratePrescriptionPDF(prescription);
+                          }
+                        }}
+                        disabled={isGenerating}
+                        className="text-blue-600 hover:text-blue-800 p-2 rounded hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Télécharger en PDF"
                       >
                         <FaDownload />
                       </button>
-                      <button 
-                        className="text-green-600 hover:text-green-800 p-2 rounded hover:bg-green-50"
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (prescription.type_prescription === 'ordonnance') {
+                            handlePrintPrescriptionPDF(prescription);
+                          } else {
+                            handlePrintPrescriptionPDF(prescription);
+                          }
+                        }}
+                        disabled={isGenerating}
+                        className="text-green-600 hover:text-green-800 p-2 rounded hover:bg-green-50 disabled:opacity-50 disabled:cursor-not-allowed"
                         title="Imprimer"
                       >
                         <FaPrint />
                       </button>
                     </div>
-                    
+
                     {/* Boutons spécifiques au QR Code */}
                     {prescription.qrCode && (
                       <div className="flex space-x-2 pt-2 border-t border-gray-200">
-                        <button 
+                        <button
                           className="text-purple-600 hover:text-purple-800 p-2 rounded hover:bg-purple-50 text-xs"
                           title="Télécharger QR Code"
                           onClick={(e) => {
@@ -711,7 +905,7 @@ const HistoriqueMedical = () => {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V6a1 1 0 00-1-1H5a1 1 0 00-1 1v1a1 1 0 001 1zm12 0h2a1 1 0 001-1V6a1 1 0 00-1-1h-2a1 1 0 00-1 1v1a1 1 0 001 1zM5 20h2a1 1 0 001-1v-1a1 1 0 00-1-1H5a1 1 0 00-1 1v1a1 1 0 001 1z" />
                           </svg>
                         </button>
-                        <button 
+                        <button
                           className="text-indigo-600 hover:text-indigo-800 p-2 rounded hover:bg-indigo-50 text-xs"
                           title="Voir QR Code en grand"
                           onClick={(e) => {
@@ -738,7 +932,7 @@ const HistoriqueMedical = () => {
               Aucune prescription trouvée
             </p>
             <p className="text-gray-400">
-              {activeFilter === 'all' 
+              {activeFilter === 'all'
                 ? 'Vous n\'avez pas encore de prescriptions dans votre historique médical.'
                 : `Aucune prescription de type "${activeFilter}" trouvée.`
               }
@@ -749,11 +943,11 @@ const HistoriqueMedical = () => {
 
       {/* Modal pour afficher les détails de la prescription */}
       {showPrescriptionModal && selectedPrescription && (
-        <div 
+        <div
           className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
           onClick={closePrescriptionModal}
         >
-          <div 
+          <div
             className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
@@ -764,9 +958,9 @@ const HistoriqueMedical = () => {
                 <div>
                   <h3 className="text-xl font-semibold text-gray-900">
                     {selectedPrescription.type_prescription === 'ordonnance' ? 'Ordonnance médicale' :
-                     selectedPrescription.type_prescription === 'examen' ? 'Demande d\'examen' :
-                     selectedPrescription.type_prescription === 'consultation' ? 'Consultation' :
-                     selectedPrescription.type_prescription}
+                      selectedPrescription.type_prescription === 'examen' ? 'Demande d\'examen' :
+                        selectedPrescription.type_prescription === 'consultation' ? 'Consultation' :
+                          selectedPrescription.type_prescription}
                   </h3>
                   <p className="text-sm text-gray-600">
                     Prescrit le {formatDate(selectedPrescription.date_prescription)}
@@ -948,19 +1142,137 @@ const HistoriqueMedical = () => {
                 >
                   Fermer
                 </button>
-                <button 
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
-                  title="Télécharger"
+                <button
+                  onClick={() => {
+                    if (selectedPrescription.type_prescription === 'ordonnance') {
+                      handleGeneratePrescriptionPDF(selectedPrescription);
+                    } else {
+                      handleGeneratePrescriptionPDF(selectedPrescription);
+                    }
+                  }}
+                  disabled={isGenerating}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                  title="Télécharger en PDF"
                 >
                   <FaDownload />
-                  Télécharger
+                  {isGenerating ? 'Génération...' : 'Télécharger'}
                 </button>
-                <button 
-                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
+                <button
+                  onClick={() => {
+                    if (selectedPrescription.type_prescription === 'ordonnance') {
+                      handlePrintPrescriptionPDF(selectedPrescription);
+                    } else {
+                      handlePrintPrescriptionPDF(selectedPrescription);
+                    }
+                  }}
+                  disabled={isGenerating}
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
                   title="Imprimer"
                 >
                   <FaPrint />
-                  Imprimer
+                  {isGenerating ? 'Préparation...' : 'Imprimer'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de sélection PDF */}
+      {showPDFSelectionModal && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          onClick={closePDFSelectionModal}
+        >
+          <div
+            className="bg-white rounded-lg shadow-xl max-w-2xl w-full"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header du modal */}
+            <div className="flex justify-between items-center p-6 border-b">
+              <div>
+                <h3 className="text-xl font-semibold text-gray-900">
+                  Génération de PDF
+                </h3>
+                <p className="text-sm text-gray-600">
+                  {selectedPrescriptionsForPDF.length} prescription(s) sélectionnée(s)
+                </p>
+              </div>
+              <button
+                onClick={closePDFSelectionModal}
+                className="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-100"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Contenu du modal */}
+            <div className="p-6">
+              <div className="mb-6">
+                <h4 className="text-lg font-medium text-gray-900 mb-3">Prescriptions sélectionnées :</h4>
+                <div className="space-y-2 max-h-40 overflow-y-auto">
+                  {selectedPrescriptionsForPDF.map((prescription, index) => (
+                    <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                      <div className="flex items-center gap-3">
+                        {getTypeIcon(prescription.type_prescription)}
+                        <div>
+                          <p className="font-medium text-gray-900">
+                            {prescription.type_prescription === 'ordonnance' ? 'Ordonnance médicale' :
+                              prescription.type_prescription === 'examen' ? 'Demande d\'examen' :
+                                prescription.type_prescription === 'consultation' ? 'Consultation' :
+                                  prescription.type_prescription}
+                          </p>
+                          <p className="text-sm text-gray-600">
+                            {formatDate(prescription.date_prescription)}
+                          </p>
+                          {prescription.prescriptionNumber && (
+                            <p className="text-xs text-gray-500 font-mono">
+                              N° {prescription.prescriptionNumber}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => togglePrescriptionSelection(prescription)}
+                        className="text-red-500 hover:text-red-700 p-1"
+                        title="Retirer de la sélection"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex justify-end gap-3 pt-6 border-t">
+                <button
+                  onClick={closePDFSelectionModal}
+                  className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                >
+                  Annuler
+                </button>
+                <button
+                  onClick={handleGenerateMultiplePrescriptionsPDF}
+                  disabled={isGenerating}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                  title="Télécharger les PDFs"
+                >
+                  <FaDownload />
+                  {isGenerating ? 'Génération...' : 'Télécharger'}
+                </button>
+                <button
+                  onClick={handlePrintMultiplePrescriptionsPDF}
+                  disabled={isGenerating}
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                  title="Imprimer les PDFs"
+                >
+                  <FaPrint />
+                  {isGenerating ? 'Préparation...' : 'Imprimer'}
                 </button>
               </div>
             </div>
@@ -987,7 +1299,7 @@ const DMP = () => {
   const [autoMesure, setAutoMesure] = useState({
     type_mesure: 'poids',
     valeur: '',
-    valeur_secondaire: '', // Pour tension (systolique/diastolique)
+    valeur_secondaire: '', 
     unite: '',
     unite_secondaire: '', // Pour tension (mmHg)
     commentaire: '',
@@ -997,7 +1309,7 @@ const DMP = () => {
   const [uploadFile, setUploadFile] = useState(null);
   const [uploadTitle, setUploadTitle] = useState('');
   const [uploadDescription, setUploadDescription] = useState('');
-  
+
   // États pour les notifications en temps réel
   const [currentNotification, setCurrentNotification] = useState(null);
   const [showNotification, setShowNotification] = useState(false);
@@ -1005,9 +1317,18 @@ const DMP = () => {
   const navigate = useNavigate();
   const { createAutoMesure } = useDMP();
 
+  // Hook pour la génération de PDF
+  const {
+    isGenerating: isGeneratingPDF,
+    error: pdfError,
+    generateUrgencyCardPDF,
+    printUrgencyCardPDF,
+    clearError: clearPDFError
+  } = usePDFGenerator();
+
   useEffect(() => {
     loadInitialData();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Fermer le menu du profil quand on clique en dehors
@@ -1040,27 +1361,31 @@ const DMP = () => {
         const tableauData = await dmpApi.getTableauDeBord();
         setTableauDeBord(tableauData.data?.tableau_de_bord);
       } catch (tableauError) {
-        console.warn('⚠️ Tableau de bord non disponible:', tableauError.message);
+        console.warn('Tableau de bord non disponible:', tableauError.message);
         setTableauDeBord(null);
       }
 
       // Charger les notifications des droits d'accès depuis l'API réelle
-      console.log('🔍 Chargement des notifications des droits d\'accès depuis l\'API...');
+      console.log('Chargement des notifications des droits d\'accès depuis l\'API...');
       try {
         // Récupérer l'ID du patient connecté
         const storedPatient = getStoredPatient();
         const patientId = storedPatient?.id_patient || storedPatient?.id;
-        
+
         if (!patientId) {
-          console.warn('⚠️ ID patient non disponible pour charger les notifications');
+          console.warn('ID patient non disponible pour charger les notifications');
           setNotificationsDroitsAcces([]);
         } else {
-          const pendingRequests = await dmpApi.getMedecinAccessRequests(patientId); 
-          console.log('📄 Demandes reçues de l\'API:', pendingRequests);
-          setNotificationsDroitsAcces(pendingRequests || []);
+          const pendingRequests = await dmpApi.getMedecinAccessRequests(patientId);
+          console.log('Demandes reçues de l\'API:', pendingRequests);
+
+          // Filtrer pour ne garder que les accès du patient connecté
+          const filteredRequests = filterAccessByPatient(pendingRequests, patientId);
+          console.log('Accès filtrés pour le patient:', filteredRequests);
+          setNotificationsDroitsAcces(filteredRequests);
         }
       } catch (notificationsError) {
-        console.warn('⚠️ Notifications non disponibles:', notificationsError.message);
+        console.warn('Notifications non disponibles:', notificationsError.message);
         setNotificationsDroitsAcces([]);
       }
 
@@ -1068,7 +1393,7 @@ const DMP = () => {
       await loadAutorisationsValidees();
 
     } catch (error) {
-      console.error('❌ Erreur lors du chargement des données initiales:', error);
+      console.error('Erreur lors du chargement des données initiales:', error);
       setError(`Erreur lors du chargement: ${error.message}`);
     } finally {
       setLoading(false);
@@ -1110,6 +1435,15 @@ const DMP = () => {
     }
   };
 
+  // Fonction pour filtrer les accès par patient ID
+const filterAccessByPatient = (accessData, patientId) => {
+  if (!accessData || !patientId) return [];
+  const arr = accessData.authorizationAccess || accessData;
+  console.log("Accès bruts:", arr);
+  arr.forEach(acc => console.log("Clés accès:", Object.keys(acc), acc));
+  return arr.filter(access => Number(access.patient_id) === Number(patientId));
+};
+
   // Fonction pour obtenir les notifications à afficher
   const getNotificationsToDisplay = () => {
     return notificationsDroitsAcces;
@@ -1131,20 +1465,24 @@ const DMP = () => {
             // Récupérer l'ID du patient connecté
             const storedPatient = getStoredPatient();
             const patientId = storedPatient?.id_patient || storedPatient?.id;
-            
+
             if (!patientId) {
               console.warn('⚠️ ID patient non disponible pour charger les notifications');
               setNotificationsDroitsAcces([]);
             } else {
               const pendingRequests = await dmpApi.getMedecinAccessRequests(patientId);
               console.log('📄 Notifications reçues (onglet):', pendingRequests);
-              setNotificationsDroitsAcces(Array.isArray(pendingRequests) ? pendingRequests : []);
+
+              // Filtrer pour ne garder que les accès du patient connecté
+              const filteredRequests = filterAccessByPatient(pendingRequests, patientId);
+              console.log('🔍 Accès filtrés pour le patient (onglet):', filteredRequests);
+              setNotificationsDroitsAcces(filteredRequests);
             }
           } catch (notificationsError) {
             console.warn('⚠️ Notifications non disponibles:', notificationsError.message);
             setNotificationsDroitsAcces([]);
           }
-          
+
           // Charger aussi les autorisations validées
           await loadAutorisationsValidees();
           break;
@@ -1179,8 +1517,8 @@ const DMP = () => {
   const handleLogout = async () => {
     try {
       await logoutPatient();
-      navigate('/connexion', { 
-        state: { message: 'Vous avez été déconnecté avec succès' } 
+      navigate('/connexion', {
+        state: { message: 'Vous avez été déconnecté avec succès' }
       });
     } catch (error) {
       console.error('Erreur lors de la déconnexion:', error);
@@ -1191,17 +1529,17 @@ const DMP = () => {
   const handleMarquerNotificationLue = async (notificationId) => {
     try {
       console.log('📝 DMP: Marquage de la notification comme lue, ID:', notificationId);
-      
+
       // Appel API pour marquer comme lue
       await dmpApi.marquerNotificationDroitsAccesLue(notificationId);
-      
+
       console.log('✅ DMP: Notification marquée comme lue avec succès');
-      
+
       // Recharger les notifications depuis l'API pour avoir les données à jour
       console.log('🔄 DMP: Rechargement des notifications après marquage...');
       const storedPatient = getStoredPatient();
       const patientId = storedPatient?.id_patient || storedPatient?.id;
-      
+
       if (patientId) {
         const pendingRequests = await dmpApi.getMedecinAccessRequests(patientId);
         console.log('📄 DMP: Nouvelles notifications reçues:', pendingRequests);
@@ -1210,10 +1548,10 @@ const DMP = () => {
 
       // Recharger aussi les autorisations validées
       await loadAutorisationsValidees();
-      
+
       // Afficher une confirmation
       alert('Notification marquée comme lue');
-      
+
     } catch (error) {
       console.error('❌ DMP: Erreur lors du marquage de la notification:', error);
       alert(`Erreur lors du marquage de la notification: ${error.message}`);
@@ -1223,10 +1561,10 @@ const DMP = () => {
   const handleRepondreDemandeAcces = async (request, reponse) => {
     try {
       const apiDecision = reponse === 'accepter' || reponse === 'accept' ? 'accept' : 'refuse';
-      const confirmationMessage = apiDecision === 'accept' 
+      const confirmationMessage = apiDecision === 'accept'
         ? `Êtes-vous sûr de vouloir autoriser l'accès au Dr. ${request.professionnel.prenom} ${request.professionnel.nom} ?`
         : `Êtes-vous sûr de vouloir refuser l'accès ?`;
-      
+
       if (!window.confirm(confirmationMessage)) {
         return;
       }
@@ -1238,8 +1576,8 @@ const DMP = () => {
       // Appel direct à la nouvelle fonction API
       await dmpApi.respondToAccessRequest(autorisationId, apiDecision);
 
-      const message = apiDecision === 'accept' 
-        ? 'Demande d\'accès acceptée avec succès !' 
+      const message = apiDecision === 'accept'
+        ? 'Demande d\'accès acceptée avec succès !'
         : 'Demande d\'accès refusée.';
       alert(message);
       rafraichirNotifications();
@@ -1248,18 +1586,18 @@ const DMP = () => {
       console.error('❌ Erreur lors de la réponse à la demande:', error);
       alert(`Erreur : ${error.message || "Impossible de traiter votre réponse."}`);
     }
-};
+  };
 
-    const rafraichirNotifications = async () => {
+  const rafraichirNotifications = async () => {
     try {
       console.log('🔄 DMP: Rafraîchissement des notifications depuis l\'API...');
       const pendingRequests = await dmpApi.getMedecinAccessRequests();
       console.log('✅ DMP: Notifications reçues de l\'API:', pendingRequests);
       setNotificationsDroitsAcces(Array.isArray(pendingRequests) ? pendingRequests : []);
-      
+
       // Recharger aussi les autorisations validées
       await loadAutorisationsValidees();
-      
+
     } catch (error) {
       console.error('❌ DMP: Erreur lors du rafraîchissement des notifications:', error);
       alert(`Erreur lors du rafraîchissement des notifications: ${error.message}`);
@@ -1284,7 +1622,7 @@ const DMP = () => {
       console.log('🎯 DMP: === DÉBUT ACCEPTATION DEMANDE D\'ACCÈS ===');
       console.log('📋 DMP: notificationId reçu:', notificationId);
       console.log('📋 DMP: Nombre total de notifications:', notificationsDroitsAcces.length);
-      
+
       // Trouver la notification correspondante
       const notification = notificationsDroitsAcces.find(n => n.id_notification === notificationId);
       if (!notification) {
@@ -1293,7 +1631,7 @@ const DMP = () => {
         alert('Erreur: Notification non trouvée');
         return;
       }
-      
+
       console.log('✅ DMP: Notification trouvée:', {
         id_notification: notification.id_notification,
         type_notification: notification.type_notification,
@@ -1302,20 +1640,20 @@ const DMP = () => {
         date_creation: notification.date_creation,
         statut_envoi: notification.statut_envoi
       });
-      
+
       // Utiliser la fonction helper pour trouver l'ID d'autorisation
       console.log('🔍 DMP: Recherche de l\'ID d\'autorisation pour la notification...');
       const autorisationId = await dmpApi.findAutorisationIdFromNotification(notification);
-      
+
       if (!autorisationId) {
         console.error('❌ DMP: Impossible de trouver l\'ID d\'autorisation pour cette notification');
         console.log('🔍 DMP: Détails de la notification pour debug:', notification);
-        
+
         // Vérifier si l'autorisation existe
         console.log('🔍 DMP: Vérification de l\'existence de l\'autorisation...');
         const autorisation = await dmpApi.verifierAutorisationExistence(notificationId);
         console.log('🔍 DMP: Résultat de la vérification:', autorisation);
-        
+
         if (!autorisation) {
           alert('Erreur: Impossible de trouver l\'autorisation correspondante. Veuillez réessayer ou contacter le support.');
           return;
@@ -1323,40 +1661,40 @@ const DMP = () => {
       }
 
       console.log('✅ DMP: ID d\'autorisation trouvé:', autorisationId);
-      
+
       // Vérifier si l'autorisation existe
       const autorisation = await dmpApi.verifierAutorisationExistence(autorisationId);
       console.log('🔍 DMP: Vérification de l\'autorisation:', autorisation);
-      
+
       if (!autorisation) {
         console.error('❌ DMP: L\'autorisation trouvée n\'existe pas ou n\'est pas valide');
         alert('Erreur: L\'autorisation trouvée n\'est pas valide. Veuillez réessayer ou contacter le support.');
         return;
       }
-      
+
       console.log('✅ DMP: Acceptation de la demande d\'accès:', autorisationId);
       const result = await dmpApi.accepterAutorisation(autorisationId, 'Accès autorisé par le patient');
-      
+
       // Vérifier si l'autorisation était déjà active
       if (result && result.success && result.message === 'L\'autorisation est déjà active') {
         console.log('⚠️ DMP: L\'autorisation était déjà active');
         alert('Cette autorisation est déjà active');
       } else {
         console.log('✅ DMP: Autorisation acceptée avec succès');
-        
-                            // Recharger les notifications depuis l'API
-                    console.log('🔄 DMP: Rechargement des notifications après acceptation...');
-                    const pendingRequests = await dmpApi.getMedecinAccessRequests();
-                    console.log('📄 DMP: Nouvelles notifications reçues:', pendingRequests);
-                    setNotificationsDroitsAcces(Array.isArray(pendingRequests) ? pendingRequests : []);
 
-                    // Recharger aussi les autorisations validées
-                    await loadAutorisationsValidees();
-        
+        // Recharger les notifications depuis l'API
+        console.log('🔄 DMP: Rechargement des notifications après acceptation...');
+        const pendingRequests = await dmpApi.getMedecinAccessRequests();
+        console.log('📄 DMP: Nouvelles notifications reçues:', pendingRequests);
+        setNotificationsDroitsAcces(Array.isArray(pendingRequests) ? pendingRequests : []);
+
+        // Recharger aussi les autorisations validées
+        await loadAutorisationsValidees();
+
         // Afficher une confirmation
         alert('Demande d\'accès acceptée avec succès');
       }
-      
+
       console.log('🎯 DMP: === FIN ACCEPTATION DEMANDE D\'ACCÈS ===');
     } catch (error) {
       console.error('❌ DMP: Erreur lors de l\'acceptation:', error);
@@ -1371,7 +1709,7 @@ const DMP = () => {
       console.log('🎯 DMP: === DÉBUT REFUS DEMANDE D\'ACCÈS ===');
       console.log('📋 DMP: notificationId reçu:', notificationId);
       console.log('📋 DMP: Nombre total de notifications:', notificationsDroitsAcces.length);
-      
+
       // Trouver la notification correspondante
       const notification = notificationsDroitsAcces.find(n => n.id_notification === notificationId);
       if (!notification) {
@@ -1380,7 +1718,7 @@ const DMP = () => {
         alert('Erreur: Notification non trouvée');
         return;
       }
-      
+
       console.log('✅ DMP: Notification trouvée:', {
         id_notification: notification.id_notification,
         type_notification: notification.type_notification,
@@ -1389,20 +1727,20 @@ const DMP = () => {
         date_creation: notification.date_creation,
         statut_envoi: notification.statut_envoi
       });
-      
+
       // Utiliser la fonction helper pour trouver l'ID d'autorisation
       console.log('🔍 DMP: Recherche de l\'ID d\'autorisation pour la notification...');
       const autorisationId = await dmpApi.findAutorisationIdFromNotification(notification);
-      
+
       if (!autorisationId) {
         console.error('❌ DMP: Impossible de trouver l\'ID d\'autorisation pour cette notification');
         console.log('🔍 DMP: Détails de la notification pour debug:', notification);
-        
+
         // Vérifier si l'autorisation existe
         console.log('🔍 DMP: Vérification de l\'existence de l\'autorisation...');
         const autorisation = await dmpApi.verifierAutorisationExistence(notificationId);
         console.log('🔍 DMP: Résultat de la vérification:', autorisation);
-        
+
         if (!autorisation) {
           alert('Erreur: Impossible de trouver l\'autorisation correspondante. Veuillez réessayer ou contacter le support.');
           return;
@@ -1410,40 +1748,40 @@ const DMP = () => {
       }
 
       console.log('✅ DMP: ID d\'autorisation trouvé:', autorisationId);
-      
+
       // Vérifier si l'autorisation existe
       const autorisation = await dmpApi.verifierAutorisationExistence(autorisationId);
       console.log('🔍 DMP: Vérification de l\'autorisation:', autorisation);
-      
+
       if (!autorisation) {
         console.error('❌ DMP: L\'autorisation trouvée n\'existe pas ou n\'est pas valide');
         alert('Erreur: L\'autorisation trouvée n\'est pas valide. Veuillez réessayer ou contacter le support.');
         return;
       }
-      
+
       console.log('✅ DMP: Refus de la demande d\'accès:', autorisationId);
       const result = await dmpApi.refuserAutorisation(autorisationId, 'Accès refusé par le patient');
-      
+
       // Vérifier si l'autorisation était déjà refusée
       if (result && result.success && result.message === 'L\'autorisation est déjà refusée') {
         console.log('⚠️ DMP: L\'autorisation était déjà refusée');
         alert('Cette autorisation est déjà refusée');
       } else {
         console.log('✅ DMP: Autorisation refusée avec succès');
-        
-                            // Recharger les notifications depuis l'API
-                    console.log('🔄 DMP: Rechargement des notifications après refus...');
-                    const pendingRequests = await dmpApi.getMedecinAccessRequests();
-                    console.log('📄 DMP: Nouvelles notifications reçues:', pendingRequests);
-                    setNotificationsDroitsAcces(Array.isArray(pendingRequests) ? pendingRequests : []);
 
-                    // Recharger aussi les autorisations validées
-                    await loadAutorisationsValidees();
-        
+        // Recharger les notifications depuis l'API
+        console.log('🔄 DMP: Rechargement des notifications après refus...');
+        const pendingRequests = await dmpApi.getMedecinAccessRequests();
+        console.log('📄 DMP: Nouvelles notifications reçues:', pendingRequests);
+        setNotificationsDroitsAcces(Array.isArray(pendingRequests) ? pendingRequests : []);
+
+        // Recharger aussi les autorisations validées
+        await loadAutorisationsValidees();
+
         // Afficher une confirmation
         alert('Demande d\'accès refusée');
       }
-      
+
       console.log('🎯 DMP: === FIN REFUS DEMANDE D\'ACCÈS ===');
     } catch (error) {
       console.error('❌ DMP: Erreur lors du refus:', error);
@@ -1452,27 +1790,80 @@ const DMP = () => {
     }
   };
 
+  // Fonctions pour la génération de PDF de fiche d'urgence
+  const handleGenerateUrgencyCardPDF = async () => {
+    try {
+      const patientData = {
+        nom_complet: patientProfile ? `${patientProfile.prenom || ''} ${patientProfile.nom || ''}`.trim() : 'N/A',
+        numero_dossier: patientProfile?.numero_dossier || patientProfile?.id,
+        date_naissance: patientProfile?.date_naissance,
+        telephone: patientProfile?.telephone,
+        groupe_sanguin: tableauDeBord?.patient?.groupe_sanguin,
+        allergies: tableauDeBord?.patient?.allergies,
+        maladies_chroniques: tableauDeBord?.patient?.maladies_chroniques,
+        id_patient: patientProfile?.id_patient || patientProfile?.id,
+        qrCode: tableauDeBord?.patient?.qrCode // Si disponible
+      };
+
+      const result = await generateUrgencyCardPDF(patientData);
+      if (result.success) {
+        alert(`Fiche d'urgence PDF générée avec succès: ${result.filename}`);
+      } else {
+        alert(`Erreur lors de la génération: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('Erreur lors de la génération de la fiche d\'urgence PDF:', error);
+      alert('Erreur lors de la génération de la fiche d\'urgence PDF');
+    }
+  };
+
+  const handlePrintUrgencyCardPDF = async () => {
+    try {
+      const patientData = {
+        nom_complet: patientProfile ? `${patientProfile.prenom || ''} ${patientProfile.nom || ''}`.trim() : 'N/A',
+        numero_dossier: patientProfile?.numero_dossier || patientProfile?.id,
+        date_naissance: patientProfile?.date_naissance,
+        telephone: patientProfile?.telephone,
+        groupe_sanguin: tableauDeBord?.patient?.groupe_sanguin,
+        allergies: tableauDeBord?.patient?.allergies,
+        maladies_chroniques: tableauDeBord?.patient?.maladies_chroniques,
+        id_patient: patientProfile?.id_patient || patientProfile?.id,
+        qrCode: tableauDeBord?.patient?.qrCode // Si disponible
+      };
+
+      const result = await printUrgencyCardPDF(patientData);
+      if (result.success) {
+        alert('Impression de la fiche d\'urgence lancée avec succès');
+      } else {
+        alert(`Erreur lors de l'impression: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('Erreur lors de l\'impression de la fiche d\'urgence:', error);
+      alert('Erreur lors de l\'impression de la fiche d\'urgence');
+    }
+  };
+
   // Fonction pour marquer une notification comme lue
   const handleMarkNotificationAsRead = async (notificationId) => {
     try {
       console.log('📝 DMP: Marquage de la notification comme lue (handleMarkNotificationAsRead), ID:', notificationId);
-      
+
       await dmpApi.marquerNotificationDroitsAccesLue(notificationId);
-      
+
       console.log('✅ DMP: Notification marquée comme lue avec succès (handleMarkNotificationAsRead)');
-      
+
       // Mettre à jour la liste des notifications
-      setNotificationsDroitsAcces(prev => 
-        prev.map(notif => 
-          notif.id_notification === notificationId 
+      setNotificationsDroitsAcces(prev =>
+        prev.map(notif =>
+          notif.id_notification === notificationId
             ? { ...notif, statut_envoi: 'envoyee' }
             : notif
         )
       );
-      
+
       // Afficher une confirmation
       alert('Notification marquée comme lue');
-      
+
     } catch (error) {
       console.error('❌ DMP: Erreur lors du marquage de la notification (handleMarkNotificationAsRead):', error);
       alert(`Erreur lors du marquage de la notification: ${error.message}`);
@@ -1488,10 +1879,10 @@ const DMP = () => {
         // Utiliser l'endpoint approprié pour les médecins
         const newNotifications = await dmpApi.getMedecinAccessRequests();
         const list = Array.isArray(newNotifications) ? newNotifications : [];
-        
+
         // Trouver les nouvelles notifications non lues
         const unreadNotifications = list.filter(n => n.statut_envoi === 'en_attente');
-        
+
         if (unreadNotifications.length > 0) {
           // Afficher la première notification non lue
           const latestNotification = unreadNotifications[0];
@@ -1504,7 +1895,7 @@ const DMP = () => {
 
     // Vérifier toutes les 30 secondes
     const interval = setInterval(checkNewNotifications, 30000);
-    
+
     // Vérification initiale
     checkNewNotifications();
 
@@ -1553,33 +1944,33 @@ const DMP = () => {
 
   const handleAutoMesureSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (!validateMesure()) {
       return;
     }
 
     try {
       setLoading(true);
-      
+
       // Préparer les données selon le type de mesure
       const mesureData = {
         ...autoMesure,
-        valeur_formatee: autoMesure.type_mesure === 'tension_arterielle' 
+        valeur_formatee: autoMesure.type_mesure === 'tension_arterielle'
           ? `${autoMesure.valeur}/${autoMesure.valeur_secondaire} ${autoMesure.unite}`
           : `${autoMesure.valeur} ${autoMesure.unite}`,
         date_complete: `${autoMesure.date_mesure} à ${autoMesure.heure_mesure}`
       };
 
       console.log('Mesure à enregistrer:', mesureData);
-      
+
       // Utiliser le contexte DMP pour créer l'auto-mesure
       const response = await createAutoMesure(mesureData);
-      
+
       if (response) {
         console.log('✅ Auto-mesure créée avec succès via contexte:', response);
-        
+
         setShowAutoMesureModal(false);
-        
+
         // Réinitialiser le formulaire
         const config = getMesureConfig('poids');
         setAutoMesure({
@@ -1592,7 +1983,7 @@ const DMP = () => {
           date_mesure: new Date().toISOString().split('T')[0],
           heure_mesure: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
         });
-        
+
         alert('Mesure enregistrée avec succès !');
       } else {
         throw new Error('Réponse invalide de l\'API');
@@ -1620,7 +2011,7 @@ const DMP = () => {
       setUploadFile(null);
       setUploadTitle('');
       setUploadDescription('');
-      
+
       alert('Document uploadé avec succès !');
     } catch (error) {
       console.error('Erreur lors de l\'upload:', error);
@@ -1636,7 +2027,7 @@ const DMP = () => {
       // Validation de la taille du fichier (max 10MB)
       const maxSize = 10 * 1024 * 1024; // 10MB en bytes
       const warningSize = 8 * 1024 * 1024; // 8MB - seuil d'avertissement
-      
+
       if (file.size > maxSize) {
         alert('Le fichier est trop volumineux. Taille maximale autorisée : 10MB');
         e.target.value = ''; // Réinitialiser l'input
@@ -1827,7 +2218,7 @@ const DMP = () => {
           onClose={closeNotification}
         />
       )}
-      
+
       {/* Header */}
       <header className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -1846,7 +2237,7 @@ const DMP = () => {
                 <FaPlus className="mr-2" />
                 Auto-mesure
               </button>
-              
+
               {/* Indicateur de notifications des droits d'accès */}
               {notificationsDroitsAcces.filter(n => n.statut_envoi === 'en_attente').length > 0 && (
                 <div className="relative">
@@ -1862,7 +2253,7 @@ const DMP = () => {
                   </button>
                 </div>
               )}
-              
+
               {activeTab === 'mon-espace-sante' && (
                 <button
                   onClick={() => setShowUploadModal(true)}
@@ -1872,7 +2263,7 @@ const DMP = () => {
                   Upload Document
                 </button>
               )}
-              
+
               {/* Profil utilisateur */}
               <div className="relative profile-menu-container">
                 <button
@@ -1880,15 +2271,15 @@ const DMP = () => {
                   className="flex items-center space-x-3 px-3 py-2 text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
                 >
                   <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white font-medium">
-                    {patientProfile ? 
-                      `${patientProfile.prenom?.charAt(0) || ''}${patientProfile.nom?.charAt(0) || ''}` : 
+                    {patientProfile ?
+                      `${patientProfile.prenom?.charAt(0) || ''}${patientProfile.nom?.charAt(0) || ''}` :
                       'P'
                     }
                   </div>
                   <div className="text-left">
                     <p className="text-sm font-medium">
-                      {patientProfile ? 
-                        `${patientProfile.prenom || ''} ${patientProfile.nom || ''}` : 
+                      {patientProfile ?
+                        `${patientProfile.prenom || ''} ${patientProfile.nom || ''}` :
                         'Patient'
                       }
                     </p>
@@ -1897,14 +2288,14 @@ const DMP = () => {
                     </p>
                   </div>
                 </button>
-                
+
                 {/* Menu déroulant du profil */}
                 {showProfileMenu && (
                   <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50 border">
                     <div className="px-4 py-2 border-b">
                       <p className="text-sm font-medium text-gray-900">
-                        {patientProfile ? 
-                          `${patientProfile.prenom || ''} ${patientProfile.nom || ''}` : 
+                        {patientProfile ?
+                          `${patientProfile.prenom || ''} ${patientProfile.nom || ''}` :
                           'Patient'
                         }
                       </p>
@@ -1935,9 +2326,9 @@ const DMP = () => {
               { id: 'tableau-de-bord', label: 'Tableau de bord', icon: FaChartBar },
               { id: 'mon-espace-sante', label: 'Mon espace de santé', icon: FaHeartbeat },
               { id: 'historique', label: 'Historique médical', icon: FaFileMedical },
-              { 
-                id: 'droits-acces', 
-                label: 'Droits d\'accès', 
+              {
+                id: 'droits-acces',
+                label: 'Droits d\'accès',
                 icon: FaShieldAlt,
                 badge: notificationsDroitsAcces.filter(n => n.statut_envoi === 'en_attente').length > 0 ? notificationsDroitsAcces.filter(n => n.statut_envoi === 'en_attente').length : null
               },
@@ -1950,11 +2341,10 @@ const DMP = () => {
                 <button
                   key={tab.id}
                   onClick={() => handleTabChange(tab.id)}
-                  className={`flex items-center py-4 px-1 border-b-2 font-medium text-sm relative ${
-                    activeTab === tab.id
+                  className={`flex items-center py-4 px-1 border-b-2 font-medium text-sm relative ${activeTab === tab.id
                       ? 'border-blue-500 text-blue-600'
                       : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
+                    }`}
                 >
                   <Icon className="mr-2" />
                   {tab.label}
@@ -1995,10 +2385,10 @@ const DMP = () => {
               <h2 className="text-xl font-semibold">Gestion des droits d'accès</h2>
               <p className="text-gray-600">Contrôlez qui peut accéder à votre dossier médical</p>
             </div>
-            
+
             {/* Debug: Afficher l'état des notifications */}
             {console.log('🔍 État des notifications dans le rendu:', notificationsDroitsAcces)}
-            
+
             {/* Section des notifications améliorée */}
             {getNotificationsToDisplay().length > 0 && (
               <div className="p-6 border-b bg-gradient-to-r from-blue-50 to-indigo-50">
@@ -2029,7 +2419,7 @@ const DMP = () => {
 
                   </div>
                 </div>
-                
+
                 <div className="space-y-4">
                   {getNotificationsToDisplay().map((notification, index) => (
                     <div key={index} className={`border rounded-xl p-5 shadow-sm transition-all hover:shadow-md ${getNotificationColor(notification.type_notification)} ${notification.statut_envoi === 'en_attente' ? 'ring-2 ring-blue-200' : ''}`}>
@@ -2040,7 +2430,7 @@ const DMP = () => {
                             {getNotificationIcon(notification.type_notification)}
                           </div>
                         </div>
-                        
+
                         {/* Contenu de la notification */}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between mb-2">
@@ -2051,11 +2441,10 @@ const DMP = () => {
                                   Nouveau
                                 </span>
                               )}
-                              <span className={`text-xs px-2 py-1 rounded-full font-medium ${
-                                notification.type_notification === 'demande_validation' ? 'bg-orange-100 text-orange-800' :
-                                notification.type_notification === 'acces_autorise' ? 'bg-green-100 text-green-800' :
-                                'bg-red-100 text-red-800'
-                              }`}>
+                              <span className={`text-xs px-2 py-1 rounded-full font-medium ${notification.type_notification === 'demande_validation' ? 'bg-orange-100 text-orange-800' :
+                                  notification.type_notification === 'acces_autorise' ? 'bg-green-100 text-green-800' :
+                                    'bg-red-100 text-red-800'
+                                }`}>
                                 {getStatusText(notification.type_notification)}
                               </span>
                             </div>
@@ -2070,9 +2459,9 @@ const DMP = () => {
                               )}
                             </div>
                           </div>
-                          
+
                           <p className="text-gray-700 mb-3 leading-relaxed">{notification.message}</p>
-                          
+
                           <div className="flex items-center justify-between">
                             <p className="text-xs text-gray-500">
                               📅 {new Date(notification.date_creation).toLocaleDateString('fr-FR', {
@@ -2083,7 +2472,7 @@ const DMP = () => {
                                 minute: '2-digit'
                               })}
                             </p>
-                            
+
                             {/* Actions pour les demandes d'accès */}
                             {notification.type_notification === 'demande_validation' && (
                               <div className="flex space-x-3">
@@ -2115,7 +2504,7 @@ const DMP = () => {
                 </div>
               </div>
             )}
-            
+
             {/* Section quand il n'y a pas de notifications */}
             {getNotificationsToDisplay().length === 0 && (
               <div className="p-6 border-b bg-gray-50">
@@ -2128,7 +2517,7 @@ const DMP = () => {
                 </div>
               </div>
             )}
-            
+
             {/* Section des autorisations avec le nouveau composant */}
             <div className="p-6">
               <div className="flex items-center justify-between mb-6">
@@ -2146,7 +2535,7 @@ const DMP = () => {
                   </button>
                 </div>
               </div>
-              
+
               <AutorisationsEnAttente />
             </div>
           </div>
@@ -2170,11 +2559,10 @@ const DMP = () => {
                           <p className="text-sm text-gray-600">{rappel.description}</p>
                           <p className="text-sm text-gray-500">Date: {rappel.date_rappel}</p>
                         </div>
-                        <span className={`px-2 py-1 rounded text-xs font-medium ${
-                          rappel.priorite === 'haute' ? 'bg-red-100 text-red-800' :
-                          rappel.priorite === 'moyenne' ? 'bg-yellow-100 text-yellow-800' :
-                          'bg-green-100 text-green-800'
-                        }`}>
+                        <span className={`px-2 py-1 rounded text-xs font-medium ${rappel.priorite === 'haute' ? 'bg-red-100 text-red-800' :
+                            rappel.priorite === 'moyenne' ? 'bg-yellow-100 text-yellow-800' :
+                              'bg-green-100 text-green-800'
+                          }`}>
                           {rappel.priorite}
                         </span>
                       </div>
@@ -2218,10 +2606,24 @@ const DMP = () => {
                     <FaQrcode className="text-4xl mx-auto text-gray-400 mb-2" />
                     <p className="text-sm text-gray-600">QR Code d'urgence</p>
                   </div>
-                  <button className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
-                    <FaPrint className="mr-2" />
-                    Imprimer la fiche
-                  </button>
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={handleGenerateUrgencyCardPDF}
+                      disabled={isGeneratingPDF}
+                      className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                    >
+                      <FaDownload className="mr-2" />
+                      {isGeneratingPDF ? 'Génération...' : 'PDF Fiche'}
+                    </button>
+                    <button
+                      onClick={handlePrintUrgencyCardPDF}
+                      disabled={isGeneratingPDF}
+                      className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                    >
+                      <FaPrint className="mr-2" />
+                      {isGeneratingPDF ? 'Préparation...' : 'Imprimer'}
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -2271,12 +2673,12 @@ const DMP = () => {
                 ✕
               </button>
             </div>
-            
+
             <form onSubmit={handleAutoMesureSubmit}>
               {(() => {
                 const config = getMesureConfig(autoMesure.type_mesure);
                 const Icon = config.icon;
-                
+
                 return (
                   <div className="space-y-6">
                     {/* En-tête avec icône et description */}
@@ -2316,7 +2718,7 @@ const DMP = () => {
                             <input
                               type="number"
                               value={autoMesure.valeur}
-                              onChange={(e) => setAutoMesure({...autoMesure, valeur: e.target.value})}
+                              onChange={(e) => setAutoMesure({ ...autoMesure, valeur: e.target.value })}
                               className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                               placeholder={config.placeholder_systolique}
                               min={config.min}
@@ -2332,7 +2734,7 @@ const DMP = () => {
                             <input
                               type="number"
                               value={autoMesure.valeur_secondaire}
-                              onChange={(e) => setAutoMesure({...autoMesure, valeur_secondaire: e.target.value})}
+                              onChange={(e) => setAutoMesure({ ...autoMesure, valeur_secondaire: e.target.value })}
                               className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                               placeholder={config.placeholder_diastolique}
                               min={config.min}
@@ -2350,7 +2752,7 @@ const DMP = () => {
                           <input
                             type="number"
                             value={autoMesure.valeur}
-                            onChange={(e) => setAutoMesure({...autoMesure, valeur: e.target.value})}
+                            onChange={(e) => setAutoMesure({ ...autoMesure, valeur: e.target.value })}
                             className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                             placeholder={config.placeholder}
                             min={config.min}
@@ -2369,7 +2771,7 @@ const DMP = () => {
                         <input
                           type="date"
                           value={autoMesure.date_mesure}
-                          onChange={(e) => setAutoMesure({...autoMesure, date_mesure: e.target.value})}
+                          onChange={(e) => setAutoMesure({ ...autoMesure, date_mesure: e.target.value })}
                           className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                           required
                         />
@@ -2379,7 +2781,7 @@ const DMP = () => {
                         <input
                           type="time"
                           value={autoMesure.heure_mesure}
-                          onChange={(e) => setAutoMesure({...autoMesure, heure_mesure: e.target.value})}
+                          onChange={(e) => setAutoMesure({ ...autoMesure, heure_mesure: e.target.value })}
                           className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                           required
                         />
@@ -2393,7 +2795,7 @@ const DMP = () => {
                       </label>
                       <textarea
                         value={autoMesure.commentaire}
-                        onChange={(e) => setAutoMesure({...autoMesure, commentaire: e.target.value})}
+                        onChange={(e) => setAutoMesure({ ...autoMesure, commentaire: e.target.value })}
                         className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         rows="3"
                         placeholder="Ajoutez un commentaire sur cette mesure..."
@@ -2477,7 +2879,7 @@ const DMP = () => {
                         <strong>Fichier sélectionné :</strong> {uploadFile.name}
                       </p>
                       <p className="text-sm text-blue-700">
-                        <strong>Taille :</strong> {(uploadFile.size / (1024 * 1024)).toFixed(2)}MB 
+                        <strong>Taille :</strong> {(uploadFile.size / (1024 * 1024)).toFixed(2)}MB
                         {uploadFile.size > 8 * 1024 * 1024 && (
                           <span className="text-orange-600 font-medium"> (Proche de la limite de 10MB)</span>
                         )}

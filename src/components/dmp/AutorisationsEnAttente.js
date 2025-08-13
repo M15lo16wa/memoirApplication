@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { FaFileMedical, FaSync, FaExclamationTriangle, FaCheckCircle, FaShieldAlt } from 'react-icons/fa';
-import { getAutorisations } from '../../services/api/dmpApi';
+import { getPatientAuthorizations, getPatientAccessHistory, getPendingAccessRequests } from '../../services/api/dmpApi';
 import AutorisationCard from './AutorisationCard';
 
 const AutorisationsEnAttente = () => {
@@ -19,7 +19,21 @@ const AutorisationsEnAttente = () => {
       setError(null);
       
       console.log('📡 AutorisationsEnAttente: Chargement des autorisations...');
-      const result = await getAutorisations();
+      
+      // Utiliser les fonctions spécifiques aux patients de dmpApi
+      const [authorizations, accessHistory, pendingRequests] = await Promise.all([
+        getPatientAuthorizations(),
+        getPatientAccessHistory(),
+        getPendingAccessRequests()
+      ]);
+      
+      // Combiner les données des différentes sources
+      const result = {
+        authorizations: authorizations?.data || authorizations || [],
+        accessHistory: accessHistory?.data || accessHistory || [],
+        pendingRequests: pendingRequests?.data || pendingRequests || []
+      };
+      
       console.log('✅ AutorisationsEnAttente: Réponse API reçue:', result);
 
       // Normalisation robuste des formats de réponse possibles
@@ -54,7 +68,19 @@ const AutorisationsEnAttente = () => {
         return [];
       };
 
-      const autorisationsRaw = extractList(result?.data ?? result);
+      // Combiner toutes les sources d'autorisations
+      const allAuthorizations = [
+        ...extractList(result.authorizations),
+        ...extractList(result.accessHistory),
+        ...extractList(result.pendingRequests)
+      ];
+      
+      // Supprimer les doublons basés sur l'ID
+      const uniqueAuthorizations = allAuthorizations.filter((auth, index, self) => 
+        index === self.findIndex(a => a.id_acces === auth.id_acces || a.id === auth.id)
+      );
+      
+      const autorisationsRaw = uniqueAuthorizations;
 
       // Adapter les clés pour l'affichage (professionnel, dates...)
       const autorisationsData = (autorisationsRaw || []).map((a) => ({

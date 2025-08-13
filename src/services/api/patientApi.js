@@ -89,8 +89,6 @@ export const loginPatient = async(patient) => {
     }
 };
 
-// ... existing code ...
-
 // 7-) récupération des prescriptions d'un patient
 export const getPrescriptionsByPatient = async (patientId, options = {}) => {
     try {
@@ -356,9 +354,9 @@ export const extractPrescriptionData = (apiResponse) => {
 // 13-) Fonction utilitaire pour vérifier si la réponse contient des données
 export const hasPrescriptions = (apiResponse) => {
     return apiResponse && 
-           apiResponse.success && 
-           apiResponse.prescriptions && 
-           apiResponse.prescriptions.length > 0;
+        apiResponse.success && 
+        apiResponse.prescriptions && 
+        apiResponse.prescriptions.length > 0;
 };
 
 // 14-) Fonction utilitaire pour obtenir le nombre de prescriptions
@@ -373,14 +371,14 @@ const patientApi = {
     updatePatient,
     deletePatient,
     loginPatient,
-    getPrescriptionsByPatient,        // ✅ Ajouté
-    getAllPrescriptionsByPatient,     // ✅ Ajouté
-    getActivePrescriptionsByPatient,  // ✅ Ajouté
-    getOrdonnancesByPatient,          // ✅ Ajouté
-    getExamensByPatient,              // ✅ Ajouté
-    extractPrescriptionData,           // ✅ Nouvelle fonction utilitaire
-    hasPrescriptions,                  // ✅ Nouvelle fonction utilitaire
-    getPrescriptionCount               // ✅ Nouvelle fonction utilitaire
+    getPrescriptionsByPatient,       
+    getAllPrescriptionsByPatient,
+    getActivePrescriptionsByPatient, 
+    getOrdonnancesByPatient,         
+    getExamensByPatient,           
+    extractPrescriptionData,          
+    hasPrescriptions,                 
+    getPrescriptionCount              
 };
 
 export default patientApi;
