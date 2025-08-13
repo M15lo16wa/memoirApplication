@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { FaUser, FaClock, FaCheck, FaTimes, FaEye, FaCalendar } from 'react-icons/fa';
-import { accepterAutorisation, refuserAutorisation } from '../../services/api/dmpApi';
+import { accepterAutorisation, refuserAutorisation, revokerAutorisation } from '../../services/api/dmpApi';
 
 const AutorisationCard = ({ autorisation, onUpdate }) => {
   const [showActionModal, setShowActionModal] = useState(false);
   const [actionType, setActionType] = useState(null);
   const [commentaire, setCommentaire] = useState('');
   const [raisonRefus, setRaisonRefus] = useState('');
+  const [raisonRevocation, setRaisonRevocation] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleAccept = () => {
@@ -16,6 +17,11 @@ const AutorisationCard = ({ autorisation, onUpdate }) => {
 
   const handleRefuse = () => {
     setActionType('refuse');
+    setShowActionModal(true);
+  };
+
+  const handleRevoke = () => {
+    setActionType('revoke');
     setShowActionModal(true);
   };
 
@@ -33,6 +39,13 @@ const AutorisationCard = ({ autorisation, onUpdate }) => {
         }
         await refuserAutorisation(autorisation.id_acces, raisonRefus);
         alert('Autorisation refusée');
+      } else if (actionType === 'revoke') {
+        if (!raisonRevocation.trim()) {
+          alert('Veuillez indiquer une raison de révocation');
+          return;
+        }
+        await revokerAutorisation(autorisation.id_acces, raisonRevocation);
+        alert('Accès révoqué avec succès');
       }
       
       // Notifier le composant parent pour recharger la liste
@@ -44,6 +57,7 @@ const AutorisationCard = ({ autorisation, onUpdate }) => {
       setShowActionModal(false);
       setCommentaire('');
       setRaisonRefus('');
+      setRaisonRevocation('');
       setActionType(null);
       
     } catch (error) {
@@ -75,6 +89,11 @@ const AutorisationCard = ({ autorisation, onUpdate }) => {
         return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
           <FaClock className="w-3 h-3 mr-1" />
           Expiré
+        </span>;
+      case 'revoke':
+        return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+          <FaTimes className="w-3 h-3 mr-1" />
+          Révoqué
         </span>;
       default:
         return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
@@ -168,9 +187,18 @@ const AutorisationCard = ({ autorisation, onUpdate }) => {
         {/* Informations supplémentaires pour les autorisations actives */}
         {autorisation.statut === 'actif' && (
           <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg">
-            <div className="flex items-center text-green-800">
-              <FaEye className="w-4 h-4 mr-2" />
-              <span className="text-sm font-medium">Accès actif</span>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center text-green-800">
+                <FaEye className="w-4 h-4 mr-2" />
+                <span className="text-sm font-medium">Accès actif</span>
+              </div>
+              <button
+                onClick={handleRevoke}
+                className="flex items-center px-3 py-1.5 bg-red-600 text-white text-xs font-medium rounded-md hover:bg-red-700 transition-colors shadow-sm"
+              >
+                <FaTimes className="w-3 h-3 mr-1" />
+                Révoquer
+              </button>
             </div>
             {autorisation.date_expiration && (
               <p className="text-xs text-green-700 mt-1">
@@ -186,7 +214,9 @@ const AutorisationCard = ({ autorisation, onUpdate }) => {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">
-              {actionType === 'accept' ? 'Accepter la demande' : 'Refuser la demande'}
+              {actionType === 'accept' ? 'Accepter la demande' : 
+               actionType === 'refuse' ? 'Refuser la demande' : 
+               'Révoquer l\'accès'}
             </h3>
             
             {actionType === 'accept' ? (
@@ -202,7 +232,7 @@ const AutorisationCard = ({ autorisation, onUpdate }) => {
                   placeholder="Ajouter un commentaire..."
                 />
               </div>
-            ) : (
+            ) : actionType === 'refuse' ? (
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Raison du refus *
@@ -216,6 +246,20 @@ const AutorisationCard = ({ autorisation, onUpdate }) => {
                   required
                 />
               </div>
+            ) : (
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Raison de la révocation *
+                </label>
+                <textarea
+                  value={raisonRevocation}
+                  onChange={(e) => setRaisonRevocation(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500"
+                  rows="3"
+                  placeholder="Indiquez la raison de la révocation..."
+                  required
+                />
+              </div>
             )}
             
             <div className="flex space-x-3">
@@ -224,6 +268,7 @@ const AutorisationCard = ({ autorisation, onUpdate }) => {
                   setShowActionModal(false);
                   setCommentaire('');
                   setRaisonRefus('');
+                  setRaisonRevocation('');
                   setActionType(null);
                 }}
                 className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50"
@@ -232,14 +277,20 @@ const AutorisationCard = ({ autorisation, onUpdate }) => {
               </button>
               <button
                 onClick={handleConfirmAction}
-                disabled={loading || (actionType === 'refuse' && !raisonRefus.trim())}
+                disabled={loading || 
+                  (actionType === 'refuse' && !raisonRefus.trim()) ||
+                  (actionType === 'revoke' && !raisonRevocation.trim())
+                }
                 className={`flex-1 px-4 py-2 text-white rounded-md ${
                   actionType === 'accept' 
                     ? 'bg-green-600 hover:bg-green-700' 
                     : 'bg-red-600 hover:bg-red-700'
                 } disabled:opacity-50 disabled:cursor-not-allowed`}
               >
-                {loading ? 'Traitement...' : actionType === 'accept' ? 'Accepter' : 'Refuser'}
+                {loading ? 'Traitement...' : 
+                 actionType === 'accept' ? 'Accepter' : 
+                 actionType === 'refuse' ? 'Refuser' : 
+                 'Révoquer'}
               </button>
             </div>
           </div>

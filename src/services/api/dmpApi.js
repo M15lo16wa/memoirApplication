@@ -227,9 +227,8 @@ export const getAutorisations = async (patientId = null) => {
 };
 
 export const accepterAutorisation = async (autorisationId, commentaire) => {
-    const response = await dmpApi.patch(`/access/authorization/${autorisationId}`, { 
-        statut: 'actif', 
-        commentaire 
+    const response = await dmpApi.delete(`/access/authorization/${autorisationId}`, {
+        data: { reason: commentaire || 'Révoqué par l\'utilisateur' }
     });
     return response.data.data;
 };
@@ -242,6 +241,27 @@ export const refuserAutorisation = async (autorisationId, raisonRefus) => {
     return response.data.data;
 };
 
+// Fonction exportée pour révoquer une autorisation (utilise la route patient par défaut)
+export const revokerAutorisation = async (autorisationId, raisonRevocation) => {
+    try {
+        // Utiliser la route patient pour la révocation
+        const response = await dmpApi.delete(`/access/patient/authorization/${autorisationId}`, {
+            data: { reason: raisonRevocation }
+        });
+        return response.data;
+    } catch (error) {
+        console.error('Erreur lors de la révocation de l\'autorisation:', error);
+        throw error;
+    }
+};
+
+// // Pour les professionnels (route existante) - si besoin futur
+// const revokeProfAuth = async (id, reason) => {
+//     const response = await dmpApi.delete(`/access/authorization/${id}`, {
+//         data: { reason }
+//     });
+//     return response.data;
+// };
 // --- Notifications et statistiques ---
 // Note: Ces endpoints n'existent pas dans l'API, on utilise les endpoints d'accès à la place
 export const getNotificationsStats = async () => {
@@ -511,6 +531,7 @@ const dmpApiExports = {
     getAutorisations,
     accepterAutorisation,
     refuserAutorisation,
+    revokerAutorisation,
     getNotificationsStats,
     marquerToutesNotificationsLues,
     marquerNotificationDroitsAccesLue,
