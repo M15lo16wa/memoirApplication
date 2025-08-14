@@ -20,19 +20,22 @@ api.interceptors.request.use(
         // Prioriser le token médecin quand il est présent (afin d'accéder aux routes back côté pro)
         if (generalToken && hasMedecin) {
             config.headers.Authorization = `Bearer ${generalToken}`;
-            return config;
         }
-
         // Sinon, fallback sur le JWT patient
-        if (jwtToken) {
+        else if (jwtToken) {
             config.headers.Authorization = `Bearer ${jwtToken}`;
-            return config;
         }
-
         // Dernier recours
-        if (generalToken) {
+        else if (generalToken) {
             config.headers.Authorization = `Bearer ${generalToken}`;
         }
+
+        // IMPORTANT: Supprimer le Content-Type global pour les FormData
+        // Axios doit pouvoir définir automatiquement le bon Content-Type avec boundary
+        if (config.data instanceof FormData) {
+            delete config.headers['Content-Type'];
+        }
+
         return config;
     },
     (error) => Promise.reject(error)
@@ -690,20 +693,40 @@ const getHistoriqueConsultations = async (patientId) => {
     }
 };
 
-// 10-) upload de document
-const uploadDocument = async (Id, formData) => {
+// services/api/medicalApi.js
+
+// 10-) Upload de document 
+const uploadDocument = async (patientId, formData) => {
     try {
-        const response = await api.post(`/prescription/${Id}/transferer`, formData, {
-            headers: {
-                'Content-Type': 'multipart/form-data',
-            },
-        });
+        // Debug: Vérifier le FormData reçu
+        console.log(' FormData reçu dans medicalApi.uploadDocument:');
+        console.log('  patientId:', patientId);
+        console.log('  formData instanceof FormData:', formData instanceof FormData);
+        
+        if (formData instanceof FormData) {
+            console.log('  Contenu du FormData:');
+            for (let [key, value] of formData.entries()) {
+                if (key === 'file') {
+                    console.log(`${key}:`, {
+                        name: value.name,
+                        type: value.type,
+                        size: value.size,
+                        isFile: value instanceof File
+                    });
+                } else {
+                    console.log(`${key}:`, value);
+                }
+            }
+        }
+        
+        const response = await api.post(`/documents/upload`, formData);
         return response.data;
     } catch (error) {
         console.error('Erreur lors de l\'upload du document:', error);
         throw error;
     }
 };
+
 
 // 11-) download de document
 const downloadDocument = async (documentId) => {

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useReducer, useEffect, useMemo } from 'react';
 import { getCurrentUser, getStoredPatient } from '../services/api/authApi';
 import * as dmpApi from '../services/api/dmpApi';
+import * as medicalApi from '../services/api/medicalApi';
 
 
 
@@ -63,15 +64,6 @@ const dmpReducer = (state, action) => {
                 loading: false 
             };
         case 'ADD_DOCUMENT':
-            // Validation de la taille du fichier (max 10MB)
-            if (action.payload && action.payload.size && action.payload.size > 10 * 1024 * 1024) {
-                return { 
-                    ...state, 
-                    error: "Le fichier est trop volumineux. Taille maximale autorisée : 10MB",
-                    loading: false 
-                };
-            }
-            
             // Validation que state.documents est bien un tableau
             const currentDocuments = Array.isArray(state.documents) ? state.documents : [];
             
@@ -118,7 +110,7 @@ export const DMPProvider = ({ children }) => {
             // Charger les documents automatiquement
             const loadInitialDocuments = async () => {
                 try {
-                    const response = await dmpApi.getDocumentsDMP(null, {});
+                    const response = await dmpApi.getDocumentsDMP(state.patientId, {});
                     console.log('📄 Documents chargés dans le contexte:', response);
                     
                     // S'assurer que nous avons un tableau de documents
@@ -142,7 +134,7 @@ export const DMPProvider = ({ children }) => {
             // Charger les auto-mesures automatiquement
             const loadInitialAutoMesures = async () => {
                 try {
-                    const response = await dmpApi.getAutoMesuresDMP(null, null);
+                    const response = await dmpApi.getAutoMesuresDMP(state.patientId, null);
                     console.log('📊 Auto-mesures chargées dans le contexte:', response);
                     
                     // S'assurer que nous avons un tableau d'auto-mesures
@@ -183,7 +175,7 @@ export const DMPProvider = ({ children }) => {
             
             dispatch({ type: 'SET_LOADING', payload: true });
             try {
-                const response = await dmpApi.getDMP(); // Utilise l'ID du patient connecté automatiquement
+                const response = await dmpApi.getDMP(state.patientId); // Utilise l'ID du patient connecté
                 dispatch({ type: 'SET_DMP_DATA', payload: response.data });
             } catch (error) {
                 dispatch({ type: 'SET_ERROR', payload: error.message });
@@ -196,7 +188,7 @@ export const DMPProvider = ({ children }) => {
             
             dispatch({ type: 'SET_LOADING', payload: true });
             try {
-                const response = await dmpApi.getHistoriqueMedical(); // Utilise l'ID du patient connecté automatiquement
+                const response = await dmpApi.getHistoriqueMedical(state.patientId); // Utilise l'ID du patient connecté
                 dispatch({ type: 'SET_HISTORIQUE', payload: response.data });
             } catch (error) {
                 dispatch({ type: 'SET_ERROR', payload: error.message });
@@ -269,14 +261,14 @@ export const DMPProvider = ({ children }) => {
             dispatch({ type: 'SET_LOADING', payload: true });
             try {
                 const response = await dmpApi.createAutoMesureDMP(null, mesureData); // Utilise l'ID du patient connecté automatiquement
-                console.log('✅ Auto-mesure créée via contexte:', response);
+                console.log(' Auto-mesure créée via contexte:', response);
                 
                 // Recharger toutes les auto-mesures pour avoir les données à jour
                 await actions.loadAutoMesures();
                 
                 return response.data;
             } catch (error) {
-                console.error('❌ Erreur lors de la création de l\'auto-mesure via contexte:', error);
+                console.error(' Erreur lors de la création de l\'auto-mesure via contexte:', error);
                 dispatch({ type: 'SET_ERROR', payload: error.message });
                 throw error;
             }
@@ -289,7 +281,7 @@ export const DMPProvider = ({ children }) => {
             dispatch({ type: 'SET_LOADING', payload: true });
             try {
                 const response = await dmpApi.getDocumentsDMP(null, filters); // Utilise l'ID du patient connecté automatiquement
-                console.log('📄 Documents chargés dans le contexte:', response);
+                console.log('Documents chargés dans le contexte:', response);
                 
                 // S'assurer que nous avons un tableau de documents
                 let documents = [];
@@ -301,10 +293,10 @@ export const DMPProvider = ({ children }) => {
                     documents = response;
                 }
                 
-                console.log('📄 Documents finaux pour le contexte:', documents);
+                console.log('Documents finaux pour le contexte:', documents);
                 dispatch({ type: 'SET_DOCUMENTS', payload: documents });
             } catch (error) {
-                console.error('❌ Erreur lors du chargement des documents dans le contexte:', error);
+                console.error('Erreur lors du chargement des documents dans le contexte:', error);
                 dispatch({ type: 'SET_ERROR', payload: error.message });
             }
         },
@@ -327,9 +319,9 @@ export const DMPProvider = ({ children }) => {
                 
                 if (documentData.file.size > warningSize) {
                     const remainingMB = (10 - parseFloat(fileSizeMB)).toFixed(2);
-                    console.log(`⚠️ Attention : Fichier de ${fileSizeMB}MB (${remainingMB}MB restants sur 10MB)`);
+                    console.log(` Attention : Fichier de ${fileSizeMB}MB (${remainingMB}MB restants sur 10MB)`);
                 } else {
-                    console.log(`✅ Fichier de ${fileSizeMB}MB - Taille acceptable`);
+                    console.log(`Fichier de ${fileSizeMB}MB - Taille acceptable`);
                 }
             }
             
@@ -343,20 +335,67 @@ export const DMPProvider = ({ children }) => {
             
             dispatch({ type: 'SET_LOADING', payload: true });
             try {
-                // Appel à l'API réelle pour uploader le document
-                const response = await dmpApi.uploadDocumentDMP(null, documentData);
+                // Créer le FormData pour l'upload
+                const formData = new FormData();
+                formData.append('file', documentData.file);
+                formData.append('title', documentData.description || 'Document sans titre');
+                formData.append('description', documentData.description || '');
+                formData.append('type', documentData.type || 'general');
+                formData.append('categorie', documentData.categorie || 'general');
+                formData.append('patientId', state.patientId);
                 
-                if (response.data) {
-                    dispatch({ type: 'ADD_DOCUMENT', payload: response.data });
-                    console.log('✅ Document uploadé via le contexte:', response.data);
-                    return response.data;
+                // Debug: Vérifier le contenu du FormData
+                console.log('Contenu du FormData avant envoi:');
+                for (let [key, value] of formData.entries()) {
+                    if (key === 'file') {
+                        console.log(`  ${key}:`, {
+                            name: value.name,
+                            type: value.type,
+                            size: value.size,
+                            isFile: value instanceof File
+                        });
+                    } else {
+                        console.log(`  ${key}:`, value);
+                    }
+                }
+                
+                console.log('Envoi du FormData:', {
+                    file: documentData.file?.name,
+                    title: documentData.description || 'Document sans titre',
+                    description: documentData.description || '',
+                    type: documentData.type || 'general',
+                    categorie: documentData.categorie || 'general',
+                    patientId: state.patientId
+                });
+                
+                // Appel à l'API réelle pour uploader le document
+                const response = await medicalApi.uploadDocument(state.patientId, formData);
+                
+                if (response) {
+                    // Créer un objet document pour l'ajouter au contexte
+                    const newDocument = {
+                        id: response.id || Date.now(),
+                        name: documentData.file?.name || 'Document',
+                        type: documentData.type || 'general',
+                        description: documentData.description || '',
+                        categorie: documentData.categorie || 'general',
+                        size: documentData.file?.size,
+                        uploadedAt: new Date().toISOString(),
+                        ...response
+                    };
+                    
+                    dispatch({ type: 'ADD_DOCUMENT', payload: newDocument });
+                    console.log(' Document uploadé via le contexte:', newDocument);
+                    return newDocument;
                 } else {
                     throw new Error('Réponse invalide de l\'API');
                 }
             } catch (error) {
-                console.error('❌ Erreur lors de l\'upload via le contexte:', error);
+                console.error('Erreur lors de l\'upload via le contexte:', error);
                 dispatch({ type: 'SET_ERROR', payload: error.message });
                 throw error;
+            } finally {
+                dispatch({ type: 'SET_LOADING', payload: false });
             }
         },
 

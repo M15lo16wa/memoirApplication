@@ -18,6 +18,7 @@ import DMPNotification from "../components/ui/DMPNotification";
 import AutorisationsEnAttente from "../components/dmp/AutorisationsEnAttente";
 import * as dmpApi from "../services/api/dmpApi";
 import * as patientApi from "../services/api/patientApi";
+import { uploadDocument } from "../services/api/medicalApi";
 
 // Composant HistoriqueMedical qui utilise les fonctions de patientApi
 const HistoriqueMedical = () => {
@@ -1315,7 +1316,7 @@ const DMP = () => {
   const [showNotification, setShowNotification] = useState(false);
 
   const navigate = useNavigate();
-  const { createAutoMesure } = useDMP();
+  const { createAutoMesure, uploadDocument } = useDMP();
 
   // Hook pour la génération de PDF
   const {
@@ -2005,17 +2006,22 @@ const filterAccessByPatient = (accessData, patientId) => {
 
     try {
       setLoading(true);
-      // Simulation de l'upload - à remplacer par l'API réelle
-      // Note: Document upload is now handled by DMPMonEspaceSante component
+      // Construction des données pour l'upload
+      const documentData = {
+        file: uploadFile,
+        description: uploadTitle,
+        type: 'general', // ou à adapter selon le formulaire
+        categorie: 'general', // ou à adapter selon le formulaire
+      };
+      await uploadDocument(documentData);
       setShowUploadModal(false);
       setUploadFile(null);
       setUploadTitle('');
       setUploadDescription('');
-
       alert('Document uploadé avec succès !');
     } catch (error) {
-      console.error('Erreur lors de l\'upload:', error);
-      alert('Erreur lors de l\'upload du document');
+      console.error("Erreur lors de l'upload:", error);
+      alert("Erreur lors de l'upload du document: " + (error.message || ""));
     } finally {
       setLoading(false);
     }

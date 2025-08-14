@@ -81,6 +81,19 @@ const DMPMonEspaceSante = () => {
         e.preventDefault();
         if (!uploadData.file) return;
 
+        // Debug: Vérifier les données avant l'appel
+        console.log('📁 Données uploadData avant appel à uploadDocument:', {
+            file: {
+                name: uploadData.file?.name,
+                type: uploadData.file?.type,
+                size: uploadData.file?.size,
+                isFile: uploadData.file instanceof File
+            },
+            type: uploadData.type,
+            description: uploadData.description,
+            categorie: uploadData.categorie
+        });
+
         try {
             await uploadDocument(uploadData);
             setShowUploadModal(false);
