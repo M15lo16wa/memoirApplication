@@ -1292,6 +1292,7 @@ const DMP = () => {
 
   const [rappels, setRappels] = useState([]);
   const [notificationsDroitsAcces, setNotificationsDroitsAcces] = useState([]);
+  const [droitsAcces, setDroitsAcces] = useState([]);
   const [, setAutorisationsValidees] = useState([]);
   const [showAutoMesureModal, setShowAutoMesureModal] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
@@ -1388,6 +1389,29 @@ const DMP = () => {
       } catch (notificationsError) {
         console.warn('Notifications non disponibles:', notificationsError.message);
         setNotificationsDroitsAcces([]);
+      }
+
+      // Charger les droits d'accès complets
+      console.log('Chargement des droits d\'accès complets...');
+      try {
+        const storedPatient = getStoredPatient();
+        const patientId = storedPatient?.id_patient || storedPatient?.id;
+
+        if (patientId) {
+          const droitsAccesData = await dmpApi.getDroitsAcces(patientId);
+          console.log('Droits d\'accès reçus de l\'API:', droitsAccesData);
+          
+          if (Array.isArray(droitsAccesData)) {
+            setDroitsAcces(droitsAccesData);
+          } else if (droitsAccesData && Array.isArray(droitsAccesData.data)) {
+            setDroitsAcces(droitsAccesData.data);
+          } else {
+            setDroitsAcces([]);
+          }
+        }
+      } catch (droitsError) {
+        console.warn('Droits d\'accès non disponibles:', droitsError.message);
+        setDroitsAcces([]);
       }
 
       // Charger les autorisations validées
@@ -1591,17 +1615,58 @@ const filterAccessByPatient = (accessData, patientId) => {
 
   const rafraichirNotifications = async () => {
     try {
-      console.log('🔄 DMP: Rafraîchissement des notifications depuis l\'API...');
-      const pendingRequests = await dmpApi.getMedecinAccessRequests();
-      console.log('✅ DMP: Notifications reçues de l\'API:', pendingRequests);
-      setNotificationsDroitsAcces(Array.isArray(pendingRequests) ? pendingRequests : []);
+      setLoading(true);
+      const storedPatient = getStoredPatient();
+      const patientId = storedPatient?.id_patient || storedPatient?.id;
 
-      // Recharger aussi les autorisations validées
-      await loadAutorisationsValidees();
+      if (!patientId) {
+        console.warn('ID patient non disponible pour rafraîchir les notifications');
+        setNotificationsDroitsAcces([]);
+        return;
+      }
 
+      const pendingRequests = await dmpApi.getMedecinAccessRequests(patientId);
+      console.log('Demandes reçues lors du rafraîchissement:', pendingRequests);
+
+      // Filtrer pour ne garder que les accès du patient connecté
+      const filteredRequests = filterAccessByPatient(pendingRequests, patientId);
+      console.log('Accès filtrés lors du rafraîchissement:', filteredRequests);
+      setNotificationsDroitsAcces(Array.isArray(filteredRequests) ? filteredRequests : []);
     } catch (error) {
-      console.error('❌ DMP: Erreur lors du rafraîchissement des notifications:', error);
-      alert(`Erreur lors du rafraîchissement des notifications: ${error.message}`);
+      console.error('Erreur lors du rafraîchissement des notifications:', error);
+      setNotificationsDroitsAcces([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const rafraichirDroitsAcces = async () => {
+    try {
+      setLoading(true);
+      const storedPatient = getStoredPatient();
+      const patientId = storedPatient?.id_patient || storedPatient?.id;
+
+      if (!patientId) {
+        console.warn('ID patient non disponible pour rafraîchir les droits d\'accès');
+        setDroitsAcces([]);
+        return;
+      }
+
+      const droitsAccesData = await dmpApi.getDroitsAcces(patientId);
+      console.log('Droits d\'accès reçus lors du rafraîchissement:', droitsAccesData);
+      
+      if (Array.isArray(droitsAccesData)) {
+        setDroitsAcces(droitsAccesData);
+      } else if (droitsAccesData && Array.isArray(droitsAccesData.data)) {
+        setDroitsAcces(droitsAccesData.data);
+      } else {
+        setDroitsAcces([]);
+      }
+    } catch (error) {
+      console.error('Erreur lors du rafraîchissement des droits d\'accès:', error);
+      setDroitsAcces([]);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -2543,6 +2608,165 @@ const filterAccessByPatient = (accessData, patientId) => {
               </div>
 
               <AutorisationsEnAttente />
+            </div>
+
+            {/* Section des accès refusés et expirés */}
+            <div className="p-6 border-t border-gray-200">
+              {/* Debug: Afficher les données des droits d'accès */}
+              {console.log('🔍 Droits d\'accès complets:', droitsAcces)}
+              {console.log('🔍 Droits d\'accès refusés:', droitsAcces.filter(acc => acc.statut === 'refuse' || acc.statut === 'refused' || acc.status === 'refuse' || acc.status === 'refused'))}
+              {console.log('🔍 Droits d\'accès expirés:', droitsAcces.filter(acc => acc.statut === 'expire' || acc.status === 'expire' || (acc.date_fin && new Date(acc.date_fin) < new Date()) || (acc.end_date && new Date(acc.end_date) < new Date())))}
+              {console.log('🔍 Droits d\'accès révoqués:', droitsAcces.filter(acc => acc.statut === 'revoke' || acc.statut === 'revoked' || acc.status === 'revoke' || acc.status === 'revoked'))}
+
+              <div className="mb-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900">Historique des accès</h3>
+                    <p className="text-sm text-gray-600">Accès refusés et expirés</p>
+                  </div>
+                  <button
+                    onClick={rafraichirDroitsAcces}
+                    className="flex items-center px-3 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Rafraîchir
+                  </button>
+                </div>
+              </div>
+
+              {/* Accès refusés */}
+              <div className="mb-6">
+                <h4 className="text-md font-medium text-gray-800 mb-3 flex items-center">
+                  <FaTimes className="w-4 h-4 text-red-500 mr-2" />
+                  Accès refusés ({droitsAcces.filter(acc => acc.statut === 'refuse' || acc.statut === 'refused' || acc.status === 'refuse' || acc.status === 'refused').length})
+                </h4>
+                {droitsAcces.filter(acc => acc.statut === 'refuse' || acc.statut === 'refused' || acc.status === 'refuse' || acc.status === 'refused').length > 0 ? (
+                  <div className="space-y-3">
+                    {droitsAcces.filter(acc => acc.statut === 'refuse' || acc.statut === 'refused' || acc.status === 'refuse' || acc.status === 'refused').map((acces, index) => (
+                      <div key={index} className="bg-red-50 border border-red-200 rounded-lg p-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center space-x-2 mb-2">
+                              <span className="font-medium text-gray-900">
+                                {acces.nom_professionnel || acces.nom || acces.professional_name || 'Nom non spécifié'} {acces.prenom_professionnel || acces.prenom || acces.professional_firstname || ''}
+                              </span>
+                              <span className="bg-red-100 text-red-800 text-xs px-2 py-1 rounded-full font-medium">
+                                Refusé
+                              </span>
+                            </div>
+                            <p className="text-sm text-gray-600 mb-1">
+                              {acces.specialite || acces.speciality || 'Spécialité non spécifiée'}
+                            </p>
+                            {acces.raison_refus && (
+                              <p className="text-sm text-red-600">
+                                Raison: {acces.raison_refus}
+                              </p>
+                            )}
+                            <p className="text-xs text-gray-500 mt-2">
+                              Refusé le: {new Date(acces.date_refus || acces.date_modification || acces.updated_at || acces.created_at).toLocaleDateString('fr-FR')}
+                            </p>
+                            {/* Debug: Afficher toutes les clés disponibles */}
+                            <details className="mt-2">
+                              <summary className="text-xs text-gray-400 cursor-pointer">Voir les données complètes</summary>
+                              <pre className="text-xs text-gray-500 mt-1 bg-gray-100 p-2 rounded">
+                                {JSON.stringify(acces, null, 2)}
+                              </pre>
+                            </details>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-4 bg-gray-50 rounded-lg">
+                    <p className="text-gray-500 text-sm">Aucun accès refusé</p>
+                    <p className="text-xs text-gray-400 mt-1">Total des droits d'accès: {droitsAcces.length}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Accès expirés */}
+              <div className="mb-6">
+                <h4 className="text-md font-medium text-gray-800 mb-3 flex items-center">
+                  <FaTimes className="w-4 h-4 text-orange-500 mr-2" />
+                  Accès expirés ({droitsAcces.filter(acc => acc.statut === 'expire' || acc.status === 'expire' || (acc.date_fin && new Date(acc.date_fin) < new Date()) || (acc.end_date && new Date(acc.end_date) < new Date())).length})
+                </h4>
+                {droitsAcces.filter(acc => acc.statut === 'expire' || acc.status === 'expire' || (acc.date_fin && new Date(acc.date_fin) < new Date()) || (acc.end_date && new Date(acc.end_date) < new Date())).length > 0 ? (
+                  <div className="space-y-3">
+                    {droitsAcces.filter(acc => acc.statut === 'expire' || acc.status === 'expire' || (acc.date_fin && new Date(acc.date_fin) < new Date()) || (acc.end_date && new Date(acc.end_date) < new Date())).map((acces, index) => (
+                      <div key={index} className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center space-x-2 mb-2">
+                              <span className="font-medium text-gray-900">
+                                {acces.nom_professionnel || acces.nom || acces.professional_name || 'Nom non spécifié'} {acces.prenom_professionnel || acces.prenom || acces.professional_firstname || ''}
+                              </span>
+                              <span className="bg-orange-100 text-orange-800 text-xs px-2 py-1 rounded-full font-medium">
+                                Expiré
+                              </span>
+                            </div>
+                            <p className="text-sm text-gray-600 mb-1">
+                              {acces.specialite || acces.speciality || 'Spécialité non spécifiée'}
+                            </p>
+                            <p className="text-xs text-gray-500 mt-2">
+                              Expiré le: {new Date(acces.date_fin || acces.end_date || acces.date_modification || acces.updated_at || acces.created_at).toLocaleDateString('fr-FR')}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-4 bg-gray-50 rounded-lg">
+                    <p className="text-gray-500 text-sm">Aucun accès expiré</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Accès révoqués */}
+              <div>
+                <h4 className="text-md font-medium text-gray-800 mb-3 flex items-center">
+                  <FaTimes className="w-4 h-4 text-gray-500 mr-2" />
+                  Accès révoqués ({droitsAcces.filter(acc => acc.statut === 'revoke' || acc.statut === 'revoked' || acc.status === 'revoke' || acc.status === 'revoked').length})
+                </h4>
+                {droitsAcces.filter(acc => acc.statut === 'revoke' || acc.statut === 'revoked' || acc.status === 'revoke' || acc.status === 'revoked').length > 0 ? (
+                  <div className="space-y-3">
+                    {droitsAcces.filter(acc => acc.statut === 'revoke' || acc.statut === 'revoked' || acc.status === 'revoke' || acc.status === 'revoked').map((acces, index) => (
+                      <div key={index} className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center space-x-2 mb-2">
+                              <span className="font-medium text-gray-900">
+                                {acces.nom_professionnel || acces.nom || acces.professional_name || 'Nom non spécifié'} {acces.prenom_professionnel || acces.prenom || acces.professional_firstname || ''}
+                              </span>
+                              <span className="bg-gray-100 text-gray-800 text-xs px-2 py-1 rounded-full font-medium">
+                                Révoqué
+                              </span>
+                            </div>
+                            <p className="text-sm text-gray-600 mb-1">
+                              {acces.specialite || acces.speciality || 'Spécialité non spécifiée'}
+                            </p>
+                            {acces.raison_revocation && (
+                              <p className="text-sm text-gray-600">
+                                Raison: {acces.raison_revocation}
+                              </p>
+                            )}
+                            <p className="text-xs text-gray-500 mt-2">
+                              Révoqué le: {new Date(acces.date_revocation || acces.date_modification || acces.updated_at || acces.created_at).toLocaleDateString('fr-FR')}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-4 bg-gray-50 rounded-lg">
+                    <p className="text-gray-500 text-sm">Aucun accès révoqué</p>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}

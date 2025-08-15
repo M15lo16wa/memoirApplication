@@ -116,38 +116,106 @@ export const getPatientInfo = async (patientId) => {
     try {
         console.log(`🔍 Récupération des informations du patient ${patientId}...`);
         
-        // Essayer d'abord la route patient directe
+        // Essayer d'abord la fonction getPatient de patientApi
+        try {
+            const { getPatient } = await import('./patientApi.js');
+            const patientData = await getPatient(patientId);
+            console.log(`✅ Informations patient récupérées via getPatient:`, patientData);
+            
+            // Extraire les données du patient de la réponse
+            if (patientData?.data?.patient) {
+                return patientData.data.patient;
+            } else if (patientData?.patient) {
+                return patientData.patient;
+            } else if (patientData?.data) {
+                return patientData.data;
+            } else {
+                return patientData;
+            }
+        } catch (patientError) {
+            console.log(`⚠️ getPatient non disponible, essai via route directe...`);
+        }
+        
+        // Essayer la route patient directe
         try {
             const response = await dmpApi.get(`/patient/${patientId}`);
             console.log(`✅ Informations patient récupérées via /patient/${patientId}:`, response.data);
-            return response.data.data || response.data;
+            
+            if (response.data?.data?.patient) {
+                return response.data.data.patient;
+            } else if (response.data?.patient) {
+                return response.data.patient;
+            } else if (response.data?.data) {
+                return response.data.data;
+            } else {
+                return response.data;
+            }
         } catch (patientError) {
             console.log(`⚠️ Route /patient/${patientId} non disponible, essai via dossier médical...`);
         }
         
         // Fallback via le dossier médical
-        const dossierResponse = await dmpApi.get(`/dossierMedical/patient/${patientId}/complet`);
-        const dossierData = dossierResponse.data.data || dossierResponse.data;
-        
-        // Extraire les informations du patient du dossier
-        if (dossierData?.patient) {
-            console.log(`✅ Informations patient extraites du dossier:`, dossierData.patient);
-            return dossierData.patient;
-        } else if (dossierData?.patient_info) {
-            console.log(`✅ Informations patient extraites du dossier (patient_info):`, dossierData.patient_info);
-            return dossierData.patient_info;
-        } else {
-            // Créer un objet patient minimal avec les données disponibles
-            const patientInfo = {
-                id: patientId,
-                nom: dossierData?.nom || 'Patient',
-                prenom: dossierData?.prenom || 'Inconnu',
-                date_naissance: dossierData?.date_naissance || 'N/A',
-                groupe_sanguin: dossierData?.groupe_sanguin || 'N/A'
-            };
-            console.log(`⚠️ Informations patient limitées, objet créé:`, patientInfo);
-            return patientInfo;
+        try {
+            const dossierResponse = await dmpApi.get(`/dossierMedical/patient/${patientId}/complet`);
+            const dossierData = dossierResponse.data.data || dossierResponse.data;
+            console.log(`📋 Données du dossier récupérées:`, dossierData);
+            
+            // Extraire les informations du patient du dossier
+            if (dossierData?.patient) {
+                console.log(`✅ Informations patient extraites du dossier:`, dossierData.patient);
+                return dossierData.patient;
+            } else if (dossierData?.patient_info) {
+                console.log(`✅ Informations patient extraites du dossier (patient_info):`, dossierData.patient_info);
+                return dossierData.patient_info;
+            } else if (dossierData?.nom || dossierData?.prenom) {
+                // Créer un objet patient avec les données disponibles dans le dossier
+                const patientInfo = {
+                    id: patientId,
+                    nom: dossierData.nom || 'Patient',
+                    prenom: dossierData.prenom || 'Inconnu',
+                    date_naissance: dossierData.date_naissance || 'N/A',
+                    groupe_sanguin: dossierData.groupe_sanguin || 'N/A'
+                };
+                console.log(`⚠️ Informations patient extraites des propriétés du dossier:`, patientInfo);
+                return patientInfo;
+            } else {
+                console.warn(`⚠️ Aucune information patient trouvée dans le dossier`);
+                console.log(`🔍 Clés disponibles dans le dossier:`, Object.keys(dossierData || {}));
+            }
+        } catch (dossierError) {
+            console.log(`⚠️ Route dossier médical non disponible:`, dossierError.message);
         }
+        
+        // Dernier fallback : essayer de récupérer depuis la liste des patients
+        try {
+            const { getPatients } = await import('./patientApi.js');
+            const patientsResponse = await getPatients();
+            console.log(`🔍 Recherche du patient ${patientId} dans la liste des patients...`);
+            
+            if (patientsResponse?.data) {
+                const patients = Array.isArray(patientsResponse.data) ? patientsResponse.data : [patientsResponse.data];
+                const patient = patients.find(p => p.id == patientId || p.id_patient == patientId);
+                
+                if (patient) {
+                    console.log(`✅ Patient trouvé dans la liste:`, patient);
+                    return patient;
+                }
+            }
+        } catch (listError) {
+            console.log(`⚠️ Impossible de récupérer la liste des patients:`, listError.message);
+        }
+        
+        // Si aucune méthode n'a fonctionné, créer un objet patient minimal
+        console.warn(`⚠️ Aucune méthode n'a permis de récupérer les informations du patient ${patientId}`);
+        const fallbackPatient = {
+            id: patientId,
+            nom: 'Patient',
+            prenom: 'Inconnu',
+            date_naissance: 'N/A',
+            groupe_sanguin: 'N/A'
+        };
+        console.log(`⚠️ Objet patient minimal créé:`, fallbackPatient);
+        return fallbackPatient;
         
     } catch (error) {
         console.error(`❌ Erreur lors de la récupération des informations du patient ${patientId}:`, error);
@@ -421,8 +489,18 @@ export const marquerNotificationDroitsAccesLue = async (notificationId) => {
 
 // --- Historique et accès ---
 export const getDMPAccessHistory = async (patientId) => {
-    const response = await dmpApi.get(`/access/history/patient/${patientId}`);
-    return response.data.data;
+    // Validation du patientId
+    if (!patientId) {
+        throw new Error('ID du patient requis pour récupérer l\'historique DMP');
+    }
+    
+    try {
+        const response = await dmpApi.get(`/access/history/patient/${patientId}`);
+        return response.data.data;
+    } catch (error) {
+        console.error(`Erreur lors de la récupération de l'historique DMP pour le patient ${patientId}:`, error);
+        throw error;
+    }
 };
 
 // --- Documents DMP ---

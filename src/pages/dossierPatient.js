@@ -4,9 +4,19 @@ import { QRCodeCanvas } from 'qrcode.react';
 
 import { getPatients, createDossierMedical, getServices, getAllDossiersMedical, getDossierMedical, closeDossierPatient, updateDossierPatient, createOrdonnance, createExamen, getAllPrescriptions, getOrdonnancesRecentes, createOrdonnanceComplete, ajouterPrescriptionAuDossier, marquerNotificationLue, getNotificationsPatient, getResumeAujourdhui } from "../services/api/medicalApi";
 import DMPHistory from "../components/dmp/DMPHistory";
+import { useDMP } from "../context/DMPContext";
 
 function DossierPatient() {
   const navigate = useNavigate();
+  const { state: dmpState } = useDMP();
+
+  // Fonction pour récupérer le patientId actuel
+  const getCurrentPatientId = () => {
+    return dmpState?.patientId || 
+           selectedPatientForPrescription?.id || 
+           selectedPatientForPrescription?.rawData?.id_patient || 
+           selectedPatientForPrescription?.id_patient;
+  };
 
   const loadServices = async () => {
     setServicesLoading(true);
@@ -1702,7 +1712,41 @@ const loadOrdonnancesRecentes = useCallback(async () => {
                 </div>
               </div>
               
-              <DMPHistory />
+              {/* Sélection de patient pour l'historique DMP */}
+              <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+                <h3 className="text-lg font-semibold mb-4">Sélection du Patient</h3>
+                <div className="flex items-center space-x-4">
+                  <select
+                    value={getCurrentPatientId() || ''}
+                    onChange={(e) => {
+                      const selectedPatient = patients.find(p => 
+                        (p.id || p.rawData?.id_patient || p.id_patient) === parseInt(e.target.value)
+                      );
+                      if (selectedPatient) {
+                        setSelectedPatientForPrescription(selectedPatient);
+                      }
+                    }}
+                    className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">-- Sélectionnez un patient --</option>
+                    {Array.isArray(patients) && patients.map((patient, idx) => (
+                      <option 
+                        key={idx} 
+                        value={patient.id || patient.rawData?.id_patient || patient.id_patient}
+                      >
+                        {patient.name || patient.nom || `Patient ${idx + 1}`}
+                      </option>
+                    ))}
+                  </select>
+                  {getCurrentPatientId() && (
+                    <span className="text-sm text-gray-600">
+                      Patient sélectionné: {selectedPatientForPrescription?.name || selectedPatientForPrescription?.nom || 'Patient'}
+                    </span>
+                  )}
+                </div>
+              </div>
+              
+              <DMPHistory patientId={getCurrentPatientId()} />
             </div>
           )}
           {/* Notifications */}

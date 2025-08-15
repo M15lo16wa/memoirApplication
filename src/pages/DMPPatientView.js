@@ -13,6 +13,7 @@ const DMPPatientView = () => {
   const [patient, setPatient] = useState(null);
   const [documents, setDocuments] = useState([]);
   const [autoMesures, setAutoMesures] = useState([]);
+  const [dossierData, setDossierData] = useState(null);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [quitting, setQuitting] = useState(false);
 
@@ -44,6 +45,9 @@ const DMPPatientView = () => {
         const dossierData = await dmpApi.getSecureDossierForMedecin(patientId);
         console.log(`📋 Dossier complet reçu:`, dossierData);
         
+        // Sauvegarder les données du dossier dans le state
+        setDossierData(dossierData);
+
         // Extraire les informations du patient
         let patientInfo = null;
         if (dossierData?.patient) {
@@ -85,13 +89,86 @@ const DMPPatientView = () => {
         setPatient(patientInfo);
         
         // Extraire les documents
-        const patientDocuments = Array.isArray(dossierData?.documents) ? dossierData.documents : [];
-        console.log(`📄 ${patientDocuments.length} documents extraits:`, patientDocuments);
+        let patientDocuments = [];
+        
+        // Explorer la structure complète pour trouver les documents
+        console.log(`🔍 Recherche des documents dans la structure du dossier...`);
+        console.log(`📋 Structure complète reçue:`, dossierData);
+        
+        // Essayer différentes structures possibles pour les documents
+        if (dossierData?.documents && Array.isArray(dossierData.documents)) {
+          patientDocuments = dossierData.documents;
+          console.log(`✅ Documents trouvés dans dossierData.documents:`, patientDocuments);
+        } else if (dossierData?.dossier?.documents && Array.isArray(dossierData.dossier.documents)) {
+          patientDocuments = dossierData.dossier.documents;
+          console.log(`✅ Documents trouvés dans dossierData.dossier.documents:`, patientDocuments);
+        } else if (dossierData?.dossier?.documents_personnels && Array.isArray(dossierData.dossier.documents_personnels)) {
+          patientDocuments = dossierData.dossier.documents_personnels;
+          console.log(`✅ Documents trouvés dans dossierData.dossier.documents_personnels:`, patientDocuments);
+        } else if (dossierData?.documents_personnels && Array.isArray(dossierData.documents_personnels)) {
+          patientDocuments = dossierData.documents_personnels;
+          console.log(`✅ Documents trouvés dans dossierData.documents_personnels:`, patientDocuments);
+        } else {
+          // Si aucun document trouvé, essayer de les récupérer via l'API dédiée
+          console.log(`⚠️ Aucun document trouvé dans le dossier, tentative via API dédiée...`);
+          try {
+            const documentsResponse = await dmpApi.getDocumentsPersonnelsDMP(patientId);
+            console.log(`📄 Documents récupérés via API dédiée:`, documentsResponse);
+            
+            if (Array.isArray(documentsResponse)) {
+              patientDocuments = documentsResponse;
+            } else if (documentsResponse && Array.isArray(documentsResponse.data)) {
+              patientDocuments = documentsResponse.data;
+            }
+            
+            console.log(`✅ ${patientDocuments.length} documents récupérés via API dédiée`);
+          } catch (docError) {
+            console.warn(`⚠️ Impossible de récupérer les documents via API dédiée:`, docError);
+          }
+        }
+        
+        console.log(`📄 ${patientDocuments.length} documents finaux extraits:`, patientDocuments);
         setDocuments(patientDocuments);
         
         // Extraire les auto-mesures
-        const patientAutoMesures = Array.isArray(dossierData?.autoMesures) ? dossierData.autoMesures : [];
-        console.log(`📊 ${patientAutoMesures.length} auto-mesures extraites:`, patientAutoMesures);
+        let patientAutoMesures = [];
+        
+        // Explorer la structure complète pour trouver les auto-mesures
+        console.log(`🔍 Recherche des auto-mesures dans la structure du dossier...`);
+        
+        // Essayer différentes structures possibles pour les auto-mesures
+        if (dossierData?.autoMesures && Array.isArray(dossierData.autoMesures)) {
+          patientAutoMesures = dossierData.autoMesures;
+          console.log(`✅ Auto-mesures trouvées dans dossierData.autoMesures:`, patientAutoMesures);
+        } else if (dossierData?.auto_mesures && Array.isArray(dossierData.auto_mesures)) {
+          patientAutoMesures = dossierData.auto_mesures;
+          console.log(`✅ Auto-mesures trouvées dans dossierData.auto_mesures:`, patientAutoMesures);
+        } else if (dossierData?.dossier?.autoMesures && Array.isArray(dossierData.dossier.autoMesures)) {
+          patientAutoMesures = dossierData.dossier.autoMesures;
+          console.log(`✅ Auto-mesures trouvées dans dossierData.dossier.autoMesures:`, patientAutoMesures);
+        } else if (dossierData?.dossier?.auto_mesures && Array.isArray(dossierData.dossier.auto_mesures)) {
+          patientAutoMesures = dossierData.dossier.auto_mesures;
+          console.log(`✅ Auto-mesures trouvées dans dossierData.dossier.auto_mesures:`, patientAutoMesures);
+        } else {
+          // Si aucune auto-mesure trouvée, essayer de les récupérer via l'API dédiée
+          console.log(`⚠️ Aucune auto-mesure trouvée dans le dossier, tentative via API dédiée...`);
+          try {
+            const autoMesuresResponse = await dmpApi.getAutoMesuresDMP(patientId);
+            console.log(`📊 Auto-mesures récupérées via API dédiée:`, autoMesuresResponse);
+            
+            if (autoMesuresResponse && Array.isArray(autoMesuresResponse.data)) {
+              patientAutoMesures = autoMesuresResponse.data;
+            } else if (Array.isArray(autoMesuresResponse)) {
+              patientAutoMesures = autoMesuresResponse;
+            }
+            
+            console.log(`✅ ${patientAutoMesures.length} auto-mesures récupérées via API dédiée`);
+          } catch (autoMesuresError) {
+            console.warn(`⚠️ Impossible de récupérer les auto-mesures via API dédiée:`, autoMesuresError);
+          }
+        }
+        
+        console.log(`📊 ${patientAutoMesures.length} auto-mesures finales extraites:`, patientAutoMesures);
         setAutoMesures(patientAutoMesures);
         
         console.log(`✅ Chargement terminé avec succès pour le patient ${patientId}`);
@@ -381,7 +458,7 @@ const DMPPatientView = () => {
         </div>
 
         {/* Documents et Auto-mesures */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
           {/* Documents */}
           <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
             <div className="flex items-center space-x-3 mb-6">
@@ -491,6 +568,61 @@ const DMPPatientView = () => {
                 ))}
               </div>
             )}
+          </div>
+        </div>
+
+        {/* Informations médicales supplémentaires */}
+        <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
+          <h3 className="text-xl font-bold text-gray-800 mb-6">Informations médicales</h3>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {/* Prescriptions actives */}
+            <div className="bg-blue-50 rounded-xl p-4 border border-blue-200">
+              <div className="flex items-center space-x-3 mb-3">
+                <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center">
+                  <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                </div>
+                <h4 className="font-semibold text-gray-800">Prescriptions actives</h4>
+              </div>
+              <p className="text-2xl font-bold text-blue-600">
+                {dossierData?.prescriptions_actives?.length || 0}
+              </p>
+              <p className="text-sm text-gray-600">Prescriptions en cours</p>
+            </div>
+
+            {/* Consultations récentes */}
+            <div className="bg-green-50 rounded-xl p-4 border border-green-200">
+              <div className="flex items-center space-x-3 mb-3">
+                <div className="w-8 h-8 bg-green-500 rounded-lg flex items-center justify-center">
+                  <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                </div>
+                <h4 className="font-semibold text-gray-800">Consultations récentes</h4>
+              </div>
+              <p className="text-2xl font-bold text-green-600">
+                {dossierData?.consultations_recentes?.length || 0}
+              </p>
+              <p className="text-sm text-gray-600">Consultations récentes</p>
+            </div>
+
+            {/* Examens récents */}
+            <div className="bg-purple-50 rounded-xl p-4 border border-purple-200">
+              <div className="flex items-center space-x-3 mb-3">
+                <div className="w-8 h-8 bg-purple-500 rounded-lg flex items-center justify-center">
+                  <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+                  </svg>
+                </div>
+                <h4 className="font-semibold text-gray-800">Examens récents</h4>
+              </div>
+              <p className="text-2xl font-bold text-purple-600">
+                {dossierData?.examens_recents?.length || 0}
+              </p>
+              <p className="text-sm text-gray-600">Examens récents</p>
+            </div>
           </div>
         </div>
       </div>
