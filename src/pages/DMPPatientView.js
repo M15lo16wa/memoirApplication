@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import dmpApi from '../services/api/dmpApi';
 
+
+
 const DMPPatientView = () => {
   const { patientId } = useParams();
   const navigate = useNavigate();
@@ -11,6 +13,8 @@ const DMPPatientView = () => {
   const [patient, setPatient] = useState(null);
   const [documents, setDocuments] = useState([]);
   const [autoMesures, setAutoMesures] = useState([]);
+  const [showConfirmation, setShowConfirmation] = useState(false);
+  const [quitting, setQuitting] = useState(false);
 
   useEffect(() => {
     const loadAll = async () => {
@@ -44,7 +48,61 @@ const DMPPatientView = () => {
   }, [patientId]);
 
   const handleQuitterDossier = () => {
-    navigate('/dmp');
+    // Afficher la modal de confirmation
+    setShowConfirmation(true);
+  };
+
+  const handleConfirmQuitter = async () => {
+    try {
+      setQuitting(true);
+      setShowConfirmation(false);
+      
+      console.log('�� Révocation automatique de l\'accès au dossier patient...');
+      
+      // Récupérer l'ID du professionnel connecté
+      const storedMedecin = JSON.parse(localStorage.getItem('medecin') || '{}');
+      const professionnelId = storedMedecin?.id || storedMedecin?.id_professionnel;
+      
+      if (professionnelId && patientId) {
+        // ✅ ÉTAPE 1: Récupérer l'ID de l'autorisation active
+        const verification = await dmpApi.verifierAccesMedecinPatient(professionnelId, patientId);
+        
+        if (verification.hasAccess && verification.authorization) {
+          const autorisationId = verification.authorization.id_acces;
+          console.log('�� Autorisation trouvée:', autorisationId);
+          
+          // ✅ ÉTAPE 2: Désactiver l'autorisation avec son ID
+          await dmpApi.desactiverAutorisationMedecin(
+            autorisationId, // ✅ ID de l'autorisation
+            'Accès désactivé automatiquement lors de la fermeture du dossier'
+          );
+          console.log('✅ Accès désactivé avec succès');
+          
+          // ✅ ÉTAPE 3: Vérifier que l'accès a bien été désactivé
+          const verificationFinale = await dmpApi.verifierAccesMedecinPatient(professionnelId, patientId);
+          if (verificationFinale.hasAccess) {
+            console.warn('⚠️ L\'accès n\'a pas été complètement désactivé');
+          } else {
+            console.log('✅ Vérification confirmée: accès désactivé');
+          }
+        } else {
+          console.log('ℹ️ Aucune autorisation active trouvée');
+        }
+      }
+      
+      // Rediriger vers le DMP
+      navigate('/dmp');
+    } catch (error) {
+      console.error('❌ Erreur lors de la désactivation de l\'accès:', error);
+      // Même en cas d'erreur, on quitte le dossier
+      navigate('/dmp');
+    } finally {
+      setQuitting(false);
+    }
+  };
+
+  const handleCancelQuitter = () => {
+    setShowConfirmation(false);
   };
 
   if (loading) {
@@ -111,12 +169,26 @@ const DMPPatientView = () => {
             <div className="flex items-center space-x-3">
               <button
                 onClick={handleQuitterDossier}
-                className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200 shadow-md hover:shadow-lg"
+                disabled={quitting}
+                className={`flex items-center space-x-2 font-medium py-2 px-4 rounded-lg transition-colors duration-200 shadow-md hover:shadow-lg ${
+                  quitting 
+                    ? 'bg-gray-400 cursor-not-allowed' 
+                    : 'bg-blue-600 hover:bg-blue-700 text-white'
+                }`}
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                </svg>
-                <span>Quitter dossier patient</span>
+                {quitting ? (
+                  <>
+                    <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
+                    <span>Révocation en cours...</span>
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                    </svg>
+                    <span>Quitter dossier patient</span>
+                  </>
+                )}
               </button>
               <div className="h-8 w-px bg-gray-300"></div>
               <h1 className="text-2xl font-bold text-gray-800">Dossier DMP du Patient</h1>
@@ -305,6 +377,43 @@ const DMPPatientView = () => {
           </div>
         </div>
       </div>
+      
+      {/* Modal de confirmation pour quitter le dossier */}
+      {showConfirmation && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md mx-4">
+            <div className="text-center">
+              <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                </svg>
+              </div>
+              <h3 className="text-xl font-bold text-gray-800 mb-4">Quitter le dossier patient</h3>
+              <p className="text-gray-600 mb-6">
+                Êtes-vous sûr de vouloir quitter le dossier de <strong>{patient?.prenom} {patient?.nom}</strong> ? 
+                <br /><br />
+                <span className="text-orange-600 font-medium">
+                  ⚠️ Votre accès sera automatiquement révoqué et vous devrez faire une nouvelle demande pour y accéder à nouveau.
+                </span>
+              </p>
+              <div className="flex space-x-4">
+                <button
+                  onClick={handleCancelQuitter}
+                  className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-800 font-medium py-3 px-6 rounded-lg transition-colors duration-200"
+                >
+                  Annuler
+                </button>
+                <button
+                  onClick={handleConfirmQuitter}
+                  className="flex-1 bg-orange-600 hover:bg-orange-700 text-white font-medium py-3 px-6 rounded-lg transition-colors duration-200"
+                >
+                  Quitter et révoquer l'accès
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

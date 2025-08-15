@@ -35,6 +35,13 @@ const AutorisationsEnAttente = () => {
       };
       
       console.log('✅ AutorisationsEnAttente: Réponse API reçue:', result);
+      console.log('🔍 AutorisationsEnAttente: Détail pendingRequests:', {
+        pendingRequests: result.pendingRequests,
+        pendingRequestsData: result.pendingRequests?.data,
+        pendingRequestsArray: result.pendingRequests?.data?.pendingRequests,
+        pendingRequestsKeys: result.pendingRequests ? Object.keys(result.pendingRequests) : [],
+        pendingRequestsDataKeys: result.pendingRequests?.data ? Object.keys(result.pendingRequests.data) : []
+      });
 
       // Normalisation robuste des formats de réponse possibles
       const extractList = (payload) => {
@@ -50,6 +57,9 @@ const AutorisationsEnAttente = () => {
         if (Array.isArray(payload?.authorizations)) {
           return payload.authorizations;
         }
+        if (Array.isArray(payload?.pendingRequests)) {
+          return payload.pendingRequests;
+        }
         if (Array.isArray(payload?.data?.authorizationAccess)) {
           return payload.data.authorizationAccess;
         }
@@ -58,6 +68,9 @@ const AutorisationsEnAttente = () => {
         }
         if (Array.isArray(payload?.data?.authorizations)) {
           return payload.data.authorizations;
+        }
+        if (Array.isArray(payload?.data?.pendingRequests)) {
+          return payload.data.pendingRequests;
         }
         if (Array.isArray(payload?.data)) {
           return payload.data;
@@ -69,15 +82,30 @@ const AutorisationsEnAttente = () => {
       };
 
       // Combiner toutes les sources d'autorisations
+      const extractedAuthorizations = extractList(result.authorizations);
+      const extractedAccessHistory = extractList(result.accessHistory);
+      const extractedPendingRequests = extractList(result.pendingRequests);
+      
+      console.log('🔍 AutorisationsEnAttente: Données extraites de chaque source:', {
+        authorizations: extractedAuthorizations,
+        accessHistory: extractedAccessHistory,
+        pendingRequests: extractedPendingRequests
+      });
+      
       const allAuthorizations = [
-        ...extractList(result.authorizations),
-        ...extractList(result.accessHistory),
-        ...extractList(result.pendingRequests)
+        ...extractedAuthorizations,
+        ...extractedAccessHistory,
+        ...extractedPendingRequests
       ];
       
       // Supprimer les doublons basés sur l'ID
       const uniqueAuthorizations = allAuthorizations.filter((auth, index, self) => 
-        index === self.findIndex(a => a.id_acces === auth.id_acces || a.id === auth.id)
+        index === self.findIndex(a => 
+          (a.id_acces === auth.id_acces) || 
+          (a.id === auth.id) || 
+          (a.id_acces_autorisation === auth.id_acces_autorisation) ||
+          (a.id_notification === auth.id_notification)
+        )
       );
       
       const autorisationsRaw = uniqueAuthorizations;
@@ -109,7 +137,12 @@ const AutorisationsEnAttente = () => {
       console.log('🔍 AutorisationsEnAttente: Structure des données après normalisation:', {
         total: autorisationsData.length,
         premier: autorisationsData[0],
-        statuts: autorisationsData.map(a => ({ id: a.id_acces, statut: a.statut, professionnel: a.professionnel }))
+        statuts: autorisationsData.map(a => ({ 
+          id: a.id_acces || a.id_acces_autorisation, 
+          statut: a.statut, 
+          professionnel: a.professionnel,
+          type: a.type || 'demande_acces'
+        }))
       });
       setAutorisations(autorisationsData);
     } catch (error) {
@@ -132,7 +165,11 @@ const AutorisationsEnAttente = () => {
   };
 
   // Filtrer les autorisations par statut
-  const autorisationsEnAttente = autorisations.filter(a => a.statut === 'attente_validation');
+  // Gérer les demandes d'accès qui n'ont pas de statut mais sont des notifications de demande
+  const autorisationsEnAttente = autorisations.filter(a => 
+    a.statut === 'attente_validation' || 
+    (a.id_notification && a.id_acces_autorisation && !a.statut) // Demandes d'accès en attente
+  );
   const autorisationsActives = autorisations.filter(a => a.statut === 'actif');
   const autorisationsRefusees = autorisations.filter(a => a.statut === 'refuse');
   const autorisationsExpirees = autorisations.filter(a => a.statut === 'expire');
@@ -238,7 +275,7 @@ const AutorisationsEnAttente = () => {
           <div className="space-y-4">
             {autorisationsEnAttente.map((autorisation) => (
               <AutorisationCard
-                key={autorisation.id_acces}
+                key={autorisation.id_acces || autorisation.id_acces_autorisation || autorisation.id_notification}
                 autorisation={autorisation}
                 onUpdate={handleAutorisationUpdate}
               />
@@ -257,7 +294,7 @@ const AutorisationsEnAttente = () => {
           <div className="space-y-4">
             {autorisationsActives.map((autorisation) => (
               <AutorisationCard
-                key={autorisation.id_acces}
+                key={autorisation.id_acces || autorisation.id_acces_autorisation || autorisation.id_notification}
                 autorisation={autorisation}
                 onUpdate={handleAutorisationUpdate}
                 isActive={true}
@@ -277,7 +314,7 @@ const AutorisationsEnAttente = () => {
           <div className="space-y-4">
             {autorisationsRefusees.map((autorisation) => (
               <AutorisationCard
-                key={autorisation.id_acces}
+                key={autorisation.id_acces || autorisation.id_acces_autorisation || autorisation.id_notification}
                 autorisation={autorisation}
                 onUpdate={handleAutorisationUpdate}
               />
@@ -296,7 +333,7 @@ const AutorisationsEnAttente = () => {
           <div className="space-y-4">
             {autorisationsExpirees.map((autorisation) => (
               <AutorisationCard
-                key={autorisation.id_acces}
+                key={autorisation.id_acces || autorisation.id_acces_autorisation || autorisation.id_notification}
                 autorisation={autorisation}
                 onUpdate={handleAutorisationUpdate}
               />

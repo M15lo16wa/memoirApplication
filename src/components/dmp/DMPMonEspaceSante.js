@@ -4,12 +4,12 @@ import { FaUpload, FaFileMedical, FaHeartbeat, FaTrash, FaEye, FaDownload, FaPlu
 
 const DMPMonEspaceSante = () => {
     const { 
-        documents, 
         autoMesures, 
+        documents,
         loading, 
         error,
-        loadDocuments,
         loadAutoMesures,
+        loadDocuments,
         uploadDocument,
         createAutoMesure
     } = useDMP();
@@ -43,7 +43,8 @@ const DMPMonEspaceSante = () => {
     });
 
     useEffect(() => {
-        loadDocuments({}); // Charger avec des filtres vides par défaut
+        // Charger les documents et auto-mesures au montage du composant
+        loadDocuments();
         loadAutoMesures();
     }, [loadDocuments, loadAutoMesures]);
 
@@ -103,7 +104,7 @@ const DMPMonEspaceSante = () => {
                 description: '',
                 categorie: 'general'
             });
-            loadDocuments({}); // Recharger les documents
+            loadDocuments({}); // Recharger les documents via le contexte
         } catch (error) {
             console.error('Erreur lors de l\'upload:', error);
         }

@@ -227,8 +227,9 @@ export const getAutorisations = async (patientId = null) => {
 };
 
 export const accepterAutorisation = async (autorisationId, commentaire) => {
-    const response = await dmpApi.delete(`/access/authorization/${autorisationId}`, {
-        data: { reason: commentaire || 'Révoqué par l\'utilisateur' }
+    const response = await dmpApi.patch(`/access/authorization/${autorisationId}`, {
+        statut: 'actif',
+        commentaire: commentaire || 'Autorisation acceptée par le patient'
     });
     return response.data.data;
 };
@@ -251,6 +252,41 @@ export const revokerAutorisation = async (autorisationId, raisonRevocation) => {
         return response.data;
     } catch (error) {
         console.error('Erreur lors de la révocation de l\'autorisation:', error);
+        throw error;
+    }
+};
+
+// Fonction pour révoquer l'accès d'un médecin à un patient spécifique
+export const revokerAutorisationMedecin = async (professionnelId, patientId,raisonRevocation) => {
+    try {
+        console.log(`   Désactivation de l'accès: Médecin ${professionnelId} → Patient ${patientId}`);
+        
+        // ✅ ÉTAPE 1: Récupérer l'autorisation active
+        const verification = await dmpApi.get(`/access/status/${patientId}?professionnelId=${professionnelId}`);
+        
+        if (!verification.data.data.status || verification.data.data.status === 'not_requested') {
+            console.log('ℹ️ Aucune autorisation active trouvée');
+            return { message: 'Aucune autorisation active' };
+        }
+        
+        // ✅ ÉTAPE 2: Récupérer l'ID de l'autorisation
+        const autorisationId = verification.data.data.authorization?.id_acces;
+        if (!autorisationId) {
+            throw new Error('ID d\'autorisation non trouvé');
+        }
+        
+        // ✅ ÉTAPE 3: Désactiver l'autorisation
+        const response = await dmpApi.patch(`/access/authorization/${autorisationId}`, {
+            statut: 'inactif',
+            raison_demande: raisonRevocation || 'Accès désactivé lors de la fermeture du dossier',
+            date_fin: new Date().toISOString()
+        });
+
+        console.log('✅ Autorisation désactivée avec succès:', response.data);
+        return response.data;
+        
+    } catch (error) {
+        console.error('❌ Erreur lors de la désactivation de l\'autorisation:', error);
         throw error;
     }
 };
@@ -295,6 +331,64 @@ export const getDocumentsDMP = async (patientId = null, filters = {}) => {
     const url = patientId ? `/dossierMedical/patient/${patientId}/complet` : '/dossierMedical';
     const response = await dmpApi.get(url, { params: filters });
     return response.data.data;
+};
+
+// --- Documents personnels DMP ---
+export const getDocumentsPersonnelsDMP = async (patientId = null, filters = {}) => {
+    try {
+        // Construire les paramètres de requête
+        const params = new URLSearchParams();
+        
+        if (filters.type) params.append('type', filters.type);
+        if (filters.date_debut) params.append('date_debut', filters.date_debut);
+        if (filters.date_fin) params.append('date_fin', filters.date_fin);
+        
+        const queryString = params.toString();
+        const url = `/documents/patient${queryString ? `?${queryString}` : ''}`;
+        
+        const response = await dmpApi.get(url);
+        
+        // Vérifier que la réponse est valide et extraire les données
+        if (response.data && response.data.success) {
+            console.log(`✅ ${response.data.count || 0} documents personnels récupérés avec succès`);
+            return response.data.data;
+        } else {
+            throw new Error('Format de réponse invalide de l\'API');
+        }
+    } catch (error) {
+        console.error('❌ Erreur lors de la récupération des documents personnels:', error);
+        // En cas d'erreur, essayer de récupérer depuis le dossier médical
+        try {
+            console.log('🔄 Fallback: récupération depuis le dossier médical...');
+            const fallbackResponse = await dmpApi.get(`/dossierMedical/patient/${patientId}/complet`);
+            const dossier = fallbackResponse.data.data;
+            
+            // Extraire les documents personnels du dossier médical
+            let documents = [];
+            if (dossier && dossier.documents_personnels && Array.isArray(dossier.documents_personnels)) {
+                documents = dossier.documents_personnels;
+            } else if (dossier && dossier.documents && Array.isArray(dossier.documents)) {
+                documents = dossier.documents;
+            }
+            
+            // Appliquer les filtres si nécessaire
+            if (filters.type) {
+                documents = documents.filter(doc => doc.type === filters.type);
+            }
+            if (filters.date_debut) {
+                documents = documents.filter(doc => new Date(doc.createdAt) >= new Date(filters.date_debut));
+            }
+            if (filters.date_fin) {
+                documents = documents.filter(doc => new Date(doc.createdAt) <= new Date(filters.date_fin));
+            }
+            
+            console.log(`✅ ${documents.length} documents récupérés via fallback`);
+            return documents;
+        } catch (fallbackError) {
+            console.error('❌ Erreur lors du fallback:', fallbackError);
+            return [];
+        }
+    }
 };
 
 export const uploadDocumentDMP = async (patientId, documentData) => {
@@ -501,6 +595,25 @@ export const verifierAcces = async (patientId) => {
     return response.data.data;
 };
 
+// Fonction pour vérifier si un médecin a encore accès à un patient
+export const verifierAccesMedecinPatient = async (professionnelId, patientId) => {
+    try {
+        const response = await dmpApi.get(`/access/check/${professionnelId}/${patientId}/status`);
+        return {
+            hasAccess: response.data.data?.hasAccess || false,
+            status: response.data.data?.status || 'unknown',
+            message: response.data.data?.message || 'Statut d\'accès non disponible'
+        };
+    } catch (error) {
+        console.error('Erreur lors de la vérification de l\'accès:', error);
+        return {
+            hasAccess: false,
+            status: 'error',
+            message: 'Erreur lors de la vérification de l\'accès'
+        };
+    }
+};
+
 export const getDureeRestante = async (autorisationId) => {
     const response = await dmpApi.get(`/access/authorization/${autorisationId}`);
     // Calculer la durée restante à partir de la date d'expiration
@@ -532,11 +645,13 @@ const dmpApiExports = {
     accepterAutorisation,
     refuserAutorisation,
     revokerAutorisation,
+    revokerAutorisationMedecin,
     getNotificationsStats,
     marquerToutesNotificationsLues,
     marquerNotificationDroitsAccesLue,
     getDMPAccessHistory,
     getDocumentsDMP,
+    getDocumentsPersonnelsDMP,
     uploadDocumentDMP,
     getAutoMesuresDMP,
     createAutoMesureDMP,
@@ -557,8 +672,8 @@ const dmpApiExports = {
     verifierAutorisationExistence,
     getAutorisationsDemandees,
     verifierAcces,
+    verifierAccesMedecinPatient,
     getDureeRestante,
 };
 
 export default dmpApiExports;
-

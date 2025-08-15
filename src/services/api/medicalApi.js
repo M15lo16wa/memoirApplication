@@ -741,14 +741,42 @@ const downloadDocument = async (documentId) => {
     }
 };
 
-// 12-) view de document
-const viewDocument = async (documentId) => {
+// 12-) view de document avec gestion d'erreur améliorée
+export const viewDocument = async (filters = {}) => {
     try {
-        const response = await api.get(`/documents/${documentId}/view`);
-        return response.data;
+        // Construire les paramètres de requête
+        const params = new URLSearchParams();
+        
+        if (filters.type) params.append('type', filters.type);
+        if (filters.date_debut) params.append('date_debut', filters.date_debut);
+        if (filters.date_fin) params.append('date_fin', filters.date_fin);
+        
+        const queryString = params.toString();
+        const url = `/documents/patient${queryString ? `?${queryString}` : ''}`;
+        
+        const response = await api.get(url);
+        
+        // Vérifier que la réponse est valide et extraire les données
+        if (response.data && response.data.success) {
+            console.log(`✅ ${response.data.count} documents récupérés avec succès`);
+            return response.data.data;
+        } else {
+            throw new Error('Format de réponse invalide de l\'API');
+        }
     } catch (error) {
-        console.error('Erreur lors de la visualisation du document:', error);
-        throw error;
+        if (error.response) {
+            // Erreur de réponse du serveur
+            console.error('❌ Erreur serveur:', error.response.status, error.response.data);
+            throw new Error(`Erreur serveur: ${error.response.data.message || 'Erreur inconnue'}`);
+        } else if (error.request) {
+            // Erreur de requête (pas de réponse)
+            console.error('❌ Erreur de connexion:', error.request);
+            throw new Error('Erreur de connexion au serveur');
+        } else {
+            // Erreur autre
+            console.error('❌ Erreur lors de la visualisation des documents:', error.message);
+            throw error;
+        }
     }
 };
 
@@ -869,7 +897,7 @@ export {
     getHistoriqueConsultations,
     uploadDocument,
     downloadDocument,
-    viewDocument,
+    // viewDocument, // Removed duplicate export to fix lint error
     getResumeMedical,
     createConsultation,
     getConsultation,

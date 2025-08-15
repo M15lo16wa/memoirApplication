@@ -1,188 +1,155 @@
-# Fonctionnalité de Révocation d'Accès DMP
+# Fonctionnalité de Révocation Automatique d'Accès
 
 ## Vue d'ensemble
 
-La fonctionnalité de révocation d'accès permet aux patients de révoquer (annuler) l'accès d'un professionnel de santé à leur dossier médical partagé (DMP), même après que l'autorisation ait été acceptée et soit active.
+Cette fonctionnalité permet de révoquer automatiquement l'accès d'un médecin à un dossier patient dès qu'il clique sur "Quitter dossier patient". Cela garantit la sécurité des données en s'assurant qu'un médecin ne peut plus accéder au dossier d'un patient une fois qu'il a quitté la consultation.
 
-## Implémentation
+## Fonctionnement
 
-### 1. API Backend (`dmpApi.js`)
+### 1. Bouton "Quitter dossier patient"
 
-#### Nouvelle fonction `revokerAutorisation`
+- **Localisation** : Header de la page `DMPPatientView.js`
+- **Comportement** : Affiche une modal de confirmation avant de quitter
+- **État visuel** : 
+  - Normal : Bouton bleu avec icône de flèche
+  - En cours de révocation : Bouton gris avec spinner et texte "Révocation en cours..."
+
+### 2. Modal de confirmation
+
+La modal affiche :
+- ⚠️ **Avertissement clair** que l'accès sera révoqué
+- **Nom du patient** concerné
+- **Deux boutons** :
+  - "Annuler" : Ferme la modal sans action
+  - "Quitter et révoquer l'accès" : Confirme l'action
+
+### 3. Processus de révocation
+
+1. **Vérification des identifiants** : Récupération de l'ID du médecin et du patient
+2. **Appel API** : `revokerAutorisationMedecin(professionnelId, patientId, raison)`
+3. **Vérification** : Confirmation que l'accès a bien été révoqué
+4. **Redirection** : Retour à la page DMP principale
+
+## API Endpoints
+
+### Révocation d'accès
 ```javascript
-export const revokerAutorisation = async (autorisationId, raisonRevocation) => {
-    const response = await dmpApi.patch(`/access/authorization/${autorisationId}`, { 
-        statut: 'revoke', 
-        raisonRevocation 
-    });
-    return response.data.data;
-};
+DELETE /api/access/authorization/{patientId}
 ```
 
-**Endpoint utilisé** : `PATCH /access/authorization/{autorisationId}`
-**Paramètres** :
-- `statut: 'revoke'` - Marque l'autorisation comme révoquée
-- `raisonRevocation` - Raison de la révocation (obligatoire)
+**Paramètres :**
+- `patientId` : ID du patient (utilisé comme autorisationId)
+- `reason` : Raison de la révocation (ex: "Accès révoqué automatiquement lors de la fermeture du dossier")
+- `type` : Type de révocation ("medecin_patient_revocation")
+- `professionnelId` : ID du médecin qui révoque l'accès
 
-### 2. Interface Utilisateur (`AutorisationCard.js`)
-
-#### Bouton de révocation
-- **Affichage** : Visible uniquement pour les autorisations avec le statut `'actif'`
-- **Style** : Bouton rouge compact avec icône "X"
-- **Position** : Dans l'en-tête de la section "Accès actif"
-
+### Vérification d'accès
 ```javascript
-<button
-  onClick={handleRevoke}
-  className="flex items-center px-3 py-1.5 bg-red-600 text-white text-xs font-medium rounded-md hover:bg-red-700 transition-colors shadow-sm"
->
-  <FaTimes className="w-3 h-3 mr-1" />
-  Révoquer
-</button>
+GET /api/access/check/{professionnelId}/{patientId}/status
 ```
 
-#### Modal de confirmation
-- **Titre** : "Révoquer l'accès"
-- **Champ obligatoire** : Raison de la révocation
-- **Validation** : Le bouton est désactivé si la raison n'est pas renseignée
-- **Actions** : Annuler / Révoquer
-
-### 3. Gestion des États
-
-#### Nouveaux états ajoutés
-```javascript
-const [raisonRevocation, setRaisonRevocation] = useState('');
-```
-
-#### Logique de validation
-```javascript
-disabled={loading || 
-  (actionType === 'refuse' && !raisonRefus.trim()) ||
-  (actionType === 'revoke' && !raisonRevocation.trim())
-}
-```
-
-#### Nettoyage des états
-```javascript
-setRaisonRevocation('');
-```
-
-### 4. Statut Visuel
-
-#### Badge "Révoqué"
-```javascript
-case 'revoke':
-  return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-    <FaTimes className="w-3 h-3 mr-1" />
-    Révoqué
-  </span>;
-```
-
-## Flux Utilisateur
-
-### 1. Révocation d'un accès actif
-1. **Patient** : Consulte ses autorisations dans l'onglet "droits-acces"
-2. **Identification** : Repère une autorisation active (statut "actif")
-3. **Action** : Clique sur le bouton "Révoquer"
-4. **Confirmation** : Remplit le formulaire avec la raison de révocation
-5. **Validation** : Confirme la révocation
-6. **Résultat** : L'autorisation passe au statut "revoke"
-
-### 2. Gestion des erreurs
-- **Validation** : La raison de révocation est obligatoire
-- **Feedback** : Messages d'erreur et de succès appropriés
-- **Rollback** : En cas d'erreur, l'autorisation reste active
-
-## Sécurité et Contrôles
-
-### 1. Vérifications côté client
-- Seuls les patients peuvent révoquer leurs propres autorisations
-- La raison de révocation est obligatoire
-- Confirmation requise avant la révocation
-
-### 2. Vérifications côté serveur
-- L'endpoint vérifie l'authentification du patient
-- Validation que l'autorisation appartient bien au patient
-- Enregistrement de la raison de révocation
-
-## Cas d'Usage
-
-### 1. Révocation immédiate
-- **Situation** : Le patient change d'avis sur un accès accordé
-- **Action** : Révoque l'accès sans attendre l'expiration
-- **Impact** : L'accès est immédiatement suspendu
-
-### 2. Révocation pour cause de changement
-- **Situation** : Le patient change de médecin traitant
-- **Action** : Révoque l'accès de l'ancien médecin
-- **Impact** : Sécurisation du dossier médical
-
-### 3. Révocation pour cause de sécurité
-- **Situation** : Le patient suspecte un accès non autorisé
-- **Action** : Révoque l'accès par précaution
-- **Impact** : Protection immédiate des données
-
-## Intégration avec l'API
-
-### 1. Endpoint utilisé
-```
-PATCH /api/access/authorization/{autorisationId}
-```
-
-### 2. Corps de la requête
+**Retour :**
 ```json
 {
-  "statut": "revoke",
-  "raisonRevocation": "Changement de médecin traitant"
+  "hasAccess": false,
+  "status": "revoked",
+  "message": "Accès révoqué"
 }
 ```
 
-### 3. Réponse attendue
-```json
+## Fonctions d'API (Frontend)
+
+### `revokerAutorisationMedecin(professionnelId, patientId, raisonRevocation)`
+
+Révoque l'accès d'un médecin spécifique à un patient spécifique.
+
+**Paramètres :**
+- `professionnelId` : ID du professionnel de santé
+- `patientId` : ID du patient
+- `raisonRevocation` : Raison de la révocation
+
+**Retour :** Promise avec la réponse de l'API
+
+**Fallback :** Si l'endpoint spécifique n'existe pas, utilise l'endpoint général
+
+### `verifierAccesMedecinPatient(professionnelId, patientId)`
+
+Vérifie si un médecin a encore accès à un patient.
+
+**Retour :**
+```javascript
 {
-  "success": true,
-  "data": {
-    "id_acces": 123,
-    "statut": "revoke",
-    "raisonRevocation": "Changement de médecin traitant",
-    "date_revocation": "2024-01-15T10:30:00Z"
-  }
+  hasAccess: boolean,
+  status: string,
+  message: string
 }
 ```
 
-## Tests et Validation
+## Sécurité
 
-### 1. Tests fonctionnels
-- [ ] Révocation d'un accès actif
-- [ ] Validation de la raison obligatoire
-- [ ] Confirmation de la révocation
-- [ ] Mise à jour du statut visuel
-- [ ] Rechargement de la liste
+### Garanties
+- ✅ **Révocation immédiate** : L'accès est révoqué dès la confirmation
+- ✅ **Vérification** : Confirmation que l'accès a bien été révoqué
+- ✅ **Logs complets** : Toutes les actions sont tracées dans la console
+- ✅ **Gestion d'erreur** : Même en cas d'erreur, l'utilisateur quitte le dossier
 
-### 2. Tests de sécurité
-- [ ] Seuls les patients peuvent révoquer
-- [ ] Validation côté serveur
-- [ ] Enregistrement des actions
+### Prévention
+- ⚠️ **Confirmation obligatoire** : L'utilisateur doit confirmer son intention
+- ⚠️ **Avertissement clair** : Message explicite sur les conséquences
+- ⚠️ **Pas de retour en arrière** : Une fois confirmé, l'action est irréversible
 
-### 3. Tests d'interface
-- [ ] Affichage du bouton pour les accès actifs
-- [ ] Modal de confirmation
-- [ ] Messages d'erreur et de succès
-- [ ] Responsive design
+## Interface utilisateur
 
-## Maintenance et Évolutions
+### États du bouton
+1. **Normal** : Bouton bleu avec icône et texte "Quitter dossier patient"
+2. **Désactivé** : Bouton gris avec spinner et texte "Révocation en cours..."
+3. **Modal ouverte** : Bouton reste dans son état actuel
 
-### 1. Améliorations futures
-- **Historique des révocations** : Traçabilité des actions
-- **Notifications** : Informer le professionnel de la révocation
-- **Raison prédéfinies** : Liste de raisons communes
-- **Révocation temporaire** : Suspension temporaire de l'accès
+### Modal de confirmation
+- **Overlay** : Fond noir semi-transparent
+- **Z-index** : 50 (au-dessus de tout le contenu)
+- **Responsive** : S'adapte aux différentes tailles d'écran
+- **Accessibilité** : Boutons clairement identifiés et contrastés
 
-### 2. Monitoring
-- **Logs** : Enregistrement des révocations
-- **Métriques** : Taux de révocation par type d'accès
-- **Alertes** : Détection de révocations multiples
+## Logs et débogage
 
-## Conclusion
+### Console logs
+```
+🔒 Révocation automatique de l'accès au dossier patient...
+🔒 Révocation de l'accès: Médecin 123 → Patient 456
+✅ Accès révoqué avec succès
+✅ Vérification confirmée: accès révoqué
+```
 
-La fonctionnalité de révocation d'accès renforce le contrôle des patients sur leurs données médicales partagées, offrant une sécurité supplémentaire et une flexibilité dans la gestion des autorisations DMP.
+### Gestion d'erreur
+```
+❌ Erreur lors de la révocation de l'accès: [détails]
+⚠️ L'accès n'a pas été complètement révoqué
+```
+
+## Utilisation
+
+### Pour les médecins
+1. Cliquer sur "Quitter dossier patient"
+2. Confirmer dans la modal
+3. Attendre la révocation (spinner)
+4. Être redirigé vers le DMP
+
+### Pour les développeurs
+1. **Tester la révocation** : Vérifier les logs dans la console
+2. **Vérifier l'API** : S'assurer que les endpoints existent côté backend
+3. **Gérer les erreurs** : Vérifier la gestion des cas d'échec
+
+## Maintenance
+
+### Points d'attention
+- **Endpoints API** : Vérifier que les routes de révocation existent
+- **Gestion d'erreur** : Tester les cas d'échec de l'API
+- **Logs** : Surveiller les erreurs de révocation
+- **Performance** : La révocation doit être rapide (< 2 secondes)
+
+### Évolutions possibles
+- **Historique des révocations** : Traçabilité complète des actions
+- **Notifications** : Informer le patient de la révocation
+- **Audit trail** : Journal détaillé des accès et révocations
+- **Révocation en lot** : Révoquer plusieurs accès simultanément

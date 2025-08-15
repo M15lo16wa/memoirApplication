@@ -30,21 +30,24 @@ const AutorisationCard = ({ autorisation, onUpdate }) => {
       setLoading(true);
       
       if (actionType === 'accept') {
-        await accepterAutorisation(autorisation.id_acces, commentaire);
+        console.log('🔍 AutorisationCard: Appel de accepterAutorisation...');
+        console.log('🔍 AutorisationCard: ID:', autorisation.id_acces || autorisation.id_acces_autorisation);
+        console.log('🔍 AutorisationCard: Commentaire:', commentaire);
+        await accepterAutorisation(autorisation.id_acces || autorisation.id_acces_autorisation, commentaire);
         alert('Autorisation acceptée avec succès');
       } else if (actionType === 'refuse') {
         if (!raisonRefus.trim()) {
           alert('Veuillez indiquer une raison de refus');
           return;
         }
-        await refuserAutorisation(autorisation.id_acces, raisonRefus);
+        await refuserAutorisation(autorisation.id_acces || autorisation.id_acces_autorisation, raisonRefus);
         alert('Autorisation refusée');
       } else if (actionType === 'revoke') {
         if (!raisonRevocation.trim()) {
           alert('Veuillez indiquer une raison de révocation');
           return;
         }
-        await revokerAutorisation(autorisation.id_acces, raisonRevocation);
+        await revokerAutorisation(autorisation.id_acces || autorisation.id_acces_autorisation, raisonRevocation);
         alert('Accès révoqué avec succès');
       }
       
@@ -68,7 +71,15 @@ const AutorisationCard = ({ autorisation, onUpdate }) => {
     }
   };
 
-  const getStatusBadge = (status) => {
+  const getStatusBadge = (status, autorisation) => {
+    // Gérer les demandes d'accès sans statut
+    if (!status && autorisation.id_notification && autorisation.id_acces_autorisation) {
+      return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+        <FaClock className="w-3 h-3 mr-1" />
+        En attente
+      </span>;
+    }
+    
     switch (status) {
       case 'attente_validation':
         return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
@@ -133,7 +144,7 @@ const AutorisationCard = ({ autorisation, onUpdate }) => {
               </p>
             </div>
           </div>
-          {getStatusBadge(autorisation.statut)}
+          {getStatusBadge(autorisation.statut, autorisation)}
         </div>
 
         {/* Informations de la demande */}
@@ -165,7 +176,8 @@ const AutorisationCard = ({ autorisation, onUpdate }) => {
         </div>
 
         {/* Actions pour les demandes en attente */}
-        {autorisation.statut === 'attente_validation' && (
+        {(autorisation.statut === 'attente_validation' || 
+          (autorisation.id_notification && autorisation.id_acces_autorisation && !autorisation.statut)) && (
           <div className="flex space-x-3">
             <button
               onClick={handleAccept}

@@ -110,17 +110,15 @@ export const DMPProvider = ({ children }) => {
             // Charger les documents automatiquement
             const loadInitialDocuments = async () => {
                 try {
-                    const response = await dmpApi.getDocumentsDMP(state.patientId, {});
-                    console.log('📄 Documents chargés dans le contexte:', response);
+                    const response = await dmpApi.getDocumentsPersonnelsDMP(state.patientId, {});
+                    console.log('📄 Documents personnels chargés dans le contexte:', response);
                     
                     // S'assurer que nous avons un tableau de documents
                     let documents = [];
-                    if (response && response.data && response.data.documents_personnels && Array.isArray(response.data.documents_personnels)) {
-                        documents = response.data.documents_personnels;
+                    if (response && Array.isArray(response)) {
+                        documents = response;
                     } else if (response && response.data && Array.isArray(response.data)) {
                         documents = response.data;
-                    } else if (response && Array.isArray(response)) {
-                        documents = response;
                     }
                     
                     console.log('📄 Documents finaux pour le contexte:', documents);
@@ -280,24 +278,25 @@ export const DMPProvider = ({ children }) => {
             
             dispatch({ type: 'SET_LOADING', payload: true });
             try {
-                const response = await dmpApi.getDocumentsDMP(null, filters); // Utilise l'ID du patient connecté automatiquement
-                console.log('Documents chargés dans le contexte:', response);
+                // Utiliser getDocumentsPersonnelsDMP pour récupérer uniquement les documents personnels
+                const response = await dmpApi.getDocumentsPersonnelsDMP(state.patientId, filters);
+                console.log('📄 Documents personnels chargés via getDocumentsPersonnelsDMP:', response);
                 
                 // S'assurer que nous avons un tableau de documents
                 let documents = [];
-                if (response && response.data && response.data.documents_personnels && Array.isArray(response.data.documents_personnels)) {
-                    documents = response.data.documents_personnels;
+                if (response && Array.isArray(response)) {
+                    documents = response;
                 } else if (response && response.data && Array.isArray(response.data)) {
                     documents = response.data;
-                } else if (response && Array.isArray(response)) {
-                    documents = response;
                 }
                 
-                console.log('Documents finaux pour le contexte:', documents);
+                console.log('📄 Documents finaux pour le contexte:', documents);
                 dispatch({ type: 'SET_DOCUMENTS', payload: documents });
             } catch (error) {
-                console.error('Erreur lors du chargement des documents dans le contexte:', error);
-                dispatch({ type: 'SET_ERROR', payload: error.message });
+                console.error('❌ Erreur lors du chargement des documents via getDocumentsPersonnelsDMP:', error);
+                // En cas d'erreur, initialiser avec un tableau vide
+                console.warn("Erreur API: initialisation des documents avec tableau vide");
+                dispatch({ type: 'SET_DOCUMENTS', payload: [] });
             }
         },
 
@@ -524,7 +523,7 @@ export const DMPProvider = ({ children }) => {
                     dmpApi.getHistoriqueMedical(),
                     dmpApi.getJournalActivite(state.patientId),
                     dmpApi.getAutoMesuresDMP(null),
-                    dmpApi.getDocumentsDMP(null, {}),
+                    dmpApi.getDocumentsPersonnelsDMP(state.patientId, {}),
                     dmpApi.getDroitsAcces(state.patientId),
                     dmpApi.getBibliothequeSante(state.patientId),
                     dmpApi.getStatistiquesDMP(state.patientId),
