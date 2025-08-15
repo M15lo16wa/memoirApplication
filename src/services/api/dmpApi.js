@@ -111,6 +111,57 @@ const filterAccessByPatient = (accessData, patientId) => {
     });
 };
 
+// Fonction pour récupérer les informations de base d'un patient
+export const getPatientInfo = async (patientId) => {
+    try {
+        console.log(`🔍 Récupération des informations du patient ${patientId}...`);
+        
+        // Essayer d'abord la route patient directe
+        try {
+            const response = await dmpApi.get(`/patient/${patientId}`);
+            console.log(`✅ Informations patient récupérées via /patient/${patientId}:`, response.data);
+            return response.data.data || response.data;
+        } catch (patientError) {
+            console.log(`⚠️ Route /patient/${patientId} non disponible, essai via dossier médical...`);
+        }
+        
+        // Fallback via le dossier médical
+        const dossierResponse = await dmpApi.get(`/dossierMedical/patient/${patientId}/complet`);
+        const dossierData = dossierResponse.data.data || dossierResponse.data;
+        
+        // Extraire les informations du patient du dossier
+        if (dossierData?.patient) {
+            console.log(`✅ Informations patient extraites du dossier:`, dossierData.patient);
+            return dossierData.patient;
+        } else if (dossierData?.patient_info) {
+            console.log(`✅ Informations patient extraites du dossier (patient_info):`, dossierData.patient_info);
+            return dossierData.patient_info;
+        } else {
+            // Créer un objet patient minimal avec les données disponibles
+            const patientInfo = {
+                id: patientId,
+                nom: dossierData?.nom || 'Patient',
+                prenom: dossierData?.prenom || 'Inconnu',
+                date_naissance: dossierData?.date_naissance || 'N/A',
+                groupe_sanguin: dossierData?.groupe_sanguin || 'N/A'
+            };
+            console.log(`⚠️ Informations patient limitées, objet créé:`, patientInfo);
+            return patientInfo;
+        }
+        
+    } catch (error) {
+        console.error(`❌ Erreur lors de la récupération des informations du patient ${patientId}:`, error);
+        // Retourner un objet patient minimal en cas d'erreur
+        return {
+            id: patientId,
+            nom: 'Patient',
+            prenom: 'Inconnu',
+            date_naissance: 'N/A',
+            groupe_sanguin: 'N/A'
+        };
+    }
+};
+
 /**
  * (Médecin) Récupère l'ensemble des données du dossier d'un patient de manière sécurisée.
  * Ne fonctionne que si une autorisation est active.
@@ -118,8 +169,53 @@ const filterAccessByPatient = (accessData, patientId) => {
  * @returns {Promise<object>} Un objet contenant toutes les données du dossier.
  */
 export const getSecureDossierForMedecin = async (patientId) => {
-    const response = await dmpApi.get(`/dossierMedical/patient/${patientId}/complet`);
-    return response.data; // Renvoie directement les données du dossier
+    try {
+        console.log(`🔍 Récupération du dossier sécurisé pour le patient ${patientId}...`);
+        
+        const response = await dmpApi.get(`/dossierMedical/patient/${patientId}/complet`);
+        console.log(`📊 Réponse brute de l'API:`, response.data);
+        
+        // Extraire les données du dossier
+        const dossierData = response.data.data || response.data;
+        console.log(`📋 Données du dossier extraites:`, dossierData);
+        
+        // S'assurer que nous avons les informations du patient
+        if (dossierData && dossierData.patient) {
+            console.log(`✅ Informations du patient trouvées:`, dossierData.patient);
+        } else if (dossierData && dossierData.patient_info) {
+            console.log(`✅ Informations du patient trouvées (patient_info):`, dossierData.patient_info);
+            // Normaliser la structure
+            dossierData.patient = dossierData.patient_info;
+        } else {
+            console.warn(`⚠️ Aucune information patient trouvée dans le dossier`);
+            console.log(`🔍 Clés disponibles dans le dossier:`, Object.keys(dossierData || {}));
+        }
+        
+        // S'assurer que nous avons les documents
+        if (dossierData && dossierData.documents) {
+            console.log(`📄 ${dossierData.documents.length} documents trouvés`);
+        } else {
+            console.warn(`⚠️ Aucun document trouvé dans le dossier`);
+        }
+        
+        // S'assurer que nous avons les auto-mesures
+        if (dossierData && dossierData.autoMesures) {
+            console.log(`📊 ${dossierData.autoMesures.length} auto-mesures trouvées`);
+        } else if (dossierData && dossierData.auto_mesures) {
+            console.log(`📊 ${dossierData.auto_mesures.length} auto-mesures trouvées (auto_mesures)`);
+            // Normaliser la structure
+            dossierData.autoMesures = dossierData.auto_mesures;
+        } else {
+            console.warn(`⚠️ Aucune auto-mesure trouvée dans le dossier`);
+        }
+        
+        console.log(`✅ Dossier sécurisé récupéré avec succès pour le patient ${patientId}`);
+        return dossierData;
+        
+    } catch (error) {
+        console.error(`❌ Erreur lors de la récupération du dossier sécurisé pour le patient ${patientId}:`, error);
+        throw error;
+    }
 };
 
 // --- Gestion des demandes envoyées (pour la page DMPDemandesAcces) ---
@@ -277,9 +373,12 @@ export const revokerAutorisationMedecin = async (professionnelId, patientId,rais
         
         // ✅ ÉTAPE 3: Désactiver l'autorisation
         const response = await dmpApi.patch(`/access/authorization/${autorisationId}`, {
-            statut: 'inactif',
-            raison_demande: raisonRevocation || 'Accès désactivé lors de la fermeture du dossier',
-            date_fin: new Date().toISOString()
+            statut: 'expire',
+            raison_demande: raisonRevocation
+        }, {
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('jwt')}`
+            }
         });
 
         console.log('✅ Autorisation désactivée avec succès:', response.data);
@@ -641,6 +740,7 @@ const dmpApiExports = {
     getMedecinAccessRequests,
     getPatientSentAccessRequests,
     getPatientAccessStatus,
+    getPatientInfo, // Ajout de la nouvelle fonction
     getAutorisations,
     accepterAutorisation,
     refuserAutorisation,

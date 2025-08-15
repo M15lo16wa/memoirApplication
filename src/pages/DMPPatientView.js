@@ -22,21 +22,82 @@ const DMPPatientView = () => {
         setLoading(true);
         setError(null);
 
-        // 1) Vérifier le statut d'accès
-        const statusRes = await dmpApi.getAccessStatus(patientId);
-        setAccessStatus(statusRes?.accessStatus || statusRes?.status || 'not_authorized');
+        console.log(`🔍 Chargement des données pour le patient ${patientId}...`);
 
-        if ((statusRes?.status || statusRes?.accessStatus) !== 'authorized' && (statusRes?.status || statusRes?.accessStatus) !== 'active') {
+        // 1) Vérifier le statut d'accès
+        console.log(`📡 ÉTAPE 1: Vérification du statut d'accès...`);
+        const statusRes = await dmpApi.getAccessStatus(patientId);
+        console.log(`📊 Statut d'accès reçu:`, statusRes);
+        
+        const currentStatus = statusRes?.accessStatus || statusRes?.status || 'not_authorized';
+        setAccessStatus(currentStatus);
+        console.log(`✅ Statut d'accès défini: ${currentStatus}`);
+
+        if (currentStatus !== 'authorized' && currentStatus !== 'active') {
+          console.log(`⚠️ Accès non autorisé (${currentStatus}), arrêt du chargement`);
           setLoading(false);
           return; // ne pas charger les données si non autorisé ou non actif
         }
 
         // 2) Charger l'ensemble des données du dossier de manière sécurisée
+        console.log(`📡 ÉTAPE 2: Chargement du dossier sécurisé...`);
         const dossierData = await dmpApi.getSecureDossierForMedecin(patientId);
-        setPatient(dossierData?.patient || dossierData);
-        setDocuments(Array.isArray(dossierData?.documents) ? dossierData.documents : []);
-        setAutoMesures(Array.isArray(dossierData?.autoMesures) ? dossierData.autoMesures : []);
+        console.log(`📋 Dossier complet reçu:`, dossierData);
+        
+        // Extraire les informations du patient
+        let patientInfo = null;
+        if (dossierData?.patient) {
+          patientInfo = dossierData.patient;
+          console.log(`✅ Informations patient extraites:`, patientInfo);
+        } else if (dossierData?.patient_info) {
+          patientInfo = dossierData.patient_info;
+          console.log(`✅ Informations patient extraites (patient_info):`, patientInfo);
+        } else {
+          // Si aucune information patient dans le dossier, essayer de les récupérer séparément
+          console.log(`⚠️ Aucune information patient dans le dossier, tentative de récupération séparée...`);
+          try {
+            patientInfo = await dmpApi.getPatientInfo(patientId);
+            console.log(`✅ Informations patient récupérées séparément:`, patientInfo);
+            
+            // Extraire les données du patient de la réponse
+            if (patientInfo && patientInfo.patient) {
+              patientInfo = patientInfo.patient;
+              console.log(`✅ Données patient extraites:`, patientInfo);
+            } else if (patientInfo && patientInfo.data && patientInfo.data.patient) {
+              patientInfo = patientInfo.data.patient;
+              console.log(`✅ Données patient extraites (data.patient):`, patientInfo);
+            }
+            
+          } catch (patientError) {
+            console.warn(`⚠️ Impossible de récupérer les informations patient:`, patientError);
+            // Créer un objet patient minimal
+            patientInfo = {
+              id: patientId,
+              nom: 'Patient',
+              prenom: 'Inconnu',
+              date_naissance: 'N/A',
+              groupe_sanguin: 'N/A'
+            };
+            console.log(`⚠️ Objet patient minimal créé:`, patientInfo);
+          }
+        }
+        
+        setPatient(patientInfo);
+        
+        // Extraire les documents
+        const patientDocuments = Array.isArray(dossierData?.documents) ? dossierData.documents : [];
+        console.log(`📄 ${patientDocuments.length} documents extraits:`, patientDocuments);
+        setDocuments(patientDocuments);
+        
+        // Extraire les auto-mesures
+        const patientAutoMesures = Array.isArray(dossierData?.autoMesures) ? dossierData.autoMesures : [];
+        console.log(`📊 ${patientAutoMesures.length} auto-mesures extraites:`, patientAutoMesures);
+        setAutoMesures(patientAutoMesures);
+        
+        console.log(`✅ Chargement terminé avec succès pour le patient ${patientId}`);
+        
       } catch (e) {
+        console.error(`❌ Erreur lors du chargement des données:`, e);
         setError(e.message || 'Erreur de chargement');
       } finally {
         setLoading(false);
@@ -214,7 +275,9 @@ const DMPPatientView = () => {
               <h2 className="text-3xl font-bold text-gray-800">
                 {patient?.prenom} {patient?.nom}
               </h2>
-              <p className="text-gray-600 text-lg">Patient #{patientId}</p>
+              <p className="text-gray-600 text-lg">
+                {patient?.numero_dossier ? `Dossier ${patient.numero_dossier}` : `Patient #${patientId}`}
+              </p>
             </div>
           </div>
           
@@ -241,8 +304,8 @@ const DMPPatientView = () => {
                   </svg>
                 </div>
                 <div>
-                  <p className="text-sm text-purple-600 font-medium">Groupe sanguin</p>
-                  <p className="text-gray-800 font-semibold">{patient?.groupe_sanguin || 'N/A'}</p>
+                  <p className="text-sm text-purple-600 font-medium">Sexe</p>
+                  <p className="text-gray-800 font-semibold capitalize">{patient?.sexe || 'N/A'}</p>
                 </div>
               </div>
             </div>
@@ -261,6 +324,60 @@ const DMPPatientView = () => {
               </div>
             </div>
           </div>
+          
+          {/* Informations supplémentaires du patient */}
+          {patient && (patient.email || patient.telephone || patient.adresse) && (
+            <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+              {patient.email && (
+                <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-10 h-10 bg-gray-500 rounded-lg flex items-center justify-center">
+                      <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600 font-medium">Email</p>
+                      <p className="text-gray-800 font-semibold">{patient.email}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {patient.telephone && (
+                <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-10 h-10 bg-gray-500 rounded-lg flex items-center justify-center">
+                      <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600 font-medium">Téléphone</p>
+                      <p className="text-gray-800 font-semibold">{patient.telephone}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {patient.adresse && (
+                <div className="bg-gray-50 rounded-xl p-4 border border-gray-200 md:col-span-2">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-10 h-10 bg-gray-500 rounded-lg flex items-center justify-center">
+                      <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600 font-medium">Adresse</p>
+                      <p className="text-gray-800 font-semibold">{patient.adresse}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Documents et Auto-mesures */}
