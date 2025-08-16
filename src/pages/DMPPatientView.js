@@ -1,297 +1,144 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import dmpApi from '../services/api/dmpApi';
+import { useDMP } from '../context/DMPContext';
+import DMPHistory from '../components/dmp/DMPHistory';
+import { getDMP, getHistoriqueMedical, getAutorisations } from '../services/api/dmpApi';
 
-
-
-const DMPPatientView = () => {
+function DMPPatientView() {
   const { patientId } = useParams();
   const navigate = useNavigate();
+  const { state: dmpState, actions } = useDMP();
+  const [activeTab, setActiveTab] = useState('overview');
+  const [dmpData, setDmpData] = useState(null);
+  const [historique, setHistorique] = useState([]);
+  const [autorisations, setAutorisations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [accessStatus, setAccessStatus] = useState('loading');
-  const [patient, setPatient] = useState(null);
-  const [documents, setDocuments] = useState([]);
-  const [autoMesures, setAutoMesures] = useState([]);
-  const [dossierData, setDossierData] = useState(null);
-  const [showConfirmation, setShowConfirmation] = useState(false);
-  const [quitting, setQuitting] = useState(false);
+  const [currentStatus, setCurrentStatus] = useState('loading');
 
-  useEffect(() => {
-    const loadAll = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-
-        console.log(`🔍 Chargement des données pour le patient ${patientId}...`);
-
-        // 1) Vérifier le statut d'accès
-        console.log(`📡 ÉTAPE 1: Vérification du statut d'accès...`);
-        const statusRes = await dmpApi.getAccessStatus(patientId);
-        console.log(`📊 Statut d'accès reçu:`, statusRes);
-        
-        const currentStatus = statusRes?.accessStatus || statusRes?.status || 'not_authorized';
-        setAccessStatus(currentStatus);
-        console.log(`✅ Statut d'accès défini: ${currentStatus}`);
-
-        if (currentStatus !== 'authorized' && currentStatus !== 'active') {
-          console.log(`⚠️ Accès non autorisé (${currentStatus}), arrêt du chargement`);
-          setLoading(false);
-          return; // ne pas charger les données si non autorisé ou non actif
-        }
-
-        // 2) Charger l'ensemble des données du dossier de manière sécurisée
-        console.log(`📡 ÉTAPE 2: Chargement du dossier sécurisé...`);
-        const dossierData = await dmpApi.getSecureDossierForMedecin(patientId);
-        console.log(`📋 Dossier complet reçu:`, dossierData);
-        
-        // Sauvegarder les données du dossier dans le state
-        setDossierData(dossierData);
-
-        // Extraire les informations du patient
-        let patientInfo = null;
-        if (dossierData?.patient) {
-          patientInfo = dossierData.patient;
-          console.log(`✅ Informations patient extraites:`, patientInfo);
-        } else if (dossierData?.patient_info) {
-          patientInfo = dossierData.patient_info;
-          console.log(`✅ Informations patient extraites (patient_info):`, patientInfo);
-        } else {
-          // Si aucune information patient dans le dossier, essayer de les récupérer séparément
-          console.log(`⚠️ Aucune information patient dans le dossier, tentative de récupération séparée...`);
-          try {
-            patientInfo = await dmpApi.getPatientInfo(patientId);
-            console.log(`✅ Informations patient récupérées séparément:`, patientInfo);
-            
-            // Extraire les données du patient de la réponse
-            if (patientInfo && patientInfo.patient) {
-              patientInfo = patientInfo.patient;
-              console.log(`✅ Données patient extraites:`, patientInfo);
-            } else if (patientInfo && patientInfo.data && patientInfo.data.patient) {
-              patientInfo = patientInfo.data.patient;
-              console.log(`✅ Données patient extraites (data.patient):`, patientInfo);
-            }
-            
-          } catch (patientError) {
-            console.warn(`⚠️ Impossible de récupérer les informations patient:`, patientError);
-            // Créer un objet patient minimal
-            patientInfo = {
-              id: patientId,
-              nom: 'Patient',
-              prenom: 'Inconnu',
-              date_naissance: 'N/A',
-              groupe_sanguin: 'N/A'
-            };
-            console.log(`⚠️ Objet patient minimal créé:`, patientInfo);
-          }
-        }
-        
-        setPatient(patientInfo);
-        
-        // Extraire les documents
-        let patientDocuments = [];
-        
-        // Explorer la structure complète pour trouver les documents
-        console.log(`🔍 Recherche des documents dans la structure du dossier...`);
-        console.log(`📋 Structure complète reçue:`, dossierData);
-        
-        // Essayer différentes structures possibles pour les documents
-        if (dossierData?.documents && Array.isArray(dossierData.documents)) {
-          patientDocuments = dossierData.documents;
-          console.log(`✅ Documents trouvés dans dossierData.documents:`, patientDocuments);
-        } else if (dossierData?.dossier?.documents && Array.isArray(dossierData.dossier.documents)) {
-          patientDocuments = dossierData.dossier.documents;
-          console.log(`✅ Documents trouvés dans dossierData.dossier.documents:`, patientDocuments);
-        } else if (dossierData?.dossier?.documents_personnels && Array.isArray(dossierData.dossier.documents_personnels)) {
-          patientDocuments = dossierData.dossier.documents_personnels;
-          console.log(`✅ Documents trouvés dans dossierData.dossier.documents_personnels:`, patientDocuments);
-        } else if (dossierData?.documents_personnels && Array.isArray(dossierData.documents_personnels)) {
-          patientDocuments = dossierData.documents_personnels;
-          console.log(`✅ Documents trouvés dans dossierData.documents_personnels:`, patientDocuments);
-        } else {
-          // Si aucun document trouvé, essayer de les récupérer via l'API dédiée
-          console.log(`⚠️ Aucun document trouvé dans le dossier, tentative via API dédiée...`);
-          try {
-            const documentsResponse = await dmpApi.getDocumentsPersonnelsDMP(patientId);
-            console.log(`📄 Documents récupérés via API dédiée:`, documentsResponse);
-            
-            if (Array.isArray(documentsResponse)) {
-              patientDocuments = documentsResponse;
-            } else if (documentsResponse && Array.isArray(documentsResponse.data)) {
-              patientDocuments = documentsResponse.data;
-            }
-            
-            console.log(`✅ ${patientDocuments.length} documents récupérés via API dédiée`);
-          } catch (docError) {
-            console.warn(`⚠️ Impossible de récupérer les documents via API dédiée:`, docError);
-          }
-        }
-        
-        console.log(`📄 ${patientDocuments.length} documents finaux extraits:`, patientDocuments);
-        setDocuments(patientDocuments);
-        
-        // Extraire les auto-mesures
-        let patientAutoMesures = [];
-        
-        // Explorer la structure complète pour trouver les auto-mesures
-        console.log(`🔍 Recherche des auto-mesures dans la structure du dossier...`);
-        
-        // Essayer différentes structures possibles pour les auto-mesures
-        if (dossierData?.autoMesures && Array.isArray(dossierData.autoMesures)) {
-          patientAutoMesures = dossierData.autoMesures;
-          console.log(`✅ Auto-mesures trouvées dans dossierData.autoMesures:`, patientAutoMesures);
-        } else if (dossierData?.auto_mesures && Array.isArray(dossierData.auto_mesures)) {
-          patientAutoMesures = dossierData.auto_mesures;
-          console.log(`✅ Auto-mesures trouvées dans dossierData.auto_mesures:`, patientAutoMesures);
-        } else if (dossierData?.dossier?.autoMesures && Array.isArray(dossierData.dossier.autoMesures)) {
-          patientAutoMesures = dossierData.dossier.autoMesures;
-          console.log(`✅ Auto-mesures trouvées dans dossierData.dossier.autoMesures:`, patientAutoMesures);
-        } else if (dossierData?.dossier?.auto_mesures && Array.isArray(dossierData.dossier.auto_mesures)) {
-          patientAutoMesures = dossierData.dossier.auto_mesures;
-          console.log(`✅ Auto-mesures trouvées dans dossierData.dossier.auto_mesures:`, patientAutoMesures);
-        } else {
-          // Si aucune auto-mesure trouvée, essayer de les récupérer via l'API dédiée
-          console.log(`⚠️ Aucune auto-mesure trouvée dans le dossier, tentative via API dédiée...`);
-          try {
-            const autoMesuresResponse = await dmpApi.getAutoMesuresDMP(patientId);
-            console.log(`📊 Auto-mesures récupérées via API dédiée:`, autoMesuresResponse);
-            
-            if (autoMesuresResponse && Array.isArray(autoMesuresResponse.data)) {
-              patientAutoMesures = autoMesuresResponse.data;
-            } else if (Array.isArray(autoMesuresResponse)) {
-              patientAutoMesures = autoMesuresResponse;
-            }
-            
-            console.log(`✅ ${patientAutoMesures.length} auto-mesures récupérées via API dédiée`);
-          } catch (autoMesuresError) {
-            console.warn(`⚠️ Impossible de récupérer les auto-mesures via API dédiée:`, autoMesuresError);
-          }
-        }
-        
-        console.log(`📊 ${patientAutoMesures.length} auto-mesures finales extraites:`, patientAutoMesures);
-        setAutoMesures(patientAutoMesures);
-        
-        console.log(`✅ Chargement terminé avec succès pour le patient ${patientId}`);
-        
-      } catch (e) {
-        console.error(`❌ Erreur lors du chargement des données:`, e);
-        setError(e.message || 'Erreur de chargement');
-      } finally {
-        setLoading(false);
+  // Vérifier que l'utilisateur est un patient connecté
+  const checkPatientAuthorization = useCallback(() => {
+    const jwtToken = localStorage.getItem('jwt');
+    const patientData = localStorage.getItem('patient');
+    
+    if (!jwtToken || !patientData) {
+      console.warn('⚠️ Accès refusé: Utilisateur non connecté en tant que patient');
+      return false;
+    }
+    
+    try {
+      const patient = JSON.parse(patientData);
+      // Vérifier que l'utilisateur connecté correspond au patient demandé
+      if (patientId && patient.id !== parseInt(patientId) && patient.id_patient !== parseInt(patientId)) {
+        console.warn('⚠️ Accès refusé: Tentative d\'accès au dossier d\'un autre patient');
+        return false;
       }
-    };
-    if (patientId) {
-      loadAll();
+      
+      console.log('✅ Patient autorisé à consulter son dossier DMP');
+      return true;
+    } catch (error) {
+      console.error('❌ Erreur lors de la vérification des autorisations patient:', error);
+      return false;
     }
   }, [patientId]);
 
-  const handleQuitterDossier = () => {
-    // Afficher la modal de confirmation
-    setShowConfirmation(true);
-  };
-
-  const handleConfirmQuitter = async () => {
-    try {
-      setQuitting(true);
-      setShowConfirmation(false);
-      
-      console.log('�� Révocation automatique de l\'accès au dossier patient...');
-      
-      // Récupérer l'ID du professionnel connecté
-      const storedMedecin = JSON.parse(localStorage.getItem('medecin') || '{}');
-      const professionnelId = storedMedecin?.id || storedMedecin?.id_professionnel;
-      
-      if (professionnelId && patientId) {
-        // ✅ ÉTAPE 1: Récupérer l'ID de l'autorisation active
-        const verification = await dmpApi.verifierAccesMedecinPatient(professionnelId, patientId);
-        
-        if (verification.hasAccess && verification.authorization) {
-          const autorisationId = verification.authorization.id_acces;
-          console.log('�� Autorisation trouvée:', autorisationId);
-          
-          // ✅ ÉTAPE 2: Désactiver l'autorisation avec son ID
-          await dmpApi.desactiverAutorisationMedecin(
-            autorisationId, // ✅ ID de l'autorisation
-            'Accès désactivé automatiquement lors de la fermeture du dossier'
-          );
-          console.log('✅ Accès désactivé avec succès');
-          
-          // ✅ ÉTAPE 3: Vérifier que l'accès a bien été désactivé
-          const verificationFinale = await dmpApi.verifierAccesMedecinPatient(professionnelId, patientId);
-          if (verificationFinale.hasAccess) {
-            console.warn('⚠️ L\'accès n\'a pas été complètement désactivé');
-          } else {
-            console.log('✅ Vérification confirmée: accès désactivé');
-          }
-        } else {
-          console.log('ℹ️ Aucune autorisation active trouvée');
-        }
-      }
-      
-      // Rediriger vers le DMP
-      navigate('/dmp');
-    } catch (error) {
-      console.error('❌ Erreur lors de la désactivation de l\'accès:', error);
-      // Même en cas d'erreur, on quitte le dossier
-      navigate('/dmp');
-    } finally {
-      setQuitting(false);
+  // Charger les données DMP
+  const loadDMPData = useCallback(async () => {
+    if (!checkPatientAuthorization()) {
+      setCurrentStatus('unauthorized');
+      setLoading(false);
+      return;
     }
-  };
 
-  const handleCancelQuitter = () => {
-    setShowConfirmation(false);
-  };
+    setLoading(true);
+    setError(null);
+    
+    try {
+      console.log('🚀 Chargement des données DMP pour le patient:', patientId);
+      
+      // Charger les données en parallèle
+      const [dmpResponse, historiqueResponse, autorisationsResponse] = await Promise.all([
+        getDMP(patientId),
+        getHistoriqueMedical(patientId),
+        getAutorisations(patientId)
+      ]);
+      
+      setDmpData(dmpResponse?.data || dmpResponse);
+      setHistorique(historiqueResponse?.data || historiqueResponse || []);
+      setAutorisations(autorisationsResponse?.data || autorisationsResponse || []);
+      setCurrentStatus('authorized');
+      
+      console.log('✅ Données DMP chargées avec succès');
+    } catch (error) {
+      console.error('❌ Erreur lors du chargement des données DMP:', error);
+      setError('Impossible de charger les données DMP');
+      setCurrentStatus('error');
+    } finally {
+      setLoading(false);
+    }
+  }, [patientId, checkPatientAuthorization]);
 
-  if (loading) {
+  // Effet initial
+  useEffect(() => {
+    if (patientId) {
+      loadDMPData();
+    }
+  }, [patientId, loadDMPData]);
+
+  // Si l'utilisateur n'est pas autorisé, afficher un message d'erreur
+  if (currentStatus === 'unauthorized') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex justify-center items-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-4 border-blue-600 border-t-transparent mx-auto mb-4"></div>
-          <p className="text-lg text-gray-600 font-medium">Chargement du dossier patient...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-red-50 to-pink-100 flex justify-center items-center p-4">
-        <div className="text-center bg-white rounded-xl shadow-lg p-8 max-w-md">
-          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-lg shadow-md p-8 max-w-md w-full text-center">
+          <div className="text-red-600 mb-4">
+            <svg className="mx-auto h-16 w-16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
             </svg>
           </div>
-          <h2 className="text-xl font-bold text-gray-800 mb-2">Erreur de chargement</h2>
-          <p className="text-gray-600 mb-6">{error}</p>
+          <h2 className="text-xl font-bold text-gray-800 mb-2">Accès non autorisé</h2>
+          <p className="text-gray-600 mb-6">
+            Vous n'êtes pas autorisé à consulter ce dossier médical.
+          </p>
           <button
-            onClick={handleQuitterDossier}
-            className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-6 rounded-lg transition-colors duration-200"
+            onClick={() => navigate('/connexion')}
+            className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700"
           >
-            Retour au DMP
+            Se connecter
           </button>
         </div>
       </div>
     );
   }
 
-  if (accessStatus !== 'authorized' && accessStatus !== 'active') {
+  // Si en cours de chargement
+  if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-yellow-50 to-orange-100 flex justify-center items-center p-4">
-        <div className="text-center bg-white rounded-xl shadow-lg p-8 max-w-md">
-          <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <svg className="w-8 h-8 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m0 0v2m0-2h2m-2 0H8m13 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Chargement de votre dossier DMP...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Si erreur
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-lg shadow-md p-8 max-w-md w-full text-center">
+          <div className="text-red-600 mb-4">
+            <svg className="mx-auto h-16 w-16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
             </svg>
           </div>
-          <h2 className="text-xl font-bold text-gray-800 mb-2">Accès non autorisé</h2>
-          <p className="text-gray-600 mb-6">Le statut actuel est: {String(accessStatus)}</p>
+          <h2 className="text-xl font-bold text-gray-800 mb-2">Erreur</h2>
+          <p className="text-gray-600 mb-6">{error}</p>
           <button
-            onClick={handleQuitterDossier}
-            className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-6 rounded-lg transition-colors duration-200"
+            onClick={loadDMPData}
+            className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700"
           >
-            Retour au DMP
+            Réessayer
           </button>
         </div>
       </div>
@@ -299,373 +146,141 @@ const DMPPatientView = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
-      {/* Header avec bouton de retour */}
-      <div className="bg-white shadow-sm border-b border-gray-200">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <button
-                onClick={handleQuitterDossier}
-                disabled={quitting}
-                className={`flex items-center space-x-2 font-medium py-2 px-4 rounded-lg transition-colors duration-200 shadow-md hover:shadow-lg ${
-                  quitting 
-                    ? 'bg-gray-400 cursor-not-allowed' 
-                    : 'bg-blue-600 hover:bg-blue-700 text-white'
-                }`}
-              >
-                {quitting ? (
-                  <>
-                    <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
-                    <span>Révocation en cours...</span>
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                    </svg>
-                    <span>Quitter dossier patient</span>
-                  </>
-                )}
-              </button>
-              <div className="h-8 w-px bg-gray-300"></div>
-              <h1 className="text-2xl font-bold text-gray-800">Dossier DMP du Patient</h1>
-            </div>
-            <div className="flex items-center space-x-2 bg-green-100 text-green-800 px-3 py-1 rounded-full">
-              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-              <span className="text-sm font-medium">Accès autorisé</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="container mx-auto px-4 py-8">
-        {/* Informations du patient */}
-        <div className="bg-white rounded-2xl shadow-lg p-8 mb-8 border border-gray-100">
-          <div className="flex items-center space-x-4 mb-6">
-            <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center">
-              <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-              </svg>
-            </div>
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <div className="bg-white shadow-sm border-b">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center py-4">
             <div>
-              <h2 className="text-3xl font-bold text-gray-800">
-                {patient?.prenom} {patient?.nom}
-              </h2>
-              <p className="text-gray-600 text-lg">
-                {patient?.numero_dossier ? `Dossier ${patient.numero_dossier}` : `Patient #${patientId}`}
-              </p>
+              <h1 className="text-2xl font-bold text-gray-900">Mon Dossier Médical Partagé</h1>
+              <p className="text-gray-600">Gérez votre dossier médical et suivez les accès</p>
             </div>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="bg-blue-50 rounded-xl p-4 border border-blue-200">
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center">
-                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                </div>
-                <div>
-                  <p className="text-sm text-blue-600 font-medium">Date de naissance</p>
-                  <p className="text-gray-800 font-semibold">{patient?.date_naissance || 'N/A'}</p>
-                </div>
-              </div>
-            </div>
-            
-            <div className="bg-purple-50 rounded-xl p-4 border border-purple-200">
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-purple-500 rounded-lg flex items-center justify-center">
-                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
-                  </svg>
-                </div>
-                <div>
-                  <p className="text-sm text-purple-600 font-medium">Sexe</p>
-                  <p className="text-gray-800 font-semibold capitalize">{patient?.sexe || 'N/A'}</p>
-                </div>
-              </div>
-            </div>
-            
-            <div className="bg-green-50 rounded-xl p-4 border border-green-200">
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-green-500 rounded-lg flex items-center justify-center">
-                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-                <div>
-                  <p className="text-sm text-green-600 font-medium">Statut</p>
-                  <p className="text-gray-800 font-semibold capitalize">{accessStatus}</p>
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          {/* Informations supplémentaires du patient */}
-          {patient && (patient.email || patient.telephone || patient.adresse) && (
-            <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-              {patient.email && (
-                <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-10 h-10 bg-gray-500 rounded-lg flex items-center justify-center">
-                      <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                      </svg>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-600 font-medium">Email</p>
-                      <p className="text-gray-800 font-semibold">{patient.email}</p>
-                    </div>
-                  </div>
-                </div>
-              )}
-              
-              {patient.telephone && (
-                <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-10 h-10 bg-gray-500 rounded-lg flex items-center justify-center">
-                      <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                      </svg>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-600 font-medium">Téléphone</p>
-                      <p className="text-gray-800 font-semibold">{patient.telephone}</p>
-                    </div>
-                  </div>
-                </div>
-              )}
-              
-              {patient.adresse && (
-                <div className="bg-gray-50 rounded-xl p-4 border border-gray-200 md:col-span-2">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-10 h-10 bg-gray-500 rounded-lg flex items-center justify-center">
-                      <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                      </svg>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-600 font-medium">Adresse</p>
-                      <p className="text-gray-800 font-semibold">{patient.adresse}</p>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Documents et Auto-mesures */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-          {/* Documents */}
-          <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
-            <div className="flex items-center space-x-3 mb-6">
-              <div className="w-10 h-10 bg-indigo-500 rounded-lg flex items-center justify-center">
-                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-              </div>
-              <h3 className="text-xl font-bold text-gray-800">Documents</h3>
-              <span className="bg-indigo-100 text-indigo-800 text-xs font-medium px-2.5 py-0.5 rounded-full">
-                {documents.length}
-              </span>
-            </div>
-            
-            {documents.length === 0 ? (
-              <div className="text-center py-8">
-                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                </div>
-                <p className="text-gray-500 font-medium">Aucun document disponible</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {documents.map((doc) => (
-                  <div key={doc.id} className="bg-gray-50 rounded-xl p-4 border border-gray-200 hover:border-indigo-300 transition-colors duration-200">
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <h4 className="font-semibold text-gray-800 mb-1">
-                          {doc.nom || doc.titre || 'Document'}
-                        </h4>
-                        <div className="flex items-center space-x-4 text-sm text-gray-600">
-                          <span className="flex items-center space-x-1">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                            </svg>
-                            <span>{doc.type || doc.format || 'Document'}</span>
-                          </span>
-                        </div>
-                      </div>
-                      {doc.url && (
-                        <a 
-                          className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium text-sm transition-colors duration-200 flex items-center space-x-2"
-                          href={doc.url} 
-                          target="_blank" 
-                          rel="noreferrer"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                          </svg>
-                          <span>Ouvrir</span>
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Auto-mesures */}
-          <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
-            <div className="flex items-center space-x-3 mb-6">
-              <div className="w-10 h-10 bg-green-500 rounded-lg flex items-center justify-center">
-                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                </svg>
-              </div>
-              <h3 className="text-xl font-bold text-gray-800">Auto-mesures</h3>
-              <span className="bg-green-100 text-green-800 text-xs font-medium px-2.5 py-0.5 rounded-full">
-                {autoMesures.length}
-              </span>
-            </div>
-            
-            {autoMesures.length === 0 ? (
-              <div className="text-center py-8">
-                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                  </svg>
-                </div>
-                <p className="text-gray-500 font-medium">Aucune auto-mesure disponible</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {autoMesures.map((m) => (
-                  <div key={m.id} className="bg-gray-50 rounded-xl p-4 border border-gray-200 hover:border-green-300 transition-colors duration-200">
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="font-semibold text-gray-800 capitalize">
-                        {m.type}
-                      </h4>
-                      <span className="bg-green-100 text-green-800 text-xs font-medium px-2 py-1 rounded-full">
-                        {m.date_mesure}
-                      </span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <span className="text-2xl font-bold text-green-600">
-                        {m.valeur}
-                        {m.valeur_secondaire ? `/${m.valeur_secondaire}` : ''}
-                      </span>
-                      <span className="text-gray-600 font-medium">
-                        {m.unite}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Informations médicales supplémentaires */}
-        <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
-          <h3 className="text-xl font-bold text-gray-800 mb-6">Informations médicales</h3>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {/* Prescriptions actives */}
-            <div className="bg-blue-50 rounded-xl p-4 border border-blue-200">
-              <div className="flex items-center space-x-3 mb-3">
-                <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center">
-                  <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                </div>
-                <h4 className="font-semibold text-gray-800">Prescriptions actives</h4>
-              </div>
-              <p className="text-2xl font-bold text-blue-600">
-                {dossierData?.prescriptions_actives?.length || 0}
-              </p>
-              <p className="text-sm text-gray-600">Prescriptions en cours</p>
-            </div>
-
-            {/* Consultations récentes */}
-            <div className="bg-green-50 rounded-xl p-4 border border-green-200">
-              <div className="flex items-center space-x-3 mb-3">
-                <div className="w-8 h-8 bg-green-500 rounded-lg flex items-center justify-center">
-                  <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                  </svg>
-                </div>
-                <h4 className="font-semibold text-gray-800">Consultations récentes</h4>
-              </div>
-              <p className="text-2xl font-bold text-green-600">
-                {dossierData?.consultations_recentes?.length || 0}
-              </p>
-              <p className="text-sm text-gray-600">Consultations récentes</p>
-            </div>
-
-            {/* Examens récents */}
-            <div className="bg-purple-50 rounded-xl p-4 border border-purple-200">
-              <div className="flex items-center space-x-3 mb-3">
-                <div className="w-8 h-8 bg-purple-500 rounded-lg flex items-center justify-center">
-                  <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
-                  </svg>
-                </div>
-                <h4 className="font-semibold text-gray-800">Examens récents</h4>
-              </div>
-              <p className="text-2xl font-bold text-purple-600">
-                {dossierData?.examens_recents?.length || 0}
-              </p>
-              <p className="text-sm text-gray-600">Examens récents</p>
-            </div>
+            <button
+              onClick={() => navigate('/dmp')}
+              className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
+            >
+              Retour au DMP
+            </button>
           </div>
         </div>
       </div>
-      
-      {/* Modal de confirmation pour quitter le dossier */}
-      {showConfirmation && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md mx-4">
-            <div className="text-center">
-              <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-8 h-8 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                </svg>
-              </div>
-              <h3 className="text-xl font-bold text-gray-800 mb-4">Quitter le dossier patient</h3>
-              <p className="text-gray-600 mb-6">
-                Êtes-vous sûr de vouloir quitter le dossier de <strong>{patient?.prenom} {patient?.nom}</strong> ? 
-                <br /><br />
-                <span className="text-orange-600 font-medium">
-                  ⚠️ Votre accès sera automatiquement révoqué et vous devrez faire une nouvelle demande pour y accéder à nouveau.
-                </span>
-              </p>
-              <div className="flex space-x-4">
-                <button
-                  onClick={handleCancelQuitter}
-                  className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-800 font-medium py-3 px-6 rounded-lg transition-colors duration-200"
-                >
-                  Annuler
-                </button>
-                <button
-                  onClick={handleConfirmQuitter}
-                  className="flex-1 bg-orange-600 hover:bg-orange-700 text-white font-medium py-3 px-6 rounded-lg transition-colors duration-200"
-                >
-                  Quitter et révoquer l'accès
-                </button>
-              </div>
-            </div>
-          </div>
+
+      {/* Navigation des onglets */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div className="border-b border-gray-200 mb-6">
+          <nav className="-mb-px flex space-x-8">
+            <button
+              onClick={() => setActiveTab('overview')}
+              className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'overview'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              Vue d'ensemble
+            </button>
+            <button
+              onClick={() => setActiveTab('history')}
+              className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'history'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              Historique des accès
+            </button>
+            <button
+              onClick={() => setActiveTab('authorizations')}
+              className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'authorizations'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              Autorisations
+            </button>
+          </nav>
         </div>
-      )}
+
+        {/* Contenu des onglets */}
+        {activeTab === 'overview' && (
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <h2 className="text-xl font-bold text-gray-800 mb-4">Vue d'ensemble de votre dossier</h2>
+            {dmpData ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-700 mb-3">Informations générales</h3>
+                  <div className="space-y-2">
+                    <p><span className="font-medium">Statut:</span> {dmpData.statut || 'Actif'}</p>
+                    <p><span className="font-medium">Date de création:</span> {dmpData.date_creation ? new Date(dmpData.date_creation).toLocaleDateString('fr-FR') : 'Non spécifiée'}</p>
+                    <p><span className="font-medium">Dernière mise à jour:</span> {dmpData.date_mise_a_jour ? new Date(dmpData.date_mise_a_jour).toLocaleDateString('fr-FR') : 'Non spécifiée'}</p>
+                  </div>
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-700 mb-3">Statistiques</h3>
+                  <div className="space-y-2">
+                    <p><span className="font-medium">Nombre d'accès:</span> {historique.length}</p>
+                    <p><span className="font-medium">Autorisations actives:</span> {autorisations.filter(auth => auth.statut === 'ACTIVE').length}</p>
+                    <p><span className="font-medium">Demandes en attente:</span> {autorisations.filter(auth => auth.statut === 'EN_ATTENTE').length}</p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <p className="text-gray-500">Aucune donnée disponible</p>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'history' && (
+          <div>
+            <h2 className="text-xl font-bold text-gray-800 mb-4">Historique des accès à votre dossier</h2>
+            <DMPHistory patientId={parseInt(patientId)} />
+          </div>
+        )}
+
+        {activeTab === 'authorizations' && (
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <h2 className="text-xl font-bold text-gray-800 mb-4">Vos autorisations d'accès</h2>
+            {autorisations.length > 0 ? (
+              <div className="space-y-4">
+                {autorisations.map((auth, index) => (
+                  <div key={auth.id || index} className="border border-gray-200 rounded-lg p-4">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <h4 className="font-medium text-gray-900">
+                          {auth.nom_medecin || auth.nom_professionnel || 'Professionnel de santé'}
+                        </h4>
+                        <p className="text-sm text-gray-600">
+                          Type: {auth.type_acces || 'Accès standard'}
+                        </p>
+                        <p className="text-sm text-gray-600">
+                          Date: {auth.date_creation ? new Date(auth.date_creation).toLocaleDateString('fr-FR') : 'Non spécifiée'}
+                        </p>
+                      </div>
+                      <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                        auth.statut === 'ACTIVE' ? 'bg-green-100 text-green-800' :
+                        auth.statut === 'EN_ATTENTE' ? 'bg-yellow-100 text-yellow-800' :
+                        auth.statut === 'REVOQUE' ? 'bg-red-100 text-red-800' :
+                        'bg-gray-100 text-gray-800'
+                      }`}>
+                        {auth.statut === 'ACTIVE' ? 'Active' :
+                         auth.statut === 'EN_ATTENTE' ? 'En attente' :
+                         auth.statut === 'REVOQUE' ? 'Révoquée' :
+                         auth.statut}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-gray-500">Aucune autorisation trouvée</p>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
-};
+}
 
 export default DMPPatientView;
 

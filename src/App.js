@@ -19,7 +19,8 @@ import DMPPatientView from './pages/DMPPatientView';
 import { 
   ProtectedMedecinRoute, 
   ProtectedPatientRoute,
-  ProtectedMedecinOrPatientRoute 
+  ProtectedMedecinOrPatientRoute,
+  ProtectedAdminRoute
 } from './services/api/protectedRoute';
 
 
@@ -29,9 +30,11 @@ function App() {
       <Route path="/" element={<HomePage />} />
       <Route path="/connexion" element={<Connexion />} />
       
+      {/* Routes pour les administrateurs */}
+      <Route path="/admin" element={<ProtectedAdminRoute><Admin /></ProtectedAdminRoute>} />
+      <Route path="/utilisateurs" element={<ProtectedAdminRoute><Utilisateurs /></ProtectedAdminRoute>} />
+      
       {/* Routes pour les médecins uniquement */}
-      <Route path="/admin" element={<ProtectedMedecinRoute><Admin /></ProtectedMedecinRoute>} />
-      <Route path="/utilisateurs" element={<ProtectedMedecinRoute><Utilisateurs /></ProtectedMedecinRoute>} />
       <Route path='/medecin' element={<ProtectedMedecinRoute><Medecin/></ProtectedMedecinRoute>}/>
       <Route path='/consultation' element={<ProtectedMedecinRoute><Consultation/></ProtectedMedecinRoute>}/>
       

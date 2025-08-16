@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { QRCodeCanvas } from 'qrcode.react';
 
 import { getPatients, createDossierMedical, getServices, getAllDossiersMedical, getDossierMedical, closeDossierPatient, updateDossierPatient, createOrdonnance, createExamen, getAllPrescriptions, getOrdonnancesRecentes, createOrdonnanceComplete, ajouterPrescriptionAuDossier, marquerNotificationLue, getNotificationsPatient, getResumeAujourdhui } from "../services/api/medicalApi";
-import DMPHistory from "../components/dmp/DMPHistory";
+
 import { useDMP } from "../context/DMPContext";
 
 function DossierPatient() {
@@ -12,10 +12,42 @@ function DossierPatient() {
 
   // Fonction pour récupérer le patientId actuel
   const getCurrentPatientId = () => {
-    return dmpState?.patientId || 
-           selectedPatientForPrescription?.id || 
-           selectedPatientForPrescription?.rawData?.id_patient || 
-           selectedPatientForPrescription?.id_patient;
+    // Priorité 1: patientId du contexte DMP
+    if (dmpState?.patientId && !isNaN(dmpState.patientId) && dmpState.patientId > 0) {
+      console.log('✅ PatientId récupéré du contexte DMP:', dmpState.patientId);
+      return dmpState.patientId;
+    }
+    
+    // Priorité 2: patient sélectionné pour les prescriptions
+    if (selectedPatientForPrescription) {
+      const patientId = selectedPatientForPrescription?.id || 
+                       selectedPatientForPrescription?.rawData?.id_patient || 
+                       selectedPatientForPrescription?.id_patient;
+      if (patientId && !isNaN(patientId) && patientId > 0) {
+        console.log('✅ PatientId récupéré du patient sélectionné:', patientId);
+        return patientId;
+      }
+    }
+    
+    // Priorité 3: premier patient disponible dans la liste
+    if (patients && patients.length > 0) {
+      const firstPatient = patients[0];
+      const firstPatientId = firstPatient?.id || 
+                           firstPatient?.rawData?.id_patient || 
+                           firstPatient?.id_patient;
+      if (firstPatientId && !isNaN(firstPatientId) && firstPatientId > 0) {
+        console.log('✅ PatientId récupéré du premier patient disponible:', firstPatientId);
+        // Initialiser automatiquement la sélection
+        if (!selectedPatientForPrescription) {
+          console.log('🔄 Initialisation automatique de la sélection avec le premier patient');
+          setSelectedPatientForPrescription(firstPatient);
+        }
+        return firstPatientId;
+      }
+    }
+    
+    console.warn('⚠️ Aucun patientId valide disponible');
+    return null;
   };
 
   const loadServices = async () => {
@@ -729,6 +761,14 @@ function DossierPatient() {
 
       console.log('Formatted patients:', formattedPatients);
       setPatients(formattedPatients);
+      
+      // Initialiser automatiquement le premier patient comme sélection par défaut
+      // seulement si aucun patient n'est déjà sélectionné
+      if (formattedPatients.length > 0 && !selectedPatientForPrescription) {
+        console.log('Initialisation automatique du premier patient:', formattedPatients[0]);
+        setSelectedPatientForPrescription(formattedPatients[0]);
+      }
+      
       return formattedPatients;
     } catch (error) {
       console.error('Erreur lors du chargement des patients:', error);
@@ -1367,13 +1407,7 @@ const loadOrdonnancesRecentes = useCallback(async () => {
                   <span>📁</span> <span>Dossiers Patients</span>
                 </button>
               </li>
-              <li>
-                <button
-                  onClick={() => setActiveTab("access-manager")}
-                  className={`w-full text-left px-3 py-2 rounded-md flex items-center space-x-2 ${activeTab === "access-manager" ? "bg-blue-100 font-bold" : "hover:bg-blue-50"}`}>
-                  <span>🔒</span> <span>Gestion des Accès</span>
-                </button>
-              </li>
+
               <li>
                 <button
                   onClick={() => setActiveTab("notifications")}
@@ -1691,64 +1725,7 @@ const loadOrdonnancesRecentes = useCallback(async () => {
               )}
             </div>
           )}
-          {/* Access Manager */}
-          {activeTab === "access-manager" && (
-            <div>
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold">Gestion des Accès DMP</h2>
-                <div className="flex space-x-3">
-                  <button 
-                    onClick={() => setActiveTab("patients-list")}
-                    className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700"
-                  >
-                    Nouvel accès DMP
-                  </button>
-                  <button 
-                    onClick={() => window.location.reload()}
-                    className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
-                  >
-                    Actualiser
-                  </button>
-                </div>
-              </div>
-              
-              {/* Sélection de patient pour l'historique DMP */}
-              <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-                <h3 className="text-lg font-semibold mb-4">Sélection du Patient</h3>
-                <div className="flex items-center space-x-4">
-                  <select
-                    value={getCurrentPatientId() || ''}
-                    onChange={(e) => {
-                      const selectedPatient = patients.find(p => 
-                        (p.id || p.rawData?.id_patient || p.id_patient) === parseInt(e.target.value)
-                      );
-                      if (selectedPatient) {
-                        setSelectedPatientForPrescription(selectedPatient);
-                      }
-                    }}
-                    className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">-- Sélectionnez un patient --</option>
-                    {Array.isArray(patients) && patients.map((patient, idx) => (
-                      <option 
-                        key={idx} 
-                        value={patient.id || patient.rawData?.id_patient || patient.id_patient}
-                      >
-                        {patient.name || patient.nom || `Patient ${idx + 1}`}
-                      </option>
-                    ))}
-                  </select>
-                  {getCurrentPatientId() && (
-                    <span className="text-sm text-gray-600">
-                      Patient sélectionné: {selectedPatientForPrescription?.name || selectedPatientForPrescription?.nom || 'Patient'}
-                    </span>
-                  )}
-                </div>
-              </div>
-              
-              <DMPHistory patientId={getCurrentPatientId()} />
-            </div>
-          )}
+
           {/* Notifications */}
           {activeTab === "notifications" && (
             <div>

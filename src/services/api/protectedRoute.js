@@ -3,7 +3,8 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   isMedecinAuthenticated, 
   isPatientAuthenticated, 
-  getUserType
+  getUserType,
+  isAuthenticated
 } from './authApi';
 
 const LoadingScreen = () => (
@@ -18,7 +19,7 @@ const LoadingScreen = () => (
 // Route protégée intelligente qui détermine automatiquement le type d'utilisateur
 export const ProtectedRoute = ({ children, allowedUserTypes = ['medecin', 'patient'] }) => {
   const [isLoading, setIsLoading] = useState(true);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isUserAuthenticated, setIsUserAuthenticated] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -29,15 +30,19 @@ export const ProtectedRoute = ({ children, allowedUserTypes = ['medecin', 'patie
       const currentUserType = getUserType();
       const isMedecin = isMedecinAuthenticated();
       const isPatient = isPatientAuthenticated();
+      const isGeneralAuth = isAuthenticated();
       
       console.log('  - Type d\'utilisateur détecté:', currentUserType);
       console.log('  - Médecin authentifié:', isMedecin);
       console.log('  - Patient authentifié:', isPatient);
+      console.log('  - Authentification générale:', isGeneralAuth);
       console.log('  - Types autorisés:', allowedUserTypes);
+      console.log('  - Token général présent:', !!localStorage.getItem('token'));
+      console.log('  - JWT patient présent:', !!localStorage.getItem('jwt'));
       
       if (currentUserType && allowedUserTypes.includes(currentUserType)) {
         console.log('✅ Utilisateur autorisé, affichage du contenu');
-        setIsAuthenticated(true);
+        setIsUserAuthenticated(true);
       } else {
         console.log('❌ Accès non autorisé - redirection vers connexion');
         
@@ -64,7 +69,7 @@ export const ProtectedRoute = ({ children, allowedUserTypes = ['medecin', 'patie
   }, [navigate, location, allowedUserTypes]);
 
   if (isLoading) return <LoadingScreen />;
-  return isAuthenticated ? children : null;
+  return isUserAuthenticated ? children : null;
 };
 
 // Route protégée spécifiquement pour les médecins
@@ -80,6 +85,11 @@ export const ProtectedPatientRoute = ({ children }) => {
 // Route protégée pour les médecins ET les patients
 export const ProtectedMedecinOrPatientRoute = ({ children }) => {
   return <ProtectedRoute allowedUserTypes={['medecin', 'patient']}>{children}</ProtectedRoute>;
+};
+
+// Route protégée pour les administrateurs (utilise l'authentification générale)
+export const ProtectedAdminRoute = ({ children }) => {
+  return <ProtectedRoute allowedUserTypes={['medecin', 'user']}>{children}</ProtectedRoute>;
 };
 
 // Export par défaut pour la rétrocompatibilité (route intelligente par défaut)

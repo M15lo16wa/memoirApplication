@@ -16,6 +16,7 @@ import DMPDashboard from "../components/dmp/DMPDashboard";
 import DMPMonEspaceSante from "../components/dmp/DMPMonEspaceSante";
 import DMPNotification from "../components/ui/DMPNotification";
 import AutorisationsEnAttente from "../components/dmp/AutorisationsEnAttente";
+import DMPHistory from "../components/dmp/DMPHistory";
 import * as dmpApi from "../services/api/dmpApi";
 import * as patientApi from "../services/api/patientApi";
 import { uploadDocument } from "../services/api/medicalApi";
@@ -2608,6 +2609,26 @@ const filterAccessByPatient = (accessData, patientId) => {
               </div>
 
               <AutorisationsEnAttente />
+            </div>
+
+            {/* Section de l'historique des accès DMP */}
+            <div className="p-6 border-t border-gray-200">
+              <div className="mb-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900">Historique des accès DMP</h3>
+                    <p className="text-sm text-gray-600">Suivez qui a consulté votre dossier médical et quand</p>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-xs text-gray-500 bg-blue-50 px-2 py-1 rounded-full">
+                      🔒 Accès sécurisé
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Composant DMPHistory pour afficher l'historique des accès */}
+              <DMPHistory patientId={patientProfile?.id_patient || patientProfile?.id} />
             </div>
 
             {/* Section des accès refusés et expirés */}

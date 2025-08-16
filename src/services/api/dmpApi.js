@@ -116,6 +116,18 @@ export const getPatientInfo = async (patientId) => {
     try {
         console.log(`🔍 Récupération des informations du patient ${patientId}...`);
         
+        // Validation de l'ID du patient
+        if (!patientId || isNaN(patientId) || patientId <= 0) {
+            console.warn(`⚠️ ID patient invalide: ${patientId}`);
+            return {
+                id: patientId,
+                nom: 'Patient',
+                prenom: 'Inconnu',
+                date_naissance: 'N/A',
+                groupe_sanguin: 'N/A'
+            };
+        }
+        
         // Essayer d'abord la fonction getPatient de patientApi
         try {
             const { getPatient } = await import('./patientApi.js');
