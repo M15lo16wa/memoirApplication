@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { QRCodeCanvas } from 'qrcode.react';
 
 import { getPatients, createDossierMedical, getServices, getAllDossiersMedical, getDossierMedical, closeDossierPatient, updateDossierPatient, createOrdonnance, createExamen, getAllPrescriptions, getOrdonnancesRecentes, createOrdonnanceComplete, ajouterPrescriptionAuDossier, marquerNotificationLue, getNotificationsPatient, getResumeAujourdhui } from "../services/api/medicalApi";
+import { isAuthenticated, isMedecinAuthenticated, isPatientAuthenticated } from "../services/api/authApi";
 
 import { useDMP } from "../context/DMPContext";
 
@@ -10,47 +11,351 @@ function DossierPatient() {
   const navigate = useNavigate();
   const { state: dmpState } = useDMP();
 
-  // Fonction pour récupérer le patientId actuel
-  const getCurrentPatientId = () => {
-    // Priorité 1: patientId du contexte DMP
-    if (dmpState?.patientId && !isNaN(dmpState.patientId) && dmpState.patientId > 0) {
-      console.log('✅ PatientId récupéré du contexte DMP:', dmpState.patientId);
-      return dmpState.patientId;
-    }
+  // États pour l'authentification
+  const [isUserAuthenticated, setIsUserAuthenticated] = useState(false);
+  const [authLoading, setAuthLoading] = useState(true);
+
+  // États pour la gestion des onglets et des patients
+  const [activeTab, setActiveTab] = useState("patients-list");
+  const [patients, setPatients] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [showPatientModal, setShowPatientModal] = useState(false);
+  const [modalPatient, setModalPatient] = useState(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editPatient, setEditPatient] = useState(null);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [sharePatient, setSharePatient] = useState(null);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [showPatientFileModal, setShowPatientFileModal] = useState(false);
+  const [search, setSearch] = useState("");
+  const [filterRecent, setFilterRecent] = useState(false);
+  const [filterShared, setFilterShared] = useState(false);
+
+  // États pour les services et dossiers
+  const [services, setServices] = useState([]);
+  const [servicesLoading, setServicesLoading] = useState(false);
+  const [patientsForSelect, setPatientsForSelect] = useState([]);
+  const [dossiersPatients, setDossiersPatients] = useState([]);
+  const [dossiersLoading, setDossiersLoading] = useState(false);
+  const [selectedDossier, setSelectedDossier] = useState(null);
+  const [showDossierModal, setShowDossierModal] = useState(false);
+  const [dossierDetails, setDossierDetails] = useState(null);
+  const [dossierDetailsLoading, setDossierDetailsLoading] = useState(false);
+  const [showEditDossierModal, setShowEditDossierModal] = useState(false);
+  const [editDossierForm, setEditDossierForm] = useState({
+    statut: '',
+    type_dossier: '',
+    service_id: '',
+    medecin_referent_id: '',
+    resume: '',
+    antecedent_medicaux: '',
+    allergies: '',
+    traitements_chroniques: '',
+    heart_rate: '',
+    blood_pressure: '',
+    temperature: '',
+    respiratory_rate: '',
+    oxygen_saturation: '',
+    habitudes_vie: '',
+    historique_familial: '',
+    directives_anticipées: '',
+    observations: '',
+    date_fermeture: '',
+    motif_fermeture: ''
+  });
+  
+  // Form state for patient file creation
+  const [patientFileForm, setPatientFileForm] = useState({
+    patient_id: '',
+    service_id: '',
+    statut: 'actif',
+    dateOuverture: new Date().toISOString().split('T')[0],
+    dateFermeture: '',
+    resume_medical: '',
+    antecedents_medicaux: '',
+    allergies: '',
+    traitement: '',
+    signes_vitaux: '',
+    histoire_familiale: '',
+    observations: '',
+    directives_anticipees: ''
+  });
+
+  // États pour l'onglet prescription
+  const [prescriptions, setPrescriptions] = useState([]);
+  const [prescriptionsLoading, setPrescriptionsLoading] = useState(false);
+  const [showPrescriptionModal, setShowPrescriptionModal] = useState(false);
+  const [showExamenModal, setShowExamenModal] = useState(false);
+  const [selectedPatientForPrescription, setSelectedPatientForPrescription] = useState(null);
+  const [prescriptionForm, setPrescriptionForm] = useState({
+    patient_id: '',
+    principe_actif: '',
+    nom_commercial: '',
+    dosage: '',
+    frequence: '',
+    voie_administration: 'orale',
+    duree_traitement: '',
+    renouvelable: false,
+    nb_renouvellements: 0,
+    observations: '',
+    // Informations du médecin traitant
+    medecin_nom: '',
+    medecin_prenom: '',
+    medecin_specialite: '',
+    medecin_numero_ordre: ''
+  });
+  const [examenForm, setExamenForm] = useState({
+    patient_id: '',
+    type_examen: '',
+    parametres: '',
+    urgence: 'normal',
+    observations: '',
+    medecin_nom: '',
+    medecin_prenom: '',
+    medecin_specialite: '',
+    medecin_numero_ordre: ''
+  });
+
+  // États pour les modals et notifications
+  const [showQRModal, setShowQRModal] = useState(false);
+  const [qrCodeData, setQrCodeData] = useState(null);
+  const [createdPrescription, setCreatedPrescription] = useState(null);
+
+  // États pour les notifications et ordonnances
+  const [prescriptionNotifications, setPrescriptionNotifications] = useState([]);
+  const [notificationsLoading, setNotificationsLoading] = useState(false);
+  const [ordonnancesRecentes, setOrdonnancesRecentes] = useState([]);
+  const [ordonnancesRecentesLoading, setOrdonnancesRecentesLoading] = useState(false);
+  const [resumeAujourdhui, setResumeAujourdhui] = useState(null);
+  const [resumeLoading, setResumeLoading] = useState(false);
+  const [selectedNotification, setSelectedNotification] = useState(null);
+  const [showNotificationModal, setShowNotificationModal] = useState(false);
+  const [showOrdonnanceCompleteModal, setShowOrdonnanceCompleteModal] = useState(false);
+  const [ordonnanceCompleteForm, setOrdonnanceCompleteForm] = useState({
+    patient_id: '',
+    dossier_id: '',
+    principe_actif: '',
+    nom_commercial: '',
+    dosage: '',
+    frequence: '',
+    voie_administration: 'orale',
+    duree_traitement: '',
+    renouvelable: false,
+    nb_renouvellements: 0,
+    observations: '',
+    priorite: 'normale',
+    canal: 'application'
+  });
+
+  // Maintenant toutes les fonctions sont définies après les useState
+  const openDossierModal = async (dossier) => {
+    setSelectedDossier(dossier);
+    setShowDossierModal(true);
+    setDossierDetailsLoading(true);
     
-    // Priorité 2: patient sélectionné pour les prescriptions
-    if (selectedPatientForPrescription) {
-      const patientId = selectedPatientForPrescription?.id || 
-                       selectedPatientForPrescription?.rawData?.id_patient || 
-                       selectedPatientForPrescription?.id_patient;
-      if (patientId && !isNaN(patientId) && patientId > 0) {
-        console.log('✅ PatientId récupéré du patient sélectionné:', patientId);
-        return patientId;
+    try {
+      // Use the correct ID field - backend uses 'id' not 'Id'
+      const dossierId = dossier.id || dossier.Id || dossier.dossier_id || dossier.id_dossier;
+      console.log('Loading dossier details for ID:', dossierId);
+      const details = await getDossierMedical(dossierId);
+      console.log('Dossier details received:', details);
+      
+      // Handle the response format from backend
+      let dossierData;
+      if (details && details.data) {
+        dossierData = details.data;
+      } else {
+        dossierData = details;
       }
-    }
-    
-    // Priorité 3: premier patient disponible dans la liste
-    if (patients && patients.length > 0) {
-      const firstPatient = patients[0];
-      const firstPatientId = firstPatient?.id || 
-                           firstPatient?.rawData?.id_patient || 
-                           firstPatient?.id_patient;
-      if (firstPatientId && !isNaN(firstPatientId) && firstPatientId > 0) {
-        console.log('✅ PatientId récupéré du premier patient disponible:', firstPatientId);
-        // Initialiser automatiquement la sélection
-        if (!selectedPatientForPrescription) {
-          console.log('🔄 Initialisation automatique de la sélection avec le premier patient');
-          setSelectedPatientForPrescription(firstPatient);
-        }
-        return firstPatientId;
+      
+      // Enrich with patient information if not already present
+      if (dossierData && !dossierData.patient && dossier.patient_info) {
+        dossierData.patient = dossier.patient_info;
       }
+      
+      // Add patient name if available from enriched dossier data
+      if (dossierData && !dossierData.patient_name && dossier.patient_name) {
+        dossierData.patient_name = dossier.patient_name;
+      }
+      
+      // Add file number if available
+      if (dossierData && !dossierData.numeroDossier) {
+        dossierData.numeroDossier = dossier.numeroDossier || dossier.id_dossier || dossier.id;
+      }
+      
+      setDossierDetails(dossierData);
+    } catch (error) {
+      console.error('Erreur lors du chargement des détails du dossier:', error);
+      setDossierDetails(null);
+    } finally {
+      setDossierDetailsLoading(false);
     }
-    
-    console.warn('⚠️ Aucun patientId valide disponible');
-    return null;
   };
 
-  const loadServices = async () => {
+  const closeDossierModal = () => {
+    setShowDossierModal(false);
+    setSelectedDossier(null);
+    setDossierDetails(null);
+  };
+
+  const handleEditDossier = (dossier) => {
+    console.log('Opening edit modal for dossier:', dossier);
+    setSelectedDossier(dossier);
+    
+    // Pre-fill the form with existing data
+    setEditDossierForm({
+      statut: dossier.statut || '',
+      type_dossier: dossier.type_dossier || '',
+      service_id: dossier.service_id || '',
+      medecin_referent_id: dossier.medecin_referent_id || '',
+      resume: dossier.resume || '',
+      antecedent_medicaux: dossier.antecedent_medicaux || '',
+      allergies: dossier.allergies || '',
+      traitements_chroniques: dossier.traitements_chroniques || '',
+      heart_rate: dossier.heart_rate || '',
+      blood_pressure: dossier.blood_pressure || '',
+      temperature: dossier.temperature || '',
+      respiratory_rate: dossier.respiratory_rate || '',
+      oxygen_saturation: dossier.oxygen_saturation || '',
+      habitudes_vie: dossier.habitudes_vie || '',
+      historique_familial: dossier.historique_familial || '',
+      directives_anticipées: dossier.directives_anticipées || '',
+      observations: dossier.observations || '',
+      date_fermeture: dossier.date_fermeture || '',
+      motif_fermeture: dossier.motif_fermeture || ''
+    });
+    setShowEditDossierModal(true);
+  };
+
+  const handleEditDossierInputChange = (e) => {
+    const { name, value } = e.target;
+    setEditDossierForm(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleUpdateDossier = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    
+    try {
+      const dossierId = selectedDossier.id_dossier || selectedDossier.id;
+      console.log('Updating dossier:', dossierId, editDossierForm);
+      
+      // Convert date to ISO format if provided
+      const formData = {
+        ...editDossierForm,
+        date_fermeture: editDossierForm.date_fermeture ? new Date(editDossierForm.date_fermeture).toISOString() : null
+      };
+      
+      await updateDossierPatient(dossierId, formData);
+      alert('Dossier mis à jour avec succès!');
+      setShowEditDossierModal(false);
+      
+      // Reload dossiers list
+      await loadDossiersPatients();
+      
+    } catch (error) {
+      console.error('Erreur lors de la mise à jour du dossier:', error);
+      alert('Erreur lors de la mise à jour du dossier: ' + error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const closeEditDossierModal = () => {
+    setShowEditDossierModal(false);
+    setSelectedDossier(null);
+    setEditDossierForm({
+      statut: '',
+      type_dossier: '',
+      service_id: '',
+      medecin_referent_id: '',
+      resume: '',
+      antecedent_medicaux: '',
+      allergies: '',
+      traitements_chroniques: '',
+      heart_rate: '',
+      blood_pressure: '',
+      temperature: '',
+      respiratory_rate: '',
+      oxygen_saturation: '',
+      habitudes_vie: '',
+      historique_familial: '',
+      directives_anticipées: '',
+      observations: '',
+      date_fermeture: '',
+      motif_fermeture: ''
+    });
+  };
+
+  const handleCloseDossier = async (dossier) => {
+    if (window.confirm('Êtes-vous sûr de vouloir fermer ce dossier ?')) {
+      try {
+        const dossierId = dossier.id || dossier.Id || dossier.dossier_id;
+        await closeDossierPatient(dossierId);
+        alert('Dossier fermé avec succès');
+        // Reload the dossiers list
+        await loadDossiersPatients();
+      } catch (error) {
+        console.error('Erreur lors de la fermeture du dossier:', error);
+        alert('Erreur lors de la fermeture du dossier: ' + error);
+      }
+    }
+  };
+
+  const handleReactivateDossier = async (dossier) => {
+    if (window.confirm('Êtes-vous sûr de vouloir réactiver ce dossier ?')) {
+      try {
+        const dossierId = dossier.id || dossier.Id || dossier.dossier_id;
+        // Update the dossier status to 'actif'
+        await updateDossierPatient(dossierId, { statut: 'actif', dateFermeture: null });
+        alert('Dossier réactivé avec succès');
+        // Reload the dossiers list
+        await loadDossiersPatients();
+      } catch (error) {
+        console.error('Erreur lors de la réactivation du dossier:', error);
+        alert('Erreur lors de la réactivation du dossier: ' + error);
+      }
+    }
+  };
+
+  const openPatientFileModal = async () => {
+    console.log('Opening patient file modal...');
+    
+    // Set modal to open first
+    setShowPatientFileModal(true);
+    
+    // Load services and patients in parallel
+    try {
+      await Promise.all([
+        loadServices(),
+        loadPatientsForSelect()
+      ]);
+      console.log('Services and patients loaded successfully');
+    } catch (error) {
+      console.error('Error loading data for modal:', error);
+    }
+  };
+
+  const closePatientFileModal = () => {
+    setShowPatientFileModal(false);
+    setPatientFileForm({
+      patient_id: '',
+      service_id: '',
+      statut: 'actif',
+      dateOuverture: new Date().toISOString().split('T')[0],
+      dateFermeture: '',
+      resume_medical: '',
+      antecedents_medicaux: '',
+      allergies: '',
+      traitement: '',
+      signes_vitaux: '',
+      histoire_familiale: '',
+      observations: '',
+      directives_anticipees: ''
+    });
+  };
+
+  const loadServices = useCallback(async () => {
     setServicesLoading(true);
     try {
       console.log('Début du chargement des services...');
@@ -98,7 +403,7 @@ function DossierPatient() {
       setServicesLoading(false);
       console.log('Chargement des services terminé');
     }
-  };
+  }, []);
 
   // Function to get service name by ID
   const getServiceNameById = (serviceId) => {
@@ -306,415 +611,16 @@ function DossierPatient() {
     }
   };
 
-  const openDossierModal = async (dossier) => {
-    setSelectedDossier(dossier);
-    setShowDossierModal(true);
-    setDossierDetailsLoading(true);
-    
-    try {
-      // Use the correct ID field - backend uses 'id' not 'Id'
-      const dossierId = dossier.id || dossier.Id || dossier.dossier_id || dossier.id_dossier;
-      console.log('Loading dossier details for ID:', dossierId);
-      const details = await getDossierMedical(dossierId);
-      console.log('Dossier details received:', details);
-      
-      // Handle the response format from backend
-      let dossierData;
-      if (details && details.data) {
-        dossierData = details.data;
-      } else {
-        dossierData = details;
-      }
-      
-      // Enrich with patient information if not already present
-      if (dossierData && !dossierData.patient && dossier.patient_info) {
-        dossierData.patient = dossier.patient_info;
-      }
-      
-      // Add patient name if available from enriched dossier data
-      if (dossierData && !dossierData.patient_name && dossier.patient_name) {
-        dossierData.patient_name = dossier.patient_name;
-      }
-      
-      // Add file number if available
-      if (dossierData && !dossierData.numeroDossier) {
-        dossierData.numeroDossier = dossier.numeroDossier || dossier.id_dossier || dossier.id;
-      }
-      
-      setDossierDetails(dossierData);
-    } catch (error) {
-      console.error('Erreur lors du chargement des détails du dossier:', error);
-      setDossierDetails(null);
-    } finally {
-      setDossierDetailsLoading(false);
-    }
-  };
-
-  const closeDossierModal = () => {
-    setShowDossierModal(false);
-    setSelectedDossier(null);
-    setDossierDetails(null);
-  };
-
-  const handleEditDossier = (dossier) => {
-    console.log('Opening edit modal for dossier:', dossier);
-    setSelectedDossier(dossier);
-    
-    // Pre-fill the form with existing data
-    setEditDossierForm({
-      statut: dossier.statut || '',
-      type_dossier: dossier.type_dossier || '',
-      service_id: dossier.service_id || '',
-      medecin_referent_id: dossier.medecin_referent_id || '',
-      resume: dossier.resume || '',
-      antecedent_medicaux: dossier.antecedent_medicaux || '',
-      allergies: dossier.allergies || '',
-      traitements_chroniques: dossier.traitements_chroniques || '',
-      heart_rate: dossier.heart_rate || '',
-      blood_pressure: dossier.blood_pressure || '',
-      temperature: dossier.temperature || '',
-      respiratory_rate: dossier.respiratory_rate || '',
-      oxygen_saturation: dossier.oxygen_saturation || '',
-      habitudes_vie: dossier.habitudes_vie || '',
-      historique_familial: dossier.historique_familial || '',
-      directives_anticipées: dossier.directives_anticipées || '',
-      observations: dossier.observations || '',
-      date_fermeture: dossier.date_fermeture ? new Date(dossier.date_fermeture).toISOString().split('T')[0] : '',
-      motif_fermeture: dossier.motif_fermeture || ''
-    });
-    
-    setShowEditDossierModal(true);
-  };
-
-  const handleEditDossierInputChange = (e) => {
-    const { name, value } = e.target;
-    setEditDossierForm(prev => ({ ...prev, [name]: value }));
-  };
-
-  const handleUpdateDossier = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    
-    try {
-      const dossierId = selectedDossier.id_dossier || selectedDossier.id;
-      console.log('Updating dossier:', dossierId, editDossierForm);
-      
-      // Convert date to ISO format if provided
-      const formData = {
-        ...editDossierForm,
-        date_fermeture: editDossierForm.date_fermeture ? new Date(editDossierForm.date_fermeture).toISOString() : null
-      };
-      
-      await updateDossierPatient(dossierId, formData);
-      alert('Dossier mis à jour avec succès!');
-      setShowEditDossierModal(false);
-      
-      // Reload dossiers list
-      await loadDossiersPatients();
-      
-    } catch (error) {
-      console.error('Erreur lors de la mise à jour du dossier:', error);
-      alert('Erreur lors de la mise à jour du dossier: ' + error);
-    } finally {
+  // Fonction pour charger les patients
+  const loadPatients = useCallback(async () => {
+    // Vérifier l'authentification avant de faire l'appel API
+    if (!isUserAuthenticated) {
+      console.log('Utilisateur non authentifié, impossible de charger les patients');
+      setPatients([]);
       setLoading(false);
+      return [];
     }
-  };
 
-  const closeEditDossierModal = () => {
-    setShowEditDossierModal(false);
-    setSelectedDossier(null);
-    setEditDossierForm({
-      statut: '',
-      type_dossier: '',
-      service_id: '',
-      medecin_referent_id: '',
-      resume: '',
-      antecedent_medicaux: '',
-      allergies: '',
-      traitements_chroniques: '',
-      heart_rate: '',
-      blood_pressure: '',
-      temperature: '',
-      respiratory_rate: '',
-      oxygen_saturation: '',
-      habitudes_vie: '',
-      historique_familial: '',
-      directives_anticipées: '',
-      observations: '',
-      date_fermeture: '',
-      motif_fermeture: ''
-    });
-  };
-
-  const handleCloseDossier = async (dossier) => {
-    if (window.confirm('Êtes-vous sûr de vouloir fermer ce dossier ?')) {
-      try {
-        const dossierId = dossier.id || dossier.Id || dossier.dossier_id;
-        await closeDossierPatient(dossierId);
-        alert('Dossier fermé avec succès');
-        // Reload the dossiers list
-        await loadDossiersPatients();
-      } catch (error) {
-        console.error('Erreur lors de la fermeture du dossier:', error);
-        alert('Erreur lors de la fermeture du dossier: ' + error);
-      }
-    }
-  };
-
-  const handleReactivateDossier = async (dossier) => {
-    if (window.confirm('Êtes-vous sûr de vouloir réactiver ce dossier ?')) {
-      try {
-        const dossierId = dossier.id || dossier.Id || dossier.dossier_id;
-        // Update the dossier status to 'actif'
-        await updateDossierPatient(dossierId, { statut: 'actif', dateFermeture: null });
-        alert('Dossier réactivé avec succès');
-        // Reload the dossiers list
-        await loadDossiersPatients();
-      } catch (error) {
-        console.error('Erreur lors de la réactivation du dossier:', error);
-        alert('Erreur lors de la réactivation du dossier: ' + error);
-      }
-    }
-  };
-
-  const openPatientFileModal = async () => {
-    console.log('Opening patient file modal...');
-    
-    // Set modal to open first
-    setShowPatientFileModal(true);
-    
-    // Load services and patients in parallel
-    try {
-      await Promise.all([
-        loadServices(),
-        loadPatientsForSelect()
-      ]);
-      console.log('Services and patients loaded successfully');
-    } catch (error) {
-      console.error('Error loading data for modal:', error);
-    }
-  };
-
-  const closePatientFileModal = () => {
-    setShowPatientFileModal(false);
-    setPatientFileForm({
-      patient_id: '',
-      service_id: '',
-      statut: 'actif',
-      dateOuverture: new Date().toISOString().split('T')[0],
-      dateFermeture: '',
-      resume_medical: '',
-      antecedents_medicaux: '',
-      allergies: '',
-      traitement: '',
-      signes_vitaux: '',
-      histoire_familiale: '',
-      observations: '',
-      directives_anticipees: ''
-    });
-  };
-  const [activeTab, setActiveTab] = useState("patients-list");
-  const [patients, setPatients] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [showPatientModal, setShowPatientModal] = useState(false);
-  const [modalPatient, setModalPatient] = useState(null);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [editPatient, setEditPatient] = useState(null);
-  const [showShareModal, setShowShareModal] = useState(false);
-  const [sharePatient, setSharePatient] = useState(null);
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [showPatientFileModal, setShowPatientFileModal] = useState(false);
-  const [search, setSearch] = useState("");
-  const [filterRecent, setFilterRecent] = useState(false);
-  const [filterShared, setFilterShared] = useState(false);
-
-  const [services, setServices] = useState([]);
-  const [servicesLoading, setServicesLoading] = useState(false);
-  const [patientsForSelect, setPatientsForSelect] = useState([]);
-  const [dossiersPatients, setDossiersPatients] = useState([]);
-  const [dossiersLoading, setDossiersLoading] = useState(false);
-  const [selectedDossier, setSelectedDossier] = useState(null);
-  const [showDossierModal, setShowDossierModal] = useState(false);
-  const [dossierDetails, setDossierDetails] = useState(null);
-  const [dossierDetailsLoading, setDossierDetailsLoading] = useState(false);
-  const [showEditDossierModal, setShowEditDossierModal] = useState(false);
-  const [editDossierForm, setEditDossierForm] = useState({
-    statut: '',
-    type_dossier: '',
-    service_id: '',
-    medecin_referent_id: '',
-    resume: '',
-    antecedent_medicaux: '',
-    allergies: '',
-    traitements_chroniques: '',
-    heart_rate: '',
-    blood_pressure: '',
-    temperature: '',
-    respiratory_rate: '',
-    oxygen_saturation: '',
-    habitudes_vie: '',
-    historique_familial: '',
-    directives_anticipées: '',
-    observations: '',
-    date_fermeture: '',
-    motif_fermeture: ''
-  });
-  
-  // Form state for patient file creation
-  const [patientFileForm, setPatientFileForm] = useState({
-    patient_id: '',
-    service_id: '',
-    statut: 'actif',
-    dateOuverture: new Date().toISOString().split('T')[0],
-    dateFermeture: '',
-    resume_medical: '',
-    antecedents_medicaux: '',
-    allergies: '',
-    traitement: '',
-    signes_vitaux: '',
-    histoire_familiale: '',
-    observations: '',
-    directives_anticipees: ''
-  });
-
-
-
-  // États pour l'onglet prescription
-  const [prescriptions, setPrescriptions] = useState([]);
-  const [prescriptionsLoading, setPrescriptionsLoading] = useState(false);
-  const [showPrescriptionModal, setShowPrescriptionModal] = useState(false);
-  const [showExamenModal, setShowExamenModal] = useState(false);
-  const [selectedPatientForPrescription, setSelectedPatientForPrescription] = useState(null);
-  const [prescriptionForm, setPrescriptionForm] = useState({
-    patient_id: '',
-    principe_actif: '',
-    nom_commercial: '',
-    dosage: '',
-    frequence: '',
-    voie_administration: 'orale',
-    duree_traitement: '',
-    renouvelable: false,
-    nb_renouvellements: 0,
-    observations: '',
-    // Informations du médecin traitant
-    medecin_nom: '',
-    medecin_prenom: '',
-    medecin_specialite: '',
-    medecin_numero_ordre: ''
-  });
-  const [examenForm, setExamenForm] = useState({
-    patient_id: '',
-    type_examen: '',
-    parametres: '',
-    urgence: 'normal',
-    observations: '',
-    // Informations du médecin traitant
-    medecin_nom: '',
-    medecin_prenom: '',
-    medecin_specialite: '',
-    medecin_numero_ordre: ''
-  });
-
-  // États pour le QR Code
-  const [showQRModal, setShowQRModal] = useState(false);
-  const [qrCodeData, setQrCodeData] = useState(null);
-  const [createdPrescription, setCreatedPrescription] = useState(null);
-
-  // États pour les notifications et ordonnances récentes
-  const [prescriptionNotifications, setPrescriptionNotifications] = useState([]);
-  const [notificationsLoading, setNotificationsLoading] = useState(false);
-  const [ordonnancesRecentes, setOrdonnancesRecentes] = useState([]);
-  const [ordonnancesRecentesLoading, setOrdonnancesRecentesLoading] = useState(false);
-  const [resumeAujourdhui, setResumeAujourdhui] = useState(null);
-  const [resumeLoading, setResumeLoading] = useState(false);
-  const [selectedNotification, setSelectedNotification] = useState(null);
-  const [showNotificationModal, setShowNotificationModal] = useState(false);
-  const [showOrdonnanceCompleteModal, setShowOrdonnanceCompleteModal] = useState(false);
-  const [ordonnanceCompleteForm, setOrdonnanceCompleteForm] = useState({
-    patient_id: '',
-    dossier_id: '',
-    principe_actif: '',
-    nom_commercial: '',
-    dosage: '',
-    frequence: '',
-    voie_administration: 'orale',
-    duree_traitement: '',
-    renouvelable: false,
-    nb_renouvellements: 0,
-    observations: '',
-    priorite: 'normale',
-    canal: 'application',
-    // Informations du médecin traitant
-    medecin_nom: '',
-    medecin_prenom: '',
-    medecin_specialite: '',
-    medecin_numero_ordre: ''
-  });
-
-  // Chargement initial des patients et services
-  useEffect(() => {
-    loadPatients();
-    loadServices();
-  }, []);
-
-  // Reload services when modal opens
-  useEffect(() => {
-    if (showPatientFileModal) {
-      console.log('Modal opened, ensuring services are loaded...');
-      loadServices();
-    }
-  }, [showPatientFileModal]);
-
-  // Fonctions pour l'onglet prescription
-  const loadPrescriptions = useCallback(async () => {
-    setPrescriptionsLoading(true);
-    try {
-      // Récupérer toutes les prescriptions depuis l'API
-      const prescriptionsData = await getAllPrescriptions();
-      console.log('Prescriptions récupérées depuis l\'API:', prescriptionsData);
-      
-      // Filtrer par patient si un patient est sélectionné
-      let prescriptionsToShow = prescriptionsData;
-      if (selectedPatientForPrescription) {
-        const patientId = selectedPatientForPrescription?.id || selectedPatientForPrescription?.rawData?.id_patient || selectedPatientForPrescription?.id_patient;
-        if (patientId) {
-          prescriptionsToShow = prescriptionsData.filter(prescription => 
-            prescription.patient_id === patientId || 
-            prescription.patient?.id_patient === patientId ||
-            prescription.patient_id === parseInt(patientId)
-          );
-        }
-      }
-      
-      setPrescriptions(prescriptionsToShow || []);
-    } catch (error) {
-      console.error('Erreur lors du chargement des prescriptions:', error);
-      setPrescriptions([]);
-    } finally {
-      setPrescriptionsLoading(false);
-    }
-  }, [selectedPatientForPrescription]);
-
-  // Load dossiers patients when switching to shared-folder tab
-  useEffect(() => {
-    console.log('Active tab changed to:', activeTab);
-    if (activeTab === "shared-folder") {
-      console.log('Switching to shared-folder tab, loading dossiers patients...');
-      loadDossiersPatients();
-    }
-    if (activeTab === "prescriptions") {
-      console.log('Switching to prescriptions tab, loading prescriptions...');
-      loadPrescriptions();
-    }
-    if (activeTab === "notifications") {
-      console.log('Switching to notifications tab, loading notifications...');
-      loadOrdonnancesRecentes();
-      loadResumeAujourdhui();
-      loadNotifications();
-    }
-  }, [activeTab, loadPrescriptions]);
-
-  const loadPatients = async () => {
     setLoading(true);
     try {
       console.log('Loading patients...');
@@ -779,12 +685,106 @@ function DossierPatient() {
         status: error.response?.status,
         url: error.config?.url
       });
+      
+      // Gérer spécifiquement les erreurs d'authentification
+      if (error.response?.status === 401) {
+        console.error('Erreur d\'authentification: Utilisateur non connecté ou token expiré');
+        setIsUserAuthenticated(false);
+        // Rediriger vers la page de connexion
+        navigate("/connexion", { 
+          state: { 
+            from: "/dossier-patient",
+            message: "Votre session a expiré. Veuillez vous reconnecter."
+          } 
+        });
+      }
+      
       setPatients([]);
       return [];
     } finally {
       setLoading(false);
     }
-  };
+  }, [isUserAuthenticated, navigate]);
+
+  // Vérification de l'authentification
+  useEffect(() => {
+    const checkAuthentication = () => {
+      console.log('🔍 Vérification de l\'authentification...');
+      const isAuth = isAuthenticated();
+      const isMedecin = isMedecinAuthenticated();
+      const isPatient = isPatientAuthenticated();
+      
+      console.log('  - isAuthenticated:', isAuth);
+      console.log('  - isMedecinAuthenticated:', isMedecin);
+      console.log('  - isPatientAuthenticated:', isPatient);
+      console.log('  - Token JWT:', !!localStorage.getItem('jwt'));
+      console.log('  - Token général:', !!localStorage.getItem('token'));
+      
+      if (isAuth) {
+        console.log('✅ Utilisateur authentifié, chargement des données...');
+        setIsUserAuthenticated(true);
+        
+        // Charger les données seulement si l'utilisateur est authentifié
+        console.log('🔄 Appel de loadPatients...');
+        loadPatients();
+        console.log('🔄 Appel de loadServices...');
+        loadServices();
+      } else {
+        console.log('❌ Utilisateur non authentifié, redirection...');
+        setIsUserAuthenticated(false);
+        // Rediriger vers la page de connexion
+        navigate("/connexion", { 
+          state: { 
+            from: "/dossier-patient",
+            message: "Veuillez vous connecter pour accéder à la liste des patients"
+          } 
+        });
+      }
+      setAuthLoading(false);
+    };
+
+    checkAuthentication();
+  }, [navigate, loadPatients, loadServices]);
+
+  // Reload services when modal opens
+  useEffect(() => {
+    if (showPatientFileModal) {
+      console.log('Modal opened, ensuring services are loaded...');
+      loadServices();
+    }
+  }, [showPatientFileModal, loadServices]);
+
+  // Fonctions pour l'onglet prescription
+  const loadPrescriptions = useCallback(async () => {
+    setPrescriptionsLoading(true);
+    try {
+      // Récupérer toutes les prescriptions depuis l'API
+      const prescriptionsData = await getAllPrescriptions();
+      console.log('Prescriptions récupérées depuis l\'API:', prescriptionsData);
+      
+      // Filtrer par patient si un patient est sélectionné
+      let prescriptionsToShow = prescriptionsData;
+      if (selectedPatientForPrescription) {
+        const patientId = selectedPatientForPrescription?.id || selectedPatientForPrescription?.rawData?.id_patient || selectedPatientForPrescription?.id_patient;
+        if (patientId) {
+          prescriptionsToShow = prescriptionsData.filter(prescription => 
+            prescription.patient_id === patientId || 
+            prescription.patient?.id_patient === patientId ||
+            prescription.patient_id === parseInt(patientId)
+          );
+        }
+      }
+      
+      setPrescriptions(prescriptionsToShow || []);
+    } catch (error) {
+      console.error('Erreur lors du chargement des prescriptions:', error);
+      setPrescriptions([]);
+    } finally {
+      setPrescriptionsLoading(false);
+    }
+  }, [selectedPatientForPrescription]);
+
+
 
 
   // Gestion des modals
@@ -1374,6 +1374,42 @@ const loadOrdonnancesRecentes = useCallback(async () => {
   // });
 
   // Formatage des données patient pour l'affichage
+
+  // Load dossiers patients when switching to shared-folder tab
+  useEffect(() => {
+    console.log('Active tab changed to:', activeTab);
+    if (activeTab === "shared-folder") {
+      console.log('Switching to shared-folder tab, loading dossiers patients...');
+      loadDossiersPatients();
+    }
+    if (activeTab === "prescriptions") {
+      console.log('Switching to prescriptions tab, loading prescriptions...');
+      loadPrescriptions();
+    }
+    if (activeTab === "notifications") {
+      console.log('Switching to notifications tab, loading notifications...');
+      loadOrdonnancesRecentes();
+      loadResumeAujourdhui();
+      loadNotifications();
+    }
+  }, [activeTab, loadPrescriptions, loadDossiersPatients, loadOrdonnancesRecentes, loadResumeAujourdhui, loadNotifications]);
+
+  // Afficher un écran de chargement pendant la vérification d'authentification
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Vérification de l'authentification...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Si l'utilisateur n'est pas authentifié, ne rien afficher (redirection en cours)
+  if (!isUserAuthenticated) {
+    return null;
+  }
 
   return (
     <div className="bg-gray-100 min-h-screen">

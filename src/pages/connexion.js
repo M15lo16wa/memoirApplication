@@ -5,6 +5,9 @@ import { FaUserDoctor, FaUserInjured, FaUserTie, FaUserGear } from 'react-icons/
 // gestion des service de connexion
 import {login, loginPatient, loginMedecin} from "../services/api/authApi";
 
+// authentification 2FA
+import Validate2FA from "../components/2fa/Validate2FA";
+
 
 function Connexion() {
     const [email, setEmail] = useState("");
@@ -14,6 +17,9 @@ function Connexion() {
     const [error, setError] = useState("");
     const [selectedProfile, setSelectedProfile] = useState("");
     const [selectedProfessional, setSelectedProfessional] = useState("");
+    const [show2FA, setShow2FA] = useState(false);
+    const [userData, setUserData] = useState(null);
+    const [requires2FA, setRequires2FA] = useState(false);
     const navigate = useNavigate();
 
     const handleSubmit = async (e) => {
@@ -58,23 +64,28 @@ function Connexion() {
         });
 
         try {
-            let userData;
+            let response;
             
             // ROUTE 1: Patient -> /patient/auth/login
             if (selectedProfile === 'patient') {
                 console.log('🔵 Connexion PATIENT via /patient/auth/login');
-                const response = await loginPatient(identifiant);
+                response = await loginPatient(identifiant);
                 console.log('✅ Réponse complète de connexion patient:', response);
                 
-                // Vérifier si la connexion a réussi en vérifiant le localStorage
+                // Vérifier si la 2FA est requise
+                if (response.data?.requires2FA) {
+                    console.log('🔐 2FA requise pour le patient');
+                    setRequires2FA(true);
+                    setUserData(response.data);
+                    setShow2FA(true);
+                    return;
+                }
+                
+                // Connexion normale si pas de 2FA
                 const token = localStorage.getItem('jwt');
                 const patientData = localStorage.getItem('patient');
                 
-                console.log('🔑 Token stocké:', token);
-                console.log('👤 Données patient stockées:', patientData);
-                
                 if (token && patientData) {
-                    // Redirection vers la page DMP
                     console.log('🔑 Token et données patient présents, redirection vers /dmp');
                     navigate('/dmp');
                 } else {
@@ -85,8 +96,19 @@ function Connexion() {
             } else if (selectedProfile === 'professionnel' && selectedProfessional === 'medecin') {
                 console.log('🟢 Connexion MÉDECIN via /ProfessionnelSante/auth/login');
                 console.log('📤 Identifiants envoyés:', identifiant);
-                userData = await loginMedecin(identifiant);
-                console.log('✅ Données médecin reçues:', userData);
+                response = await loginMedecin(identifiant);
+                console.log('✅ Données médecin reçues:', response);
+                
+                // Vérifier si la 2FA est requise
+                if (response.data?.requires2FA) {
+                    console.log('🔐 2FA requise pour le médecin');
+                    setRequires2FA(true);
+                    setUserData(response.data);
+                    setShow2FA(true);
+                    return;
+                }
+                
+                // Connexion normale si pas de 2FA
                 console.log('🔑 Token stocké:', localStorage.getItem('token'));
                 console.log('👨‍⚕️ Données médecin stockées:', localStorage.getItem('medecin'));
                 
@@ -102,10 +124,19 @@ function Connexion() {
             // ROUTE 3: Admin/Secrétaire -> /auth/login
             } else if (selectedProfile === 'professionnel') {
                 console.log('🟡 Connexion ADMIN/SECRÉTAIRE via /auth/login');
-                userData = await login(identifiant);
-                console.log('✅ Données utilisateur reçues:', userData);
+                response = await login(identifiant);
+                console.log('✅ Données utilisateur reçues:', response);
                 
-                // Redirection selon le type de professionnel
+                // Vérifier si la 2FA est requise
+                if (response.data?.requires2FA) {
+                    console.log('🔐 2FA requise pour l\'admin/secrétaire');
+                    setRequires2FA(true);
+                    setUserData(response.data);
+                    setShow2FA(true);
+                    return;
+                }
+                
+                // Connexion normale si pas de 2FA
                 switch (selectedProfessional) {
                     case 'administrateur':
                         navigate('/admin');
@@ -120,9 +151,56 @@ function Connexion() {
             
         } catch (error) {
             console.error('❌ Erreur de connexion:', error);
-            setError(error || "Erreur de connexion");
+            setError(error.message || "Erreur de connexion");
         }
     };
+
+    const handle2FASuccess = () => {
+        console.log('✅ 2FA validée avec succès, redirection...');
+        // Redirection selon le type d'utilisateur
+        if (userData) {
+            switch (selectedProfile) {
+                case 'patient':
+                    navigate('/dmp');
+                    break;
+                case 'professionnel':
+                    if (selectedProfessional === 'medecin') {
+                        navigate('/medecin');
+                    } else if (selectedProfessional === 'administrateur') {
+                        navigate('/admin');
+                    } else if (selectedProfessional === 'secretaire') {
+                        navigate('/secretariat');
+                    }
+                    break;
+                default:
+                    navigate('/admin');
+            }
+        }
+    };
+
+    const handle2FACancel = () => {
+        console.log('❌ 2FA annulée par l\'utilisateur');
+        setShow2FA(false);
+        setRequires2FA(false);
+        setUserData(null);
+        // Optionnel : déconnecter l'utilisateur
+        localStorage.removeItem('jwt');
+        localStorage.removeItem('token');
+        localStorage.removeItem('patient');
+        localStorage.removeItem('medecin');
+    };
+
+    // Si la 2FA est requise, afficher le composant de validation
+    if (show2FA && requires2FA) {
+        return (
+            <Validate2FA
+                onSuccess={handle2FASuccess}
+                onCancel={handle2FACancel}
+                isRequired={true}
+                userData={userData}
+            />
+        );
+    }
 
     const renderProfileSelection = () => (
         <div className="text-center p-6">

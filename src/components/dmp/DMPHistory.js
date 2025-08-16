@@ -1,9 +1,25 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { getDMPAccessHistory, getPatientInfo, getPatientAuthorizations } from '../../services/api/dmpApi';
 import { useDMP } from '../../context/DMPContext';
+import { use2FA } from '../../hooks/use2FA';
+
+// Protection 2FA pour l'accès aux dossiers patients
+import Validate2FA from '../2fa/Validate2FA';
 
 function DMPHistory({ patientId = null }) {
   const { state: dmpState } = useDMP();
+  
+  // Utilisation du hook centralisé use2FA
+  const {
+    show2FA,
+    requires2FA,
+    pendingAction,
+    handle2FASuccess,
+    handle2FACancel,
+    with2FAProtection,
+    reset2FA
+  } = use2FA();
+  
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -151,6 +167,10 @@ function DMPHistory({ patientId = null }) {
     console.warn('⚠️ Aucun tableau trouvé dans les données reçues');
     return [];
   }, []);
+
+  // Utilisation du wrapper 2FA centralisé pour protéger les accès aux dossiers patients
+  const protectedLoadHistory = with2FAProtection(loadHistory, 'Chargement de l\'historique DMP');
+  const protectedCheckAccessRequests = with2FAProtection(checkAccessRequests, 'Vérification des demandes d\'accès');
 
   const loadHistory = useCallback(async (forceReload = false) => {
     // Vérifier l'autorisation avant de charger l'historique
@@ -713,6 +733,16 @@ function DMPHistory({ patientId = null }) {
             </button>
           </div>
         </div>
+      )}
+
+      {/* Protection 2FA pour l'accès aux dossiers patients */}
+      {show2FA && requires2FA && (
+        <Validate2FA
+          onSuccess={handle2FASuccess}
+          onCancel={handle2FACancel}
+          isRequired={true}
+          message="Vérification 2FA requise pour accéder à l'historique des dossiers patients"
+        />
       )}
     </div>
   );

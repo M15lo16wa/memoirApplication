@@ -597,16 +597,37 @@ const getServices = async () => {
 // 3-4) recuperation des patients
 const getPatients = async () => {
     try {
-        const response = await api.get('/patient');
+        // Essayer d'abord l'endpoint spécifique pour les patients
+        let response = await api.get('/patients');
+        
+        // Si ça ne marche pas, essayer l'endpoint générique
+        if (!response || !response.data || response.data.length === 0) {
+            console.log('Tentative avec endpoint alternatif...');
+            response = await api.get('/patient');
+        }
         
         if (!response || !response.data) {
             console.error('Invalid API response format for patients');
             return [];
         }
         
-        // Backend returns: { status: 'success', results: N, data: { patients: [...] } }
-        if (response.data.status === 'success' && response.data.data && Array.isArray(response.data.data.patients)) {
+        // Backend returns: { status: 'success', results: N, data: [...] }
+        if (response.data.status === 'success' && response.data.data && Array.isArray(response.data.data)) {
+            console.log('✅ Patients found in response.data.data:', response.data.data);
+            return response.data.data;
+        }
+        
+        // Nouveau format: { status: 'success', results: N, data: { patients: [...] } }
+        if (response.data.status === 'success' && response.data.data && response.data.data.patients && Array.isArray(response.data.data.patients)) {
+            console.log('✅ Patients found in response.data.data.patients:', response.data.data.patients);
             return response.data.data.patients;
+        }
+        
+        // Debug: Log la structure exacte de data
+        if (response.data.status === 'success' && response.data.data) {
+            console.log('🔍 Structure de response.data.data:', response.data.data);
+            console.log('🔍 Type de response.data.data:', typeof response.data.data);
+            console.log('🔍 Clés disponibles:', Object.keys(response.data.data));
         }
         
         // Fallback formats for compatibility
@@ -615,7 +636,35 @@ const getPatients = async () => {
         }
         
         if (Array.isArray(response.data)) {
-            return response.data;
+            // Si les données sont des paramètres biologiques, extraire les patients uniques
+            const patientsMap = new Map();
+            
+            response.data.forEach(item => {
+                if (item.patient && item.patient.id_patient) {
+                    const patientId = item.patient.id_patient;
+                    if (!patientsMap.has(patientId)) {
+                        patientsMap.set(patientId, {
+                            id_patient: patientId,
+                            nom: item.patient.nom || '',
+                            prenom: item.patient.prenom || '',
+                            // Ajouter d'autres champs si disponibles
+                            statut: 'Actif',
+                            date_naissance: null,
+                            sexe: null,
+                            telephone: null,
+                            email: null,
+                            adresse: null,
+                            code_postal: null,
+                            ville: null,
+                            groupe_sanguin: null
+                        });
+                    }
+                }
+            });
+            
+            const patients = Array.from(patientsMap.values());
+            console.log('✅ Patients extraits des paramètres biologiques:', patients);
+            return patients;
         }
         
         console.error('Unexpected patients response format:', response.data);
@@ -897,7 +946,7 @@ export {
     getHistoriqueConsultations,
     uploadDocument,
     downloadDocument,
-    // viewDocument, // Removed duplicate export to fix lint error
+    // viewDocument,
     getResumeMedical,
     createConsultation,
     getConsultation,

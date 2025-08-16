@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import {
   FaUser, FaFileMedical, FaShieldAlt,
   FaUpload, FaBell, FaQrcode, FaBook, FaChartBar,
@@ -9,9 +9,9 @@ import {
 } from "react-icons/fa";
 import { ProtectedPatientRoute } from "../services/api/protectedRoute";
 import { logoutPatient, getStoredPatient } from "../services/api/authApi";
-import { DMPProvider } from "../context/DMPContext";
 import { useDMP } from "../hooks/useDMP";
 import { usePDFGenerator } from "../hooks/usePDFGenerator";
+import { use2FA } from "../hooks/use2FA";
 import DMPDashboard from "../components/dmp/DMPDashboard";
 import DMPMonEspaceSante from "../components/dmp/DMPMonEspaceSante";
 import DMPNotification from "../components/ui/DMPNotification";
@@ -20,6 +20,9 @@ import DMPHistory from "../components/dmp/DMPHistory";
 import * as dmpApi from "../services/api/dmpApi";
 import * as patientApi from "../services/api/patientApi";
 import { uploadDocument } from "../services/api/medicalApi";
+
+// Protection 2FA pour l'accès aux dossiers patients
+import Validate2FA from "../components/2fa/Validate2FA";
 
 // Composant HistoriqueMedical qui utilise les fonctions de patientApi
 const HistoriqueMedical = () => {
@@ -1282,6 +1285,7 @@ const HistoriqueMedical = () => {
         </div>
       )}
     </div>
+
   );
 };
 
@@ -1317,6 +1321,8 @@ const DMP = () => {
   const [currentNotification, setCurrentNotification] = useState(null);
   const [showNotification, setShowNotification] = useState(false);
 
+  // États pour la protection 2FA des dossiers patients (gérés par le hook use2FA)
+
   const navigate = useNavigate();
   const { createAutoMesure, uploadDocument } = useDMP();
 
@@ -1328,6 +1334,17 @@ const DMP = () => {
     printUrgencyCardPDF,
     clearError: clearPDFError
   } = usePDFGenerator();
+
+  // Utilisation du hook centralisé use2FA
+  const {
+    show2FA,
+    requires2FA,
+    pendingAction,
+    handle2FASuccess,
+    handle2FACancel,
+    with2FAProtection,
+    reset2FA
+  } = use2FA();
 
   useEffect(() => {
     loadInitialData();
@@ -1462,13 +1479,17 @@ const DMP = () => {
   };
 
   // Fonction pour filtrer les accès par patient ID
-const filterAccessByPatient = (accessData, patientId) => {
-  if (!accessData || !patientId) return [];
-  const arr = accessData.authorizationAccess || accessData;
-  console.log("Accès bruts:", arr);
-  arr.forEach(acc => console.log("Clés accès:", Object.keys(acc), acc));
-  return arr.filter(access => Number(access.patient_id) === Number(patientId));
-};
+  const filterAccessByPatient = (accessData, patientId) => {
+    if (!accessData || !patientId) return [];
+    const arr = accessData.authorizationAccess || accessData;
+    console.log("Accès bruts:", arr);
+    arr.forEach(acc => console.log("Clés accès:", Object.keys(acc), acc));
+    return arr.filter(access => Number(access.patient_id) === Number(patientId));
+  };
+
+  // Utilisation du wrapper 2FA centralisé pour protéger les accès aux dossiers patients
+  const protectedLoadInitialData = with2FAProtection(loadInitialData, 'Chargement des données initiales');
+  const protectedLoadTabData = with2FAProtection(loadTabData, 'Chargement des données d\'onglet');
 
   // Fonction pour obtenir les notifications à afficher
   const getNotificationsToDisplay = () => {
@@ -2011,14 +2032,18 @@ const filterAccessByPatient = (accessData, patientId) => {
 
   const handleAutoMesureSubmit = async (e) => {
     e.preventDefault();
-
-    if (!validateMesure()) {
+    
+    // Logs de débogage pour le contexte DMP
+    console.log('🔍 État du contexte DMP:', { createAutoMesure, uploadDocument });
+    console.log('🔍 Patient connecté depuis localStorage:', getStoredPatient());
+    
+    if (!autoMesure.valeur || !autoMesure.type_mesure) {
+      alert('Veuillez remplir tous les champs obligatoires');
       return;
     }
 
+    setLoading(true);
     try {
-      setLoading(true);
-
       // Préparer les données selon le type de mesure
       const mesureData = {
         ...autoMesure,
@@ -2033,7 +2058,8 @@ const filterAccessByPatient = (accessData, patientId) => {
       // Utiliser le contexte DMP pour créer l'auto-mesure
       const response = await createAutoMesure(mesureData);
 
-      if (response) {
+      // Vérifier que la réponse contient des données valides
+      if (response && (response.data || response.id_dossier || response.numeroDossier)) {
         console.log('✅ Auto-mesure créée avec succès via contexte:', response);
 
         setShowAutoMesureModal(false);
@@ -2053,7 +2079,8 @@ const filterAccessByPatient = (accessData, patientId) => {
 
         alert('Mesure enregistrée avec succès !');
       } else {
-        throw new Error('Réponse invalide de l\'API');
+        console.warn('⚠️ Réponse de l\'API inattendue:', response);
+        throw new Error('Réponse invalide de l\'API - structure de données inattendue');
       }
     } catch (error) {
       console.error('Erreur lors de l\'enregistrement:', error);
@@ -3162,6 +3189,15 @@ const filterAccessByPatient = (accessData, patientId) => {
         </div>
       )}
 
+      {/* Protection 2FA pour l'accès aux dossiers patients */}
+      {show2FA && requires2FA && (
+        <Validate2FA
+          onSuccess={handle2FASuccess}
+          onCancel={handle2FACancel}
+          isRequired={true}
+          message="Vérification 2FA requise pour accéder aux dossiers patients"
+        />
+      )}
 
     </div>
   );
@@ -3170,9 +3206,7 @@ const filterAccessByPatient = (accessData, patientId) => {
 // Composant wrapper avec protection
 const DMPProtected = () => (
   <ProtectedPatientRoute>
-    <DMPProvider>
-      <DMP />
-    </DMPProvider>
+    <DMP />
   </ProtectedPatientRoute>
 );
 

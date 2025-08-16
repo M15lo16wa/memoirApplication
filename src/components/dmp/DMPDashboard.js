@@ -1,12 +1,27 @@
 import React, { useEffect, useState } from 'react';
 import { useDMP } from '../../hooks/useDMP';
+import { use2FA } from '../../hooks/use2FA';
 import { FaHeartbeat, FaFileMedical, FaCalendarAlt, FaChartLine, FaUserMd, FaThermometerHalf, FaTint, FaWeight } from 'react-icons/fa';
 import NotificationsStats from '../ui/NotificationsStats';
 import * as dmpApi from '../../services/api/dmpApi';
 
+// Protection 2FA pour l'accès aux dossiers patients
+import Validate2FA from '../2fa/Validate2FA';
+
 const DMPDashboard = () => {
     const [notificationsStats, setNotificationsStats] = useState(null);
     const [loadingStats, setLoadingStats] = useState(false);
+    
+    // Utilisation du hook centralisé use2FA
+    const {
+        show2FA,
+        requires2FA,
+        pendingAction,
+        handle2FASuccess,
+        handle2FACancel,
+        with2FAProtection,
+        reset2FA
+    } = use2FA();
     
     const { 
         dmpData, 
@@ -57,6 +72,10 @@ const DMPDashboard = () => {
             }
         }
     };
+
+    // Utilisation du wrapper 2FA centralisé pour protéger les accès aux dossiers patients
+    const protectedLoadStatistiques = with2FAProtection(loadStatistiques, 'Chargement des statistiques');
+    const protectedLoadNotificationsStats = with2FAProtection(loadNotificationsStats, 'Chargement des notifications');
 
     // Recharger les données quand les auto-mesures ou documents changent
     useEffect(() => {
@@ -290,6 +309,16 @@ const DMPDashboard = () => {
                     ))}
                 </div>
             </div>
+
+            {/* Protection 2FA pour l'accès aux dossiers patients */}
+            {show2FA && requires2FA && (
+                <Validate2FA
+                    onSuccess={handle2FASuccess}
+                    onCancel={handle2FACancel}
+                    isRequired={true}
+                    message="Vérification 2FA requise pour accéder au tableau de bord DMP"
+                />
+            )}
         </div>
     );
 };

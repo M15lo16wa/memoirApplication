@@ -587,27 +587,113 @@ export const uploadDocumentDMP = async (patientId, documentData) => {
 };
 
 // --- Auto-mesures DMP ---
-// Note: Les auto-mesures font partie du dossier médical
+// Utiliser les nouveaux endpoints auto-mesures dédiés
 export const getAutoMesuresDMP = async (patientId = null, type = null) => {
-    const url = patientId ? `/dossierMedical/patient/${patientId}/complet` : '/dossierMedical';
-    const response = await dmpApi.get(url);
-    // Extraire les auto-mesures du dossier médical
-    const dossier = response.data.data;
-    let autoMesures = dossier?.autoMesures || dossier?.auto_mesures || [];
+    console.log('🔍 getAutoMesuresDMP - FONCTION APPELÉE avec patientId:', patientId, 'et type:', type);
     
-    if (type) {
-        autoMesures = autoMesures.filter(mesure => mesure.type === type || mesure.type_mesure === type);
+    let url;
+    if (patientId) {
+        // ✅ Utiliser le nouvel endpoint auto-mesures dédié
+        url = `/patient/${patientId}/auto-mesures`;
+    } else {
+        // ✅ Récupérer toutes les auto-mesures
+        url = '/patient/auto-mesures';
     }
     
-    return { data: autoMesures };
+    console.log('🔍 getAutoMesuresDMP - URL appelée:', url);
+    
+    const response = await dmpApi.get(url);
+    console.log('🔍 getAutoMesuresDMP - Réponse complète de l\'API:', response);
+    
+    // Les auto-mesures sont maintenant directement dans la réponse
+    let autoMesures = response.data.data || response.data || [];
+    console.log('🔍 getAutoMesuresDMP - Auto-mesures trouvées:', autoMesures);
+    
+    if (type) {
+        autoMesures = autoMesures.filter(mesure => 
+            mesure.type_mesure === type || 
+            mesure.type === type
+        );
+        console.log('🔍 getAutoMesuresDMP - Auto-mesures filtrées par type:', type, autoMesures);
+    }
+    
+    const result = { data: autoMesures };
+    console.log('🔍 getAutoMesuresDMP - Résultat final:', result);
+    return result;
 };
 
-export const createAutoMesureDMP = async (patientId, mesureData) => {
-    // Ajouter l'auto-mesure au dossier médical existant
-    const response = await dmpApi.put(`/dossierMedical/${patientId}`, { 
-        autoMesures: [mesureData] 
-    });
-    return response.data.data;
+// --- Nouvelles Fonctionnalités Disponibles ---
+
+// Créer une nouvelle auto-mesure
+export const createAutoMesureDMP = async (autoMesureData) => {
+    const url = '/patient/auto-mesures';
+    console.log('🔍 createAutoMesureDMP - Création auto-mesure:', autoMesureData);
+    
+    const response = await dmpApi.post(url, autoMesureData);
+    console.log('🔍 createAutoMesureDMP - Réponse:', response);
+    
+    return response.data;
+};
+
+// Récupérer une auto-mesure spécifique par ID
+export const getAutoMesureByIdDMP = async (autoMesureId) => {
+    const url = `/patient/auto-mesures/${autoMesureId}`;
+    console.log('�� getAutoMesureByIdDMP - Récupération ID:', autoMesureId);
+    
+    const response = await dmpApi.get(url);
+    console.log('�� getAutoMesureByIdDMP - Réponse:', response);
+    
+    return response.data;
+};
+
+// Mettre à jour une auto-mesure
+export const updateAutoMesureDMP = async (autoMesureId, updateData) => {
+    const url = `/patient/auto-mesures/${autoMesureId}`;
+    console.log('🔍 updateAutoMesureDMP - Mise à jour ID:', autoMesureId, updateData);
+    
+    const response = await dmpApi.put(url, updateData);
+    console.log('🔍 updateAutoMesureDMP - Réponse:', response);
+    
+    return response.data;
+};
+
+// Supprimer une auto-mesure
+export const deleteAutoMesureDMP = async (autoMesureId) => {
+    const url = `/patient/auto-mesures/${autoMesureId}`;
+    console.log('🔍 deleteAutoMesureDMP - Suppression ID:', autoMesureId);
+    
+    const response = await dmpApi.delete(url);
+    console.log('🔍 deleteAutoMesureDMP - Réponse:', response);
+    
+    return response.data;
+};
+
+// Obtenir les statistiques des auto-mesures
+export const getAutoMesuresStatsDMP = async (patientId, type = null) => {
+    // ✅ Utiliser l'endpoint dédié aux statistiques
+    let url = `/patient/${patientId}/auto-mesures/stats`;
+    if (type) {
+        url += `?type_mesure=${type}`;
+    }
+    
+    console.log('🔍 getAutoMesuresStatsDMP - Statistiques:', patientId, type);
+    
+    const response = await dmpApi.get(url);
+    console.log('🔍 getAutoMesuresStatsDMP - Réponse:', response);
+    
+    return response.data;
+};
+
+// Obtenir la dernière auto-mesure par type
+export const getLastAutoMesureByTypeDMP = async (patientId, type) => {
+    // ✅ Utiliser l'endpoint dédié à la dernière mesure
+    const url = `/patient/${patientId}/auto-mesures/last/${type}`;
+    console.log('🔍 getLastAutoMesureByTypeDMP - Dernière mesure:', patientId, type);
+    
+    const response = await dmpApi.get(url);
+    console.log('🔍 getLastAutoMesureByTypeDMP - Réponse:', response);
+    
+    return response.data;
 };
 
 // --- DMP principal ---

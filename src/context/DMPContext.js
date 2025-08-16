@@ -227,7 +227,7 @@ export const DMPProvider = ({ children }) => {
             
             dispatch({ type: 'SET_LOADING', payload: true });
             try {
-                const response = await dmpApi.getAutoMesuresDMP(null, type); // Utilise l'ID du patient connecté automatiquement
+                const response = await dmpApi.getAutoMesuresDMP(state.patientId, type); // Passer l'ID du patient connecté
                 console.log('📊 Auto-mesures chargées via actions:', response);
                 
                 // S'assurer que nous avons un tableau d'auto-mesures
@@ -258,13 +258,14 @@ export const DMPProvider = ({ children }) => {
             
             dispatch({ type: 'SET_LOADING', payload: true });
             try {
-                const response = await dmpApi.createAutoMesureDMP(null, mesureData); // Utilise l'ID du patient connecté automatiquement
+                const response = await dmpApi.createAutoMesureDMP(state.patientId, mesureData); // Utilise l'ID du patient connecté
                 console.log(' Auto-mesure créée via contexte:', response);
                 
                 // Recharger toutes les auto-mesures pour avoir les données à jour
                 await actions.loadAutoMesures();
                 
-                return response.data;
+                // Retourner la réponse complète au lieu de response.data
+                return response;
             } catch (error) {
                 console.error(' Erreur lors de la création de l\'auto-mesure via contexte:', error);
                 dispatch({ type: 'SET_ERROR', payload: error.message });
