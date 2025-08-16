@@ -7,21 +7,29 @@ import {
   FaHeartbeat, FaPills, FaThermometerHalf, FaWeight,
   FaTint, FaPrint, FaUserShield, FaCheck, FaTimes
 } from "react-icons/fa";
+
+// Routes et protection
 import { ProtectedPatientRoute } from "../services/api/protectedRoute";
 import { logoutPatient, getStoredPatient } from "../services/api/authApi";
+
+// Hooks personnalisés
 import { useDMP } from "../hooks/useDMP";
 import { usePDFGenerator } from "../hooks/usePDFGenerator";
 import { use2FA } from "../hooks/use2FA";
+
+// Composants DMP
 import DMPDashboard from "../components/dmp/DMPDashboard";
 import DMPMonEspaceSante from "../components/dmp/DMPMonEspaceSante";
 import DMPNotification from "../components/ui/DMPNotification";
 import AutorisationsEnAttente from "../components/dmp/AutorisationsEnAttente";
 import DMPHistory from "../components/dmp/DMPHistory";
+
+// APIs
 import * as dmpApi from "../services/api/dmpApi";
 import * as patientApi from "../services/api/patientApi";
 import { uploadDocument } from "../services/api/medicalApi";
 
-// Protection 2FA pour l'accès aux dossiers patients
+// Protection 2FA
 import Validate2FA from "../components/2fa/Validate2FA";
 
 // Composant HistoriqueMedical qui utilise les fonctions de patientApi
@@ -1478,24 +1486,28 @@ const DMP = () => {
     }
   };
 
+  // ========================================
+  // FONCTIONS UTILITAIRES
+  // ========================================
+  
   // Fonction pour filtrer les accès par patient ID
-  const filterAccessByPatient = (accessData, patientId) => {
+  const filterAccessByPatient = useCallback((accessData, patientId) => {
     if (!accessData || !patientId) return [];
     const arr = accessData.authorizationAccess || accessData;
     console.log("Accès bruts:", arr);
     arr.forEach(acc => console.log("Clés accès:", Object.keys(acc), acc));
     return arr.filter(access => Number(access.patient_id) === Number(patientId));
-  };
-
-  // Utilisation du wrapper 2FA centralisé pour protéger les accès aux dossiers patients
-  const protectedLoadInitialData = with2FAProtection(loadInitialData, 'Chargement des données initiales');
-  const protectedLoadTabData = with2FAProtection(loadTabData, 'Chargement des données d\'onglet');
+  }, []);
 
   // Fonction pour obtenir les notifications à afficher
-  const getNotificationsToDisplay = () => {
+  const getNotificationsToDisplay = useCallback(() => {
     return notificationsDroitsAcces;
-  };
+  }, [notificationsDroitsAcces]);
 
+  // ========================================
+  // FONCTIONS DE CHARGEMENT DES DONNÉES
+  // ========================================
+  
   const loadTabData = async (tab) => {
     try {
       setLoading(true);
@@ -1556,12 +1568,23 @@ const DMP = () => {
     }
   };
 
-  const handleTabChange = (tab) => {
+  // ========================================
+  // WRAPPERS 2FA POUR LA PROTECTION
+  // ========================================
+  
+  const protectedLoadInitialData = with2FAProtection(loadInitialData, 'Chargement des données initiales');
+  const protectedLoadTabData = with2FAProtection(loadTabData, 'Chargement des données d\'onglet');
+
+  // ========================================
+  // GESTIONNAIRES D'ÉVÉNEMENTS
+  // ========================================
+  
+  const handleTabChange = useCallback((tab) => {
     setActiveTab(tab);
     loadTabData(tab);
-  };
+  }, []);
 
-  const handleLogout = async () => {
+  const handleLogout = useCallback(async () => {
     try {
       await logoutPatient();
       navigate('/connexion', {
@@ -1570,10 +1593,13 @@ const DMP = () => {
     } catch (error) {
       console.error('Erreur lors de la déconnexion:', error);
     }
-  };
+  }, [navigate]);
 
-  // Fonctions pour gérer les notifications des droits d'accès
-  const handleMarquerNotificationLue = async (notificationId) => {
+  // ========================================
+  // GESTION DES NOTIFICATIONS ET AUTORISATIONS
+  // ========================================
+  
+  const handleMarquerNotificationLue = useCallback(async (notificationId) => {
     try {
       console.log('📝 DMP: Marquage de la notification comme lue, ID:', notificationId);
 
@@ -1603,37 +1629,7 @@ const DMP = () => {
       console.error('❌ DMP: Erreur lors du marquage de la notification:', error);
       alert(`Erreur lors du marquage de la notification: ${error.message}`);
     }
-  };
-
-  const handleRepondreDemandeAcces = async (request, reponse) => {
-    try {
-      const apiDecision = reponse === 'accepter' || reponse === 'accept' ? 'accept' : 'refuse';
-      const confirmationMessage = apiDecision === 'accept'
-        ? `Êtes-vous sûr de vouloir autoriser l'accès au Dr. ${request.professionnel.prenom} ${request.professionnel.nom} ?`
-        : `Êtes-vous sûr de vouloir refuser l'accès ?`;
-
-      if (!window.confirm(confirmationMessage)) {
-        return;
-      }
-
-      // L'ID est directement disponible dans l'objet 'request'
-      const autorisationId = request.id_acces_autorisation;
-      console.log(`🚀 Réponse à la demande ID: ${autorisationId}, Réponse: ${reponse}`);
-
-      // Appel direct à la nouvelle fonction API
-      await dmpApi.respondToAccessRequest(autorisationId, apiDecision);
-
-      const message = apiDecision === 'accept'
-        ? 'Demande d\'accès acceptée avec succès !'
-        : 'Demande d\'accès refusée.';
-      alert(message);
-      rafraichirNotifications();
-
-    } catch (error) {
-      console.error('❌ Erreur lors de la réponse à la demande:', error);
-      alert(`Erreur : ${error.message || "Impossible de traiter votre réponse."}`);
-    }
-  };
+  }, []);
 
   const rafraichirNotifications = async () => {
     try {
@@ -1661,6 +1657,36 @@ const DMP = () => {
       setLoading(false);
     }
   };
+
+  const handleRepondreDemandeAcces = useCallback(async (request, reponse) => {
+    try {
+      const apiDecision = reponse === 'accepter' || reponse === 'accept' ? 'accept' : 'refuse';
+      const confirmationMessage = apiDecision === 'accept'
+        ? `Êtes-vous sûr de vouloir autoriser l'accès au Dr. ${request.professionnel.prenom} ${request.professionnel.nom} ?`
+        : `Êtes-vous sûr de vouloir refuser l'accès ?`;
+
+      if (!window.confirm(confirmationMessage)) {
+        return;
+      }
+
+      // L'ID est directement disponible dans l'objet 'request'
+      const autorisationId = request.id_acces_autorisation;
+      console.log(`🚀 Réponse à la demande ID: ${autorisationId}, Réponse: ${reponse}`);
+
+      // Appel direct à la nouvelle fonction API
+      await dmpApi.respondToAccessRequest(autorisationId, apiDecision);
+
+      const message = apiDecision === 'accept'
+        ? 'Demande d\'accès acceptée avec succès !'
+        : 'Demande d\'accès refusée.';
+      alert(message);
+      rafraichirNotifications();
+
+    } catch (error) {
+      console.error('❌ Erreur lors de la réponse à la demande:', error);
+      alert(`Erreur : ${error.message || "Impossible de traiter votre réponse."}`);
+    }
+  }, [rafraichirNotifications]);
 
   const rafraichirDroitsAcces = async () => {
     try {
@@ -2281,6 +2307,7 @@ const DMP = () => {
     return true;
   };
 
+  // Rendu du composant
   if (loading && !tableauDeBord) {
     return (
       <div className="flex justify-center items-center h-screen">

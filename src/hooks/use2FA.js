@@ -19,7 +19,7 @@ export const use2FA = () => {
     
     // Exécuter l'action qui était en attente
     if (pendingAction) {
-      pendingAction();
+      pendingAction.func(...pendingAction.args);
       setPendingAction(null);
     }
   }, [pendingAction]);
@@ -50,7 +50,7 @@ export const use2FA = () => {
         if (error.response?.status === 403 && error.response?.data?.requires2FA) {
           console.log(`🔐 2FA requise pour ${actionName}`);
           setRequires2FA(true);
-          setPendingAction(() => () => action(...args));
+          setPendingAction({ name: actionName, func: action, args: args });
           setShow2FA(true);
           return null; // L'action sera exécutée après validation 2FA
         } else {

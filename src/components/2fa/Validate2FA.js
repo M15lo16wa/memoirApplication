@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { FaShieldAlt, FaTimes, FaCheck } from 'react-icons/fa';
 
+// Importez la nouvelle fonction du service API
+import { verify2FA, validate2FASession } from '../../services/api/twoFactorApi';
+
 /**
  * Composant de validation 2FA pour la protection des dossiers patients
  */
@@ -32,13 +35,13 @@ const Validate2FA = ({
     setError('');
 
     try {
-      // Ici, vous pouvez ajouter la logique de validation 2FA
-      // Par exemple, appeler une API pour vérifier le code
+      // Appel à la nouvelle fonction du service API
+      await verify2FA(code2FA);
+      console.log(`🔐 Tentative de validation du code 2FA : ${code2FA}`);
+      // Validation de la session 2FA
+      await validate2FASession(code2FA);
+      console.log(`🔐 Validation de la session 2FA réussie`);
       
-      // Simulation de validation (à remplacer par votre logique)
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Si la validation réussit
       onSuccess();
     } catch (error) {
       console.error('Erreur lors de la validation 2FA:', error);
