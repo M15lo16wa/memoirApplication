@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
-import { setup2FA, verify2FA } from '../../services/api/twoFactorApi';
+import { setup2FA, verifyAndEnable2FA } from '../../services/api/twoFactorApi';
+import { validate2FASession } from '../../services/api/twoFactorApi';
 import { FaQrcode, FaMobile, FaShieldAlt, FaCheckCircle } from 'react-icons/fa';
 
-function Setup2FA({ onSetupComplete, onCancel }) {
+function Setup2FA({ onSetupComplete, onCancel, userData = null }) {
     const [step, setStep] = useState('setup'); // 'setup', 'verify', 'success'
     const [qrCodeData, setQrCodeData] = useState(null);
     const [secret, setSecret] = useState('');
@@ -13,8 +14,39 @@ function Setup2FA({ onSetupComplete, onCancel }) {
     const [error, setError] = useState('');
 
     useEffect(() => {
-        initialize2FA();
-    }, []);
+        console.log('🔍 Setup2FA - userData reçu:', userData);
+        console.log('🔍 Structure complète de userData:', JSON.stringify(userData, null, 2));
+        
+        if (userData && userData.two_factor_secret) {
+            console.log('🔑 Secret 2FA trouvé, génération du QR code...');
+            // Si on a déjà le secret (connexion), l'utiliser directement
+            setSecret(userData.two_factor_secret);
+            generateQRCode(userData.two_factor_secret, userData);
+            setStep('setup');
+        } else {
+            console.log('⚠️ Pas de secret 2FA, appel API de configuration...');
+            console.log('🔍 Vérification des propriétés disponibles:', {
+                hasTwoFactorSecret: !!userData?.two_factor_secret,
+                hasTwoFactorEnabled: !!userData?.two_factor_enabled,
+                properties: userData ? Object.keys(userData) : 'userData est null'
+            });
+            // Sinon, faire l'appel API (configuration initiale)
+            initialize2FA();
+        }
+    }, [userData]);
+
+    const generateQRCode = (secret, userData) => {
+        console.log('🎯 Génération QR code avec:', { secret, userData });
+        
+        // Générer l'URL pour l'application d'authentification
+        const appName = 'Santé Sénégal';
+        const userName = userData.email || userData.numero_assure || userData.numero_adeli || 'User';
+        const qrCodeUrl = `otpauth://totp/${appName}:${userName}?secret=${secret}&issuer=${appName}&algorithm=SHA1&digits=6&period=30`;
+        
+        console.log('🔗 URL TOTP générée:', qrCodeUrl);
+        setQrCodeData(qrCodeUrl);
+        console.log('✅ QR code data définie:', qrCodeUrl);
+    };
 
     const initialize2FA = async () => {
         try {
@@ -43,7 +75,15 @@ function Setup2FA({ onSetupComplete, onCancel }) {
 
         try {
             setLoading(true);
-            await verify2FA(verificationCode);
+            
+            if (userData && userData.two_factor_secret) {
+                // Connexion : valider le code avec l'API de validation
+                await validate2FASession(verificationCode);
+            } else {
+                // Configuration : valider le code avec l'API de vérification
+                await verifyAndEnable2FA(verificationCode);
+            }
+            
             setStep('success');
             setTimeout(() => {
                 onSetupComplete();
@@ -101,12 +141,21 @@ function Setup2FA({ onSetupComplete, onCancel }) {
                     {/* QR Code */}
                     <div className="text-center">
                         <div className="inline-block p-4 bg-gray-50 rounded-lg">
-                            {qrCodeData && (
-                                <QRCodeSVG 
-                                    value={qrCodeData} 
-                                    size={200}
-                                    className="mx-auto"
-                                />
+                            {qrCodeData ? (
+                                <>
+                                    <QRCodeSVG 
+                                        value={qrCodeData} 
+                                        size={200}
+                                        className="mx-auto"
+                                    />
+                                    <p className="text-xs text-gray-500 mt-2">Secret: {secret}</p>
+                                </>
+                            ) : (
+                                <div className="p-8 text-gray-400">
+                                    <p>Chargement du QR code...</p>
+                                    <p className="text-xs">qrCodeData: {qrCodeData ? 'Présent' : 'Absent'}</p>
+                                    <p className="text-xs">secret: {secret || 'Non défini'}</p>
+                                </div>
                             )}
                         </div>
                         <p className="text-sm text-gray-600 mt-3">
@@ -126,22 +175,24 @@ function Setup2FA({ onSetupComplete, onCancel }) {
                         </ol>
                     </div>
 
-                    {/* Codes de récupération */}
-                    <div className="bg-yellow-50 p-4 rounded-lg">
-                        <h4 className="font-medium text-yellow-900 mb-2">
-                            Codes de récupération (à conserver précieusement) :
-                        </h4>
-                        <div className="grid grid-cols-2 gap-2">
-                            {recoveryCodes.map((code, index) => (
-                                <code key={index} className="block p-2 bg-white text-sm font-mono text-center border rounded">
-                                    {code}
-                                </code>
-                            ))}
+                    {/* Codes de récupération - seulement affichés si disponibles */}
+                    {recoveryCodes && recoveryCodes.length > 0 && (
+                        <div className="bg-yellow-50 p-4 rounded-lg">
+                            <h4 className="font-medium text-yellow-900 mb-2">
+                                Codes de récupération (à conserver précieusement) :
+                            </h4>
+                            <div className="grid grid-cols-2 gap-2">
+                                {recoveryCodes.map((code, index) => (
+                                    <code key={index} className="block p-2 bg-white text-sm font-mono text-center border rounded">
+                                        {code}
+                                    </code>
+                                ))}
+                            </div>
+                            <p className="text-xs text-yellow-800 mt-2">
+                                Conservez ces codes en lieu sûr. Ils vous permettront d'accéder à votre compte si vous perdez votre appareil.
+                            </p>
                         </div>
-                        <p className="text-xs text-yellow-800 mt-2">
-                            Conservez ces codes en lieu sûr. Ils vous permettront d'accéder à votre compte si vous perdez votre appareil.
-                        </p>
-                    </div>
+                    )}
 
                     {/* Bouton de vérification */}
                     <button

@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { FaShieldAlt, FaTimes, FaCheck } from 'react-icons/fa';
 
-// Importez la nouvelle fonction du service API
-import { verify2FA, validate2FASession } from '../../services/api/twoFactorApi';
+// Importez la fonction de validation 2FA du service API
+import { validate2FASession } from '../../services/api/twoFactorApi';
 
 /**
  * Composant de validation 2FA pour la protection des dossiers patients
@@ -36,9 +36,6 @@ const Validate2FA = ({
 
     try {
       // Appel à la nouvelle fonction du service API
-      await verify2FA(code2FA);
-      console.log(`🔐 Tentative de validation du code 2FA : ${code2FA}`);
-      // Validation de la session 2FA
       await validate2FASession(code2FA);
       console.log(`🔐 Validation de la session 2FA réussie`);
       

@@ -1,12 +1,47 @@
+/**
+ * Composant DMPAccess - Accès sécurisé aux dossiers patients avec protection 2FA
+ * 
+ * Ce composant implémente un système d'accès aux dossiers patients avec plusieurs niveaux de sécurité :
+ * 1. Authentification CPS (Code de Professionnel de Santé)
+ * 2. Sélection du mode d'accès (standard, urgence, secret)
+ * 3. Protection 2FA pour l'accès aux données sensibles
+ * 4. Gestion des autorisations et des demandes d'accès
+ * 
+ * Utilisation du hook use2FA :
+ * - with2FAProtection : Enveloppe les fonctions sensibles avec protection 2FA
+ * - show2FAModal : Affiche la modale de vérification 2FA
+ * - handle2FAValidation : Gère la validation 2FA
+ * - handle2FACancel : Gère l'annulation 2FA
+ * 
+ * Exemple d'utilisation :
+ * ```jsx
+ * <DMPAccess patientId="123" />
+ * ```
+ */
 /* eslint-disable react-hooks/exhaustive-deps */
 import React, { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 // On importe les fonctions spécifiques dont on a besoin
 import dmpApi from "../services/api/dmpApi";
 
+// Protection 2FA pour l'accès aux dossiers patients
+import { use2FA } from '../hooks/use2FA';
+import { getPatient } from '../services/api/patientApi'; // API pour récupérer un dossier
+import Validate2FA from '../components/2fa/Validate2FA';
+
 function DMPAccess() {
     const { patientId } = useParams();
     const navigate = useNavigate();
+    
+    // Hook 2FA pour la protection des dossiers patients
+    const { 
+        show2FAModal, 
+        with2FAProtection, 
+        handle2FAValidation, 
+        handle2FACancel,
+        isSubmitting,
+        error: error2FA
+    } = use2FA();
     
     // États pour l'authentification CPS
     const [codeCPS, setCodeCPS] = useState(['', '', '', '']);
@@ -18,15 +53,60 @@ function DMPAccess() {
     const [selectedMode, setSelectedMode] = useState(null);
     const [raisonAcces, setRaisonAcces] = useState('');
     
-    const [patientInfo] = useState(null);
+    const [patientInfo, setPatientInfo] = useState(null);
     const [currentStep, setCurrentStep] = useState('cps'); // 'cps', 'mode', 'confirmation'
     const [accessStatus, setAccessStatus] = useState('loading');
+
+    // On "enveloppe" notre fonction d'accès aux données avec le protecteur 2FA
+    const protectedGetPatientRecord = with2FAProtection(async () => {
+        console.log('🚀 Accès autorisé, récupération du dossier patient...');
+        try {
+            const data = await getPatient(patientId);
+            setPatientInfo(data);
+            console.log('✅ Dossier patient récupéré avec succès:', data);
+            return data;
+        } catch (error) {
+            console.error('❌ Erreur lors de la récupération du dossier patient:', error);
+            setError('Erreur lors de la récupération du dossier patient');
+            throw error;
+        }
+    }, 'Accès au dossier patient');
+
+    // Fonction protégée pour demander l'accès
+    const protectedRequestAccess = with2FAProtection(async () => {
+        console.log('🚀 Accès autorisé, envoi de la demande d\'accès...');
+        try {
+            const accessData = {
+                mode: selectedMode,
+                raison: raisonAcces,
+                patient_id: Number(patientId)
+            };
+            await dmpApi.requestStandardAccess(accessData);
+            alert('Demande envoyée avec succès !');
+            setCurrentStep('cps');
+            return true;
+        } catch (error) {
+            console.error('❌ Erreur lors de l\'envoi de la demande d\'accès:', error);
+            alert('Erreur lors de l\'envoi de la demande d\'accès');
+            throw error;
+        }
+    }, 'Demande d\'accès au dossier patient');
 
     const accessModes = [
         { id: 'standard', title: 'Accès autorisé par le patient', description: 'Le patient doit valider votre demande.', requiresPatientApproval: true },
         { id: 'urgence', title: 'Mode urgence', description: 'Accès immédiat en cas d\'urgence.', requiresPatientApproval: false },
         { id: 'secret', title: 'Connexion secrète', description: 'Accès discret pour consultation.', requiresPatientApproval: false }
     ];
+
+    // Ajouter une étape pour l'accès au dossier patient
+    const addPatientAccessStep = () => {
+        if (accessStatus === 'authorized' || accessStatus === 'active') {
+            setCurrentStep('patient_access');
+        } else {
+            // Si pas d'accès autorisé, commencer par la demande d'accès
+            setCurrentStep('cps');
+        }
+    };
 
     const loadPatientInfo = useCallback(async () => {
         if (!patientId) {
@@ -38,9 +118,9 @@ function DMPAccess() {
             const status = response?.accessStatus || response?.status || 'not_authorized';
             setAccessStatus(status);
 
-            // Si l'accès est déjà autorisé ou actif, rediriger directement vers DMPPatientView
+            // Si l'accès est déjà autorisé ou actif, proposer l'accès au dossier
             if (status === 'authorized' || status === 'active') {
-                navigate(`/dmp-patient-view/${patientId}`);
+                setCurrentStep('patient_access');
                 return;
             }
 
@@ -253,14 +333,7 @@ function DMPAccess() {
                 <button
                     onClick={async () => {
                         try {
-                            const accessData = {
-                                mode: selectedMode,
-                                raison: raisonAcces,
-                                patient_id: Number(patientId)
-                            };
-                            await dmpApi.requestStandardAccess(accessData);
-                            alert('Demande envoyée avec succès !');
-                            setCurrentStep('cps');
+                            await protectedRequestAccess();
                         } catch (error) {
                             console.error('Erreur lors de l\'envoi de la demande d\'accès:', error);
                             alert('Erreur lors de l\'envoi de la demande d\'accès');
@@ -277,6 +350,103 @@ function DMPAccess() {
                 >
                     Modifier la demande
                 </button>
+                
+                {/* Bouton pour accéder directement au dossier patient (si autorisé) */}
+                {accessStatus === 'authorized' && (
+                    <button
+                        onClick={() => setCurrentStep('patient_access')}
+                        className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700"
+                    >
+                        Accéder au dossier patient
+                    </button>
+                )}
+            </div>
+        </div>
+    );
+
+    // Fonction de rendu pour l'accès au dossier patient
+    const renderPatientAccess = () => (
+        <div className="max-w-2xl mx-auto bg-white rounded-lg shadow-md p-6">
+            <h2 className="text-xl font-semibold text-gray-800 mb-4">Accès au dossier patient</h2>
+            <p className="text-gray-600 mb-6">
+                Cliquez sur le bouton ci-dessous pour accéder au dossier complet du patient.
+                Une vérification 2FA sera requise pour sécuriser l'accès.
+            </p>
+            
+            <button
+                onClick={protectedGetPatientRecord}
+                disabled={isSubmitting}
+                className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center"
+            >
+                {isSubmitting ? (
+                    <>
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                        Accès en cours...
+                    </>
+                ) : (
+                    <>
+                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        Accéder au dossier patient
+                    </>
+                )}
+            </button>
+            
+            {error2FA && (
+                <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                    <p className="text-red-600 text-sm">{error2FA}</p>
+                </div>
+            )}
+            
+            <div className="mt-4 flex gap-3">
+                <button
+                    onClick={() => setCurrentStep('cps')}
+                    className="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+                >
+                    Retour à l'authentification
+                </button>
+                
+                <button
+                    onClick={() => setCurrentStep('mode')}
+                    className="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+                >
+                    Demander un accès
+                </button>
+            </div>
+        </div>
+    );
+
+    // Fonction de rendu pour l'étape d'erreur
+    const renderErrorStep = () => (
+        <div className="max-w-md mx-auto bg-white rounded-lg shadow-md p-6">
+            <div className="text-center">
+                <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
+                    <svg className="h-6 w-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                    </svg>
+                </div>
+                <h2 className="text-xl font-semibold text-gray-800 mb-2">Erreur</h2>
+                <p className="text-gray-600 mb-4">{error}</p>
+                
+                <div className="space-y-3">
+                    <button
+                        onClick={() => {
+                            setError(null);
+                            setCurrentStep('cps');
+                        }}
+                        className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700"
+                    >
+                        Réessayer
+                    </button>
+                    
+                    <button
+                        onClick={() => navigate('/')}
+                        className="w-full px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+                    >
+                        Retour à l'accueil
+                    </button>
+                </div>
             </div>
         </div>
     );
@@ -293,12 +463,40 @@ function DMPAccess() {
                         <p className={`text-sm mt-1 ${accessStatusMeta(accessStatus).cls}`}>
                             Statut d'accès: {accessStatusMeta(accessStatus).label}
                         </p>
+                        
+                        {/* Bouton d'accès rapide au dossier patient */}
+                        {(accessStatus === 'authorized' || accessStatus === 'active') && (
+                            <div className="mt-4">
+                                <button
+                                    onClick={() => setCurrentStep('patient_access')}
+                                    className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                                >
+                                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                    </svg>
+                                    Accéder au dossier patient
+                                </button>
+                            </div>
+                        )}
                     </div>
                 )}
                 
                 {currentStep === 'cps' && renderCPSStep()}
                 {currentStep === 'mode' && renderModeStep()}
                 {currentStep === 'confirmation' && renderConfirmationStep()}
+                {currentStep === 'patient_access' && renderPatientAccess()}
+                {currentStep === 'error' && renderErrorStep()}
+                
+                {/* Modale 2FA pour la protection des dossiers patients */}
+                {show2FAModal && (
+                    <Validate2FA
+                        onSubmit={handle2FAValidation}
+                        onCancel={handle2FACancel}
+                        loading={isSubmitting}
+                        error={error2FA}
+                        message="Vérification 2FA requise pour accéder aux dossiers patients"
+                    />
+                )}
             </div>
         </div>
     );

@@ -6,7 +6,7 @@ import { FaUserDoctor, FaUserInjured, FaUserTie, FaUserGear } from 'react-icons/
 import {login, loginPatient, loginMedecin} from "../services/api/authApi";
 
 // authentification 2FA
-import Validate2FA from "../components/2fa/Validate2FA";
+import Setup2FA from "../components/2fa/Setup2FA";
 
 
 function Connexion() {
@@ -73,10 +73,16 @@ function Connexion() {
                 console.log('✅ Réponse complète de connexion patient:', response);
                 
                 // Vérifier si la 2FA est requise
-                if (response.data?.requires2FA) {
+                if (response.data?.status === 'requires2FA' || response.data?.requires2FA) {
                     console.log('🔐 2FA requise pour le patient');
+                    console.log('📊 Données utilisateur pour 2FA:', response.data);
+                    
+                    // Extraire les données patient de la structure imbriquée
+                    const patientData = response.data.data?.patient || response.data.patient;
+                    console.log('👤 Données patient extraites:', patientData);
+                    
                     setRequires2FA(true);
-                    setUserData(response.data);
+                    setUserData(patientData); // Passer directement les données patient
                     setShow2FA(true);
                     return;
                 }
@@ -100,10 +106,15 @@ function Connexion() {
                 console.log('✅ Données médecin reçues:', response);
                 
                 // Vérifier si la 2FA est requise
-                if (response.data?.requires2FA) {
+                if (response.data?.status === 'requires2FA' || response.data?.requires2FA) {
                     console.log('🔐 2FA requise pour le médecin');
+                    
+                    // Extraire les données médecin de la structure imbriquée
+                    const medecinData = response.data.data?.medecin || response.data.medecin || response.data;
+                    console.log('👨‍⚕️ Données médecin extraites:', medecinData);
+                    
                     setRequires2FA(true);
-                    setUserData(response.data);
+                    setUserData(medecinData);
                     setShow2FA(true);
                     return;
                 }
@@ -128,10 +139,15 @@ function Connexion() {
                 console.log('✅ Données utilisateur reçues:', response);
                 
                 // Vérifier si la 2FA est requise
-                if (response.data?.requires2FA) {
+                if (response.data?.status === 'requires2FA' || response.data?.requires2FA) {
                     console.log('🔐 2FA requise pour l\'admin/secrétaire');
+                    
+                    // Extraire les données utilisateur de la structure imbriquée
+                    const userData = response.data.data?.user || response.data.user || response.data;
+                    console.log('👤 Données utilisateur extraites:', userData);
+                    
                     setRequires2FA(true);
-                    setUserData(response.data);
+                    setUserData(userData);
                     setShow2FA(true);
                     return;
                 }
@@ -190,13 +206,12 @@ function Connexion() {
         localStorage.removeItem('medecin');
     };
 
-    // Si la 2FA est requise, afficher le composant de validation
+    // Si la 2FA est requise, afficher le composant de configuration
     if (show2FA && requires2FA) {
         return (
-            <Validate2FA
-                onSuccess={handle2FASuccess}
+            <Setup2FA
+                onSetupComplete={handle2FASuccess}
                 onCancel={handle2FACancel}
-                isRequired={true}
                 userData={userData}
             />
         );
