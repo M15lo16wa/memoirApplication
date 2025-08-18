@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 // 1. Importer la fonction de validation depuis votre service API
-import { validate2FASession } from '../services/api/twoFactorApi'; // Assurez-vous que le chemin est correct
+import { validate2FASession, create2FASession } from '../services/api/twoFactorApi'; // Assurez-vous que le chemin est correct
 
 /**
  * Hook personnalisé pour la gestion de la protection 2FA.
@@ -21,8 +21,35 @@ export const use2FA = () => {
   
   // Stocke les messages d'erreur de validation (ex: "Code invalide")
   const [validationError, setValidationError] = useState('');
+  
+  // Stocke l'identifiant de session temporaire 2FA
+  const [tempTokenId, setTempTokenId] = useState(null);
 
   // --- FONCTIONS DE GESTION DU FLUX 2FA ---
+
+  /**
+   * 1. Fonction pour créer une session temporaire 2FA
+   * @param {Object} userData - Les données utilisateur
+   */
+  const createTemporary2FASession = useCallback(async (userData) => {
+    try {
+      console.log('🔐 Création session temporaire 2FA pour:', userData);
+      
+      const sessionResult = await create2FASession(userData);
+      console.log('✅ Session temporaire 2FA créée:', sessionResult);
+      
+      if (sessionResult && sessionResult.tempTokenId) {
+        setTempTokenId(sessionResult.tempTokenId);
+        console.log('🔑 TempTokenId stocké dans le hook:', sessionResult.tempTokenId);
+        return sessionResult.tempTokenId;
+      } else {
+        throw new Error('Session temporaire 2FA invalide - tempTokenId manquant');
+      }
+    } catch (error) {
+      console.error('❌ Erreur création session temporaire 2FA:', error);
+      throw error;
+    }
+  }, []);
 
   /**
    * 2. Fonction principale de validation.
@@ -37,34 +64,60 @@ export const use2FA = () => {
     setIsSubmitting(true);
     setValidationError('');
 
+    // Vérifier que le tempTokenId est présent
+    if (!tempTokenId) {
+      setValidationError('Session temporaire 2FA manquante - veuillez vous reconnecter');
+      setIsSubmitting(false);
+      return;
+    }
+
     try {
       // Appel à l'API pour valider la session avec le code fourni
-      await validate2FASession(code);
+      const result = await validate2FASession(code, tempTokenId);
       
-      console.log('✅ Session 2FA validée avec succès !');
+      console.log('✅ Session 2FA validée avec succès !', result);
       setShow2FAModal(false); // On ferme la modale
+      setValidationError(''); // Réinitialiser l'erreur
 
       // Si la validation réussit, on exécute l'action qui était en attente
       if (pendingAction) {
         console.log('🚀 Exécution de l\'action mise en attente...');
-        // On utilise .func() car on a stocké l'action sous cette forme
-        await pendingAction.func(...pendingAction.args); 
+        try {
+          // On utilise .func() car on a stocké l'action sous cette forme
+          await pendingAction.func(...pendingAction.args);
+          // Réinitialiser l'action après exécution réussie
+          setPendingAction(null);
+        } catch (actionError) {
+          console.error('❌ Erreur lors de l\'exécution de l\'action en attente:', actionError);
+          // L'action a échoué mais la 2FA était valide
+        }
       }
 
     } catch (error) {
       console.error('❌ Erreur lors de la validation du code 2FA:', error);
+      
+      // Gestion améliorée des erreurs
+      let errorMessage = 'Code 2FA invalide ou expiré. Veuillez réessayer.';
+      
+      if (typeof error === 'string') {
+        errorMessage = error;
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
       // On stocke le message d'erreur pour l'afficher à l'utilisateur
-      setValidationError(error || 'Code invalide ou expiré. Veuillez réessayer.');
+      setValidationError(errorMessage);
+      
+      // Ne pas réinitialiser l'action en cas d'erreur pour permettre une nouvelle tentative
+      console.log('🔄 Erreur de validation - action maintenue en attente pour nouvelle tentative');
     
     } finally {
-      // Dans tous les cas, on réinitialise l'état de soumission et l'action en attente
+      // Dans tous les cas, on réinitialise l'état de soumission
       setIsSubmitting(false);
-      // On ne réinitialise l'action que si la validation a réussi, sinon on la garde pour une nouvelle tentative
-      if (!validationError) {
-        setPendingAction(null);
-      }
     }
-  }, [isSubmitting, pendingAction, validationError]); // Dépendances du useCallback
+  }, [isSubmitting, pendingAction, tempTokenId]); // Ajouté tempTokenId aux dépendances
 
   /**
    * Gère l'annulation par l'utilisateur depuis la modale.
@@ -123,5 +176,7 @@ export const use2FA = () => {
     with2FAProtection,  // La fonction "wrapper" pour protéger les actions
     handle2FAValidation,// La fonction à passer à la prop `onSubmit` de la modale
     handle2FACancel,    // La fonction à passer à la prop `onCancel` de la modale
+    createTemporary2FASession, // Pour créer une session temporaire 2FA
+    tempTokenId,        // L'identifiant de session temporaire
   };
 };

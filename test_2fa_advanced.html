@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Avancé 2FA - DMP Application</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+
+        .test-section {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .log-area {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 10px 0;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .success {
+            color: #28a745;
+        }
+
+        .error {
+            color: #dc3545;
+        }
+
+        .info {
+            color: #17a2b8;
+        }
+
+        .warning {
+            color: #ffc107;
+        }
+
+        .highlight {
+            color: #e83e8c;
+            font-weight: bold;
+        }
+
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+
+        button:hover {
+            background: #0056b3;
+        }
+
+        button:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+        }
+
+        input {
+            padding: 8px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            margin: 5px;
+        }
+
+        .code-display {
+            background: #e9ecef;
+            border: 2px solid #007bff;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 10px 0;
+            text-align: center;
+        }
+
+        .code-number {
+            font-size: 24px;
+            font-weight: bold;
+            color: #007bff;
+            letter-spacing: 3px;
+        }
+
+        .timer {
+            font-size: 14px;
+            color: #6c757d;
+            margin-top: 10px;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .status-success {
+            background-color: #28a745;
+        }
+
+        .status-error {
+            background-color: #dc3545;
+        }
+
+        .status-warning {
+            background-color: #ffc107;
+        }
+
+        .status-info {
+            background-color: #17a2b8;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>🧪 Test Avancé du Flux 2FA - DMP Application</h1>
+
+    <div class="test-section">
+        <h2>1. 🔍 Analyse de la Réponse Backend</h2>
+        <p>Ce test analyse en détail la réponse du backend pour identifier la structure exacte.</p>
+
+        <div>
+            <label>Numéro d'assuré:</label>
+            <input type="text" id="numeroAssure" value="TEMP000005" placeholder="TEMP000005">
+        </div>
+
+        <div>
+            <label>Mot de passe:</label>
+            <input type="password" id="password" value="passer123" placeholder="passer123">
+        </div>
+
+        <button onclick="analyzeBackendResponse()">🔍 Analyser Réponse Backend</button>
+        <button onclick="clearLogs()">🗑️ Effacer Logs</button>
+
+        <div class="log-area" id="analysisLogs"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>2. 🔐 Extraction du Code 2FA</h2>
+        <p>Extraction automatique du code 2FA depuis la réponse du backend.</p>
+
+        <button onclick="extract2FACode()">🔑 Extraire Code 2FA</button>
+        <button onclick="simulateBackendCode()">🎲 Simuler Code Backend</button>
+
+        <div id="codeDisplay" class="code-display" style="display: none;">
+            <h3>Code 2FA Généré par le Backend</h3>
+            <div class="code-number" id="extractedCode">------</div>
+            <div class="timer" id="codeTimer">Valide pour: -- secondes</div>
+            <p style="font-size: 12px; color: #6c757d; margin-top: 10px;">
+                💡 Utilisez ce code pour tester la validation 2FA
+            </p>
+        </div>
+
+        <div class="log-area" id="extractionLogs"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>3. 🧪 Test de Validation avec Code Extrait</h2>
+        <p>Test automatique de la validation 2FA avec le code extrait du backend.</p>
+
+        <div>
+            <label>Code 2FA (6 chiffres):</label>
+            <input type="text" id="code2FA" placeholder="Code extrait automatiquement" maxlength="6">
+        </div>
+
+        <button onclick="testWithExtractedCode()">🧪 Tester avec Code Extrait</button>
+        <button onclick="autoFillCode()">📝 Remplir Code Automatiquement</button>
+
+        <div class="log-area" id="validationLogs"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>4. 📊 État et Débogage</h2>
+        <p>Informations détaillées sur l'état de l'authentification et le débogage.</p>
+
+        <button onclick="checkAuthState()">🔍 Vérifier État Auth</button>
+        <button onclick="clearAuthData()">🚪 Déconnexion</button>
+        <button onclick="debug2FAFlow()">🐛 Déboguer Flux 2FA</button>
+
+        <div class="log-area" id="stateLogs"></div>
+    </div>
+
+    <script>
+        let extractedCode = null;
+        let codeExpiryTime = null;
+        let timerInterval = null;
+
+        // Fonction utilitaire pour ajouter des logs
+        function addLog(containerId, message, type = 'info') {
+            const container = document.getElementById(containerId);
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.className = type;
+            logEntry.innerHTML = `[${timestamp}] ${message}`;
+            container.appendChild(logEntry);
+            container.scrollTop = container.scrollTop + 1000;
+        }
+
+        // Fonction pour effacer tous les logs
+        function clearLogs() {
+            document.getElementById('analysisLogs').innerHTML = '';
+            document.getElementById('extractionLogs').innerHTML = '';
+            document.getElementById('validationLogs').innerHTML = '';
+            document.getElementById('stateLogs').innerHTML = '';
+        }
+
+        // Analyser la réponse du backend
+        async function analyzeBackendResponse() {
+            const numeroAssure = document.getElementById('numeroAssure').value;
+            const password = document.getElementById('password').value;
+
+            addLog('analysisLogs', '🔍 Début de l\'analyse de la réponse backend...', 'info');
+            addLog('analysisLogs', `📤 Envoi des identifiants: ${numeroAssure}`, 'info');
+
+            try {
+                const response = await fetch('http://localhost:3000/api/patient/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        numero_assure: numeroAssure,
+                        mot_de_passe: password
+                    })
+                });
+
+                const data = await response.json();
+                addLog('analysisLogs', '✅ Réponse reçue du serveur', 'success');
+                addLog('analysisLogs', `📊 Données complètes: ${JSON.stringify(data, null, 2)}`, 'info');
+
+                // Analyse détaillée de la structure
+                addLog('analysisLogs', '🔍 Analyse de la structure de réponse:', 'info');
+                addLog('analysisLogs', `  - Status: ${data.status || 'Non défini'}`, 'info');
+                addLog('analysisLogs', `  - Message: ${data.message || 'Non défini'}`, 'info');
+                addLog('analysisLogs', `  - TwoFactorSecret: ${data.twoFactorSecret || 'Non défini'}`, 'info');
+                addLog('analysisLogs', `  - Data: ${data.data ? 'Présent' : 'Absent'}`, 'info');
+
+                if (data.data) {
+                    addLog('analysisLogs', `  - Data.patient: ${data.data.patient ? 'Présent' : 'Absent'}`, 'info');
+                    if (data.data.patient) {
+                        addLog('analysisLogs', `  - Patient.two_factor_secret: ${data.data.patient.two_factor_secret || 'Non défini'}`, 'info');
+                    }
+                }
+
+                // Détection automatique de la 2FA
+                const requires2FA = data?.status === 'requires2FA' ||
+                    data?.requires2FA ||
+                    data?.message?.includes('2FA') ||
+                    data?.message?.includes('double facteur') ||
+                    data?.message?.includes('authentification') ||
+                    data?.two_factor_required ||
+                    data?.data?.two_factor_required;
+
+                addLog('analysisLogs', `🔐 Détection 2FA: ${requires2FA ? 'REQUISE' : 'NON REQUISE'}`, requires2FA ? 'warning' : 'success');
+
+                if (requires2FA) {
+                    addLog('analysisLogs', '🎯 2FA détectée - Prêt pour l\'extraction du code', 'warning');
+
+                    // Stocker les données pour l'extraction
+                    window.backendResponse = data;
+                    addLog('analysisLogs', '💾 Données stockées pour extraction ultérieure', 'success');
+                }
+
+            } catch (error) {
+                addLog('analysisLogs', `❌ Erreur lors de l'analyse: ${error.message}`, 'error');
+            }
+        }
+
+        // Extraire le code 2FA
+        function extract2FACode() {
+            if (!window.backendResponse) {
+                addLog('extractionLogs', '❌ Aucune réponse backend disponible. Analysez d\'abord la réponse.', 'error');
+                return;
+            }
+
+            addLog('extractionLogs', '🔑 Début de l\'extraction du code 2FA...', 'info');
+
+            const response = window.backendResponse;
+            addLog('extractionLogs', `📊 Analyse de la réponse: ${JSON.stringify(response, null, 2)}`, 'info');
+
+            // Chercher le code 2FA dans différentes propriétés
+            let code = null;
+            let source = '';
+
+            // Vérifier les propriétés directes
+            if (response.twoFactorSecret) {
+                code = response.twoFactorSecret;
+                source = 'response.twoFactorSecret';
+            } else if (response.two_factor_secret) {
+                code = response.two_factor_secret;
+                source = 'response.two_factor_secret';
+            } else if (response.data?.two_factor_secret) {
+                code = response.data.two_factor_secret;
+                source = 'response.data.two_factor_secret';
+            } else if (response.data?.patient?.two_factor_secret) {
+                code = response.data.patient.two_factor_secret;
+                source = 'response.data.patient.two_factor_secret';
+            }
+
+            if (code) {
+                addLog('extractionLogs', `✅ Code 2FA trouvé: ${code} (source: ${source})`, 'success');
+
+                // Extraire le code à 6 chiffres (si c'est un secret complet)
+                if (code.length > 6) {
+                    // C'est un secret, pas un code - on ne peut pas l'extraire directement
+                    addLog('extractionLogs', `⚠️ Secret 2FA trouvé (${code.length} caractères), mais pas de code à 6 chiffres`, 'warning');
+                    addLog('extractionLogs', '💡 Le code à 6 chiffres est généré dynamiquement par le backend', 'info');
+
+                    // Simuler un code de test
+                    simulateBackendCode();
+                } else {
+                    extractedCode = code;
+                    displayCode(code);
+                }
+            } else {
+                addLog('extractionLogs', '❌ Aucun code 2FA trouvé dans la réponse', 'error');
+                addLog('extractionLogs', '🔍 Propriétés disponibles:', 'info');
+                addLog('extractionLogs', `  - ${Object.keys(response).join(', ')}`, 'info');
+            }
+        }
+
+        // Simuler un code généré par le backend
+        function simulateBackendCode() {
+            addLog('extractionLogs', '🎲 Simulation d\'un code 2FA généré par le backend...', 'info');
+
+            // Générer un code de test (6 chiffres)
+            const testCode = Math.floor(100000 + Math.random() * 900000).toString();
+            extractedCode = testCode;
+
+            addLog('extractionLogs', `✅ Code de test généré: ${testCode}`, 'success');
+            addLog('extractionLogs', '💡 Note: Ceci est un code simulé. En production, le backend génère le vrai code.', 'warning');
+
+            displayCode(testCode);
+        }
+
+        // Afficher le code extrait
+        function displayCode(code) {
+            document.getElementById('extractedCode').textContent = code;
+            document.getElementById('codeDisplay').style.display = 'block';
+
+            // Simuler une expiration dans 30 secondes
+            codeExpiryTime = new Date(Date.now() + 30000);
+            startCodeTimer();
+
+            addLog('extractionLogs', `📱 Code affiché: ${code}`, 'success');
+            addLog('extractionLogs', '⏰ Code valide pour 30 secondes (simulation)', 'info');
+        }
+
+        // Démarrer le timer du code
+        function startCodeTimer() {
+            if (timerInterval) {
+                clearInterval(timerInterval);
+            }
+
+            timerInterval = setInterval(() => {
+                if (codeExpiryTime) {
+                    const remaining = Math.max(0, Math.floor((codeExpiryTime - new Date()) / 1000));
+                    document.getElementById('codeTimer').textContent = `Valide pour: ${remaining} secondes`;
+
+                    if (remaining <= 0) {
+                        clearInterval(timerInterval);
+                        document.getElementById('codeTimer').textContent = 'Code expiré';
+                        document.getElementById('codeTimer').style.color = '#dc3545';
+                        addLog('extractionLogs', '⏰ Code 2FA expiré', 'warning');
+                    }
+                }
+            }, 1000);
+        }
+
+        // Remplir automatiquement le code
+        function autoFillCode() {
+            if (extractedCode) {
+                document.getElementById('code2FA').value = extractedCode;
+                addLog('validationLogs', `📝 Code ${extractedCode} rempli automatiquement`, 'success');
+            } else {
+                addLog('validationLogs', '❌ Aucun code extrait disponible', 'error');
+            }
+        }
+
+        // Tester avec le code extrait
+        async function testWithExtractedCode() {
+            const code2FA = document.getElementById('code2FA').value;
+
+            if (!code2FA || code2FA.length !== 6) {
+                addLog('validationLogs', '❌ Code 2FA invalide - doit contenir 6 chiffres', 'error');
+                return;
+            }
+
+            addLog('validationLogs', `🔐 Test de validation 2FA avec le code: ${code2FA}`, 'info');
+
+            if (extractedCode && code2FA === extractedCode) {
+                addLog('validationLogs', '✅ Code correspond au code extrait du backend', 'success');
+            } else {
+                addLog('validationLogs', '⚠️ Code ne correspond pas au code extrait', 'warning');
+            }
+
+            try {
+                const response = await fetch('http://localhost:3000/api/auth/validate-2fa-session', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        twoFactorToken: code2FA
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    addLog('validationLogs', '✅ Validation 2FA réussie!', 'success');
+                    addLog('validationLogs', `📊 Réponse: ${JSON.stringify(data, null, 2)}`, 'info');
+                    addLog('validationLogs', '🚀 Redirection vers la page principale...', 'success');
+                } else {
+                    addLog('validationLogs', `❌ Échec de la validation 2FA: ${data.message}`, 'error');
+                    addLog('validationLogs', '💡 Vérifiez que le code est correct et qu\'il n\'a pas expiré', 'info');
+                }
+
+            } catch (error) {
+                addLog('validationLogs', `❌ Erreur lors de la validation: ${error.message}`, 'error');
+            }
+        }
+
+        // Vérifier l'état de l'authentification
+        function checkAuthState() {
+            addLog('stateLogs', '🔍 Vérification de l\'état d\'authentification...', 'info');
+
+            const jwt = localStorage.getItem('jwt');
+            const token = localStorage.getItem('token');
+            const patient = localStorage.getItem('patient');
+            const medecin = localStorage.getItem('medecin');
+
+            addLog('stateLogs', `<span class="status-indicator ${jwt ? 'status-success' : 'status-warning'}"></span>JWT Token: ${jwt ? 'Présent' : 'Absent'}`, jwt ? 'success' : 'warning');
+            addLog('stateLogs', `<span class="status-indicator ${token ? 'status-success' : 'status-warning'}"></span>General Token: ${token ? 'Présent' : 'Absent'}`, token ? 'success' : 'warning');
+            addLog('stateLogs', `<span class="status-indicator ${patient ? 'status-success' : 'status-warning'}"></span>Patient: ${patient ? 'Connecté' : 'Non connecté'}`, patient ? 'success' : 'warning');
+            addLog('stateLogs', `<span class="status-indicator ${medecin ? 'status-success' : 'status-warning'}"></span>Médecin: ${medecin ? 'Connecté' : 'Non connecté'}`, medecin ? 'success' : 'warning');
+
+            if (patient) {
+                try {
+                    const patientData = JSON.parse(patient);
+                    addLog('stateLogs', `📊 Données patient: ${JSON.stringify(patientData, null, 2)}`, 'info');
+                } catch (e) {
+                    addLog('stateLogs', '❌ Erreur lors du parsing des données patient', 'error');
+                }
+            }
+        }
+
+        // Déboguer le flux 2FA
+        function debug2FAFlow() {
+            addLog('stateLogs', '🐛 Débogage du flux 2FA...', 'info');
+
+            addLog('stateLogs', '📋 État actuel:', 'info');
+            addLog('stateLogs', `  - Code extrait: ${extractedCode || 'Aucun'}`, 'info');
+            addLog('stateLogs', `  - Réponse backend: ${window.backendResponse ? 'Disponible' : 'Non disponible'}`, 'info');
+            addLog('stateLogs', `  - Timer actif: ${timerInterval ? 'Oui' : 'Non'}`, 'info');
+
+            if (window.backendResponse) {
+                addLog('stateLogs', '🔍 Structure de la réponse backend:', 'info');
+                addLog('stateLogs', `  - Status: ${window.backendResponse.status}`, 'info');
+                addLog('stateLogs', `  - Message: ${window.backendResponse.message}`, 'info');
+                addLog('stateLogs', `  - TwoFactorSecret: ${window.backendResponse.twoFactorSecret}`, 'info');
+            }
+
+            addLog('stateLogs', '💡 Conseils de débogage:', 'info');
+            addLog('stateLogs', '  1. Vérifiez les logs du backend pour le code généré', 'info');
+            addLog('stateLogs', '  2. Assurez-vous que le code n\'a pas expiré', 'info');
+            addLog('stateLogs', '  3. Vérifiez la structure de la réponse backend', 'info');
+        }
+
+        // Déconnexion
+        function clearAuthData() {
+            localStorage.removeItem('jwt');
+            localStorage.removeItem('token');
+            localStorage.removeItem('patient');
+            localStorage.removeItem('medecin');
+
+            addLog('stateLogs', '🚪 Déconnexion effectuée - Données supprimées', 'success');
+        }
+
+        // Initialisation
+        document.addEventListener('DOMContentLoaded', function () {
+            addLog('stateLogs', '🚀 Application de test 2FA avancée initialisée', 'success');
+            addLog('stateLogs', '📱 Prêt pour les tests d\'authentification avancés', 'info');
+            addLog('stateLogs', '💡 Commencez par analyser la réponse du backend', 'info');
+        });
+    </script>
+</body>
+
+</html>

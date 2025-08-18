@@ -124,29 +124,54 @@ export const loginPatient = async (identifiant) => {
         let token = null;
         let patientData = null;
         
-        if (response.data.token) {
-            token = response.data.token;
-        } else if (response.data.data && response.data.data.token) {
-            token = response.data.data.token;
-        }
+        // Vérifier si la 2FA est requise AVANT de traiter le token
+        const requires2FA = response.data?.status === 'requires2FA' || 
+                           response.data?.requires2FA || 
+                           response.data?.message?.includes('2FA') ||
+                           response.data?.message?.includes('double facteur') ||
+                           response.data?.message?.includes('authentification') ||
+                           response.data?.two_factor_required ||
+                           response.data?.data?.two_factor_required;
         
-        if (response.data.data && response.data.data.patient) {
-            patientData = response.data.data.patient;
-        } else if (response.data.patient) {
-            patientData = response.data.patient;
-        } else if (response.data.data) {
-            patientData = response.data.data;
-        }
+        console.log('🔍 Analyse de la réponse 2FA:', {
+            status: response.data?.status,
+            requires2FA: response.data?.requires2FA,
+            message: response.data?.message,
+            two_factor_required: response.data?.two_factor_required,
+            data_two_factor: response.data?.data?.two_factor_required,
+            finalDecision: requires2FA
+        });
         
-        console.log('🔵 Token extrait:', token);
-        console.log('🔵 Données patient extraites:', patientData);
-        
-        if (token && patientData) {
-            localStorage.setItem("jwt", token);
-            localStorage.setItem("patient", JSON.stringify(patientData));
-            console.log('🔵 Données stockées dans localStorage');
+        if (requires2FA) {
+            console.log('🔐 2FA requise - pas de stockage du token pour le moment');
+            // Ne pas stocker le token si la 2FA est requise
+            // Le token sera stocké après validation 2FA réussie
         } else {
-            console.error('🔵 Données manquantes - token:', !!token, 'patientData:', !!patientData);
+            // Connexion normale - extraire et stocker le token
+            if (response.data.token) {
+                token = response.data.token;
+            } else if (response.data.data && response.data.data.token) {
+                token = response.data.data.token;
+            }
+            
+            if (response.data.data && response.data.data.patient) {
+                patientData = response.data.data.patient;
+            } else if (response.data.patient) {
+                patientData = response.data.patient;
+            } else if (response.data.data) {
+                patientData = response.data.data;
+            }
+            
+            console.log('🔵 Token extrait:', token);
+            console.log('🔵 Données patient extraites:', patientData);
+            
+            if (token && patientData) {
+                localStorage.setItem("jwt", token);
+                localStorage.setItem("patient", JSON.stringify(patientData));
+                console.log('🔵 Données stockées dans localStorage');
+            } else {
+                console.error('🔵 Données manquantes - token:', !!token, 'patientData:', !!patientData);
+            }
         }
         
         return response.data;

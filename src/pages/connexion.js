@@ -72,14 +72,39 @@ function Connexion() {
                 response = await loginPatient(identifiant);
                 console.log('✅ Réponse complète de connexion patient:', response);
                 
-                // Vérifier si la 2FA est requise
-                if (response.data?.status === 'requires2FA' || response.data?.requires2FA) {
+                // Vérifier si la 2FA est requise - amélioration de la détection
+                const requires2FA = response.data?.status === 'requires2FA' || 
+                                  response.data?.requires2FA || 
+                                  response.data?.message?.includes('2FA') ||
+                                  response.data?.message?.includes('double facteur') ||
+                                  response.data?.message?.includes('authentification') ||
+                                  response.data?.two_factor_required ||
+                                  response.data?.data?.two_factor_required;
+                
+                console.log('🔍 Vérification 2FA:', {
+                    status: response.data?.status,
+                    requires2FA: response.data?.requires2FA,
+                    message: response.data?.message,
+                    two_factor_required: response.data?.two_factor_required,
+                    data_two_factor: response.data?.data?.two_factor_required,
+                    finalDecision: requires2FA
+                });
+                
+                if (requires2FA) {
                     console.log('🔐 2FA requise pour le patient');
                     console.log('📊 Données utilisateur pour 2FA:', response.data);
                     
                     // Extraire les données patient de la structure imbriquée
-                    const patientData = response.data.data?.patient || response.data.patient;
+                    const patientData = response.data.data?.patient || response.data.patient || response.data.data || response.data;
                     console.log('👤 Données patient extraites:', patientData);
+                    
+                    // Vérifier si le secret 2FA est présent
+                    if (patientData.two_factor_secret) {
+                        console.log('🔑 Secret 2FA trouvé:', patientData.two_factor_secret);
+                    } else {
+                        console.log('⚠️ Secret 2FA manquant dans les données patient');
+                        console.log('🔍 Propriétés disponibles:', Object.keys(patientData));
+                    }
                     
                     setRequires2FA(true);
                     setUserData(patientData); // Passer directement les données patient

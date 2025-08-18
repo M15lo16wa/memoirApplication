@@ -12,7 +12,8 @@ const Validate2FA = ({
   onCancel, 
   isRequired = true, 
   message = "Vérification 2FA requise pour accéder aux dossiers patients",
-  userData = null 
+  userData = null,
+  tempTokenId = null 
 }) => {
   const [code2FA, setCode2FA] = useState('');
   const [loading, setLoading] = useState(false);
@@ -21,13 +22,21 @@ const Validate2FA = ({
   const handleSubmit = async (e) => {
     e.preventDefault();
     
+    // Validation stricte du code 2FA
     if (!code2FA.trim()) {
       setError('Veuillez saisir le code 2FA');
       return;
     }
 
-    if (code2FA.length < 6) {
-      setError('Le code 2FA doit contenir au moins 6 caractères');
+    // Le code 2FA doit être exactement 6 chiffres
+    if (code2FA.length !== 6) {
+      setError('Le code 2FA doit contenir exactement 6 chiffres');
+      return;
+    }
+
+    // Vérifier que le code ne contient que des chiffres
+    if (!/^\d{6}$/.test(code2FA)) {
+      setError('Le code 2FA doit contenir uniquement des chiffres');
       return;
     }
 
@@ -35,14 +44,77 @@ const Validate2FA = ({
     setError('');
 
     try {
-      // Appel à la nouvelle fonction du service API
-      await validate2FASession(code2FA);
-      console.log(`🔐 Validation de la session 2FA réussie`);
+      console.log('🔐 Validate2FA - Tentative de validation avec le code:', code2FA);
+      console.log('👤 Contexte utilisateur:', userData);
       
-      onSuccess();
+      // Vérifier que le tempTokenId est présent
+      if (!tempTokenId) {
+        throw new Error('Session temporaire 2FA manquante - veuillez vous reconnecter');
+      }
+      
+      // Appel à la fonction du service API
+      const validationResult = await validate2FASession(code2FA, tempTokenId);
+      console.log('✅ Validate2FA - Résultat de validation:', validationResult);
+      
+      // Vérifier que la validation a réussi
+      if (validationResult && validationResult.success) {
+        console.log('🎉 Validate2FA - Validation 2FA réussie !');
+        
+        // Stocker le token si fourni
+        if (validationResult.token) {
+          localStorage.setItem('token', validationResult.token);
+          console.log('🔑 Token stocké:', validationResult.token);
+        }
+        
+        // Stocker les données utilisateur si fournies
+        if (validationResult.user) {
+          if (validationResult.userType === 'patient') {
+            localStorage.setItem('patient', JSON.stringify(validationResult.user));
+          } else if (validationResult.userType === 'medecin' || validationResult.userType === 'admin') {
+            localStorage.setItem('medecin', JSON.stringify(validationResult.user));
+          }
+          console.log('👤 Données utilisateur stockées');
+        }
+        
+        // Appeler le callback de succès
+        onSuccess();
+      } else {
+        throw new Error('Réponse de validation 2FA invalide');
+      }
+      
     } catch (error) {
-      console.error('Erreur lors de la validation 2FA:', error);
-      setError('Code 2FA invalide. Veuillez réessayer.');
+      console.error('❌ Validate2FA - Erreur lors de la validation:', error);
+      
+      // Gestion améliorée des erreurs
+      let errorMessage = 'Code 2FA invalide. Veuillez réessayer.';
+      
+      if (typeof error === 'string') {
+        errorMessage = error;
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      // Messages d'erreur plus spécifiques
+      if (errorMessage.includes('expiré')) {
+        errorMessage = 'Code 2FA expiré. Veuillez vous reconnecter.';
+      } else if (errorMessage.includes('invalide')) {
+        errorMessage = 'Code 2FA incorrect. Vérifiez et réessayez.';
+      } else if (errorMessage.includes('fetch') || errorMessage.includes('Failed to fetch')) {
+        errorMessage = 'Impossible de contacter le serveur. Vérifiez votre connexion.';
+      }
+      
+      setError(errorMessage);
+      
+      // Logs détaillés pour le débogage
+      console.log('💡 Validate2FA - Conseils de débogage:', {
+        codeSaisi: code2FA,
+        messageErreur: errorMessage,
+        suggestion: 'Vérifiez que le code correspond au token généré par le backend',
+        timestamp: new Date().toISOString()
+      });
+      
     } finally {
       setLoading(false);
     }
@@ -81,14 +153,14 @@ const Validate2FA = ({
               type="text"
               value={code2FA}
               onChange={(e) => setCode2FA(e.target.value)}
-              placeholder="Entrez votre code 2FA"
+              placeholder="123456"
               className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-center text-lg font-mono tracking-widest"
-              maxLength="8"
+              maxLength="6"
               autoComplete="off"
               autoFocus
             />
             <p className="text-xs text-gray-500 mt-1 text-center">
-              Saisissez le code à 6-8 chiffres reçu
+              Saisissez le code à 6 chiffres reçu
             </p>
           </div>
 
@@ -122,7 +194,7 @@ const Validate2FA = ({
             
             <button
               type="submit"
-              disabled={loading || !code2FA.trim()}
+              disabled={loading || !code2FA.trim() || code2FA.length !== 6}
               className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? (
