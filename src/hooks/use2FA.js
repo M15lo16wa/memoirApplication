@@ -34,14 +34,51 @@ export const use2FA = () => {
   const createTemporary2FASession = useCallback(async (userData) => {
     try {
       console.log('🔐 Création session temporaire 2FA pour:', userData);
-      
-      const sessionResult = await create2FASession(userData);
+      // Construire les paramètres pour l'API: { userType, identifier, userId? }
+      const params = (() => {
+        if (!userData) throw new Error('Données utilisateur manquantes');
+        if (userData.numero_assure) {
+          return {
+            userType: 'patient',
+            identifier: userData.numero_assure,
+            userId: userData.id_patient || userData.id || userData.userId ? String(userData.id_patient || userData.id || userData.userId) : undefined,
+          };
+        }
+        if (userData.numero_adeli) {
+          return {
+            userType: 'professionnel',
+            identifier: userData.numero_adeli,
+            userId: userData.id || userData.id_professionnel || userData.userId ? String(userData.id || userData.id_professionnel || userData.userId) : undefined,
+          };
+        }
+        if (userData.email) {
+          return {
+            userType: 'professionnel',
+            identifier: userData.email,
+            userId: userData.id || userData.userId ? String(userData.id || userData.userId) : undefined,
+          };
+        }
+        if (userData.id || userData.userId) {
+          return {
+            userType: userData.type === 'patient' ? 'patient' : 'professionnel',
+            identifier: String(userData.id || userData.userId),
+            userId: String(userData.id || userData.userId),
+          };
+        }
+        throw new Error("Impossible de déterminer 'userType' et 'identifier' pour create2FASession");
+      })();
+
+      console.log('🧭 Paramètres create2FASession construits:', params);
+
+      const sessionResult = await create2FASession(params);
       console.log('✅ Session temporaire 2FA créée:', sessionResult);
       
-      if (sessionResult && sessionResult.tempTokenId) {
-        setTempTokenId(sessionResult.tempTokenId);
-        console.log('🔑 TempTokenId stocké dans le hook:', sessionResult.tempTokenId);
-        return sessionResult.tempTokenId;
+      // Harmoniser selon doc API: success + data.tempTokenId
+      const tempId = sessionResult?.data?.tempTokenId || sessionResult?.tempTokenId;
+      if (tempId) {
+        setTempTokenId(tempId);
+        console.log('🔑 TempTokenId stocké dans le hook:', tempId);
+        return tempId;
       } else {
         throw new Error('Session temporaire 2FA invalide - tempTokenId manquant');
       }

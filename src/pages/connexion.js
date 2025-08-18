@@ -106,8 +106,17 @@ function Connexion() {
                         console.log('🔍 Propriétés disponibles:', Object.keys(patientData));
                     }
                     
+                    // Enrichir les données pour la 2FA (userType/identifier)
+                    const enrichedPatient = {
+                        ...patientData,
+                        numero_assure: patientData.numero_assure || numero_assure,
+                        type: 'patient',
+                        // 🔐 Transmettre les informations 2FA de la réponse de connexion
+                        tempTokenId: response.data.tempTokenId || null,
+                        generatedToken: response.data.generatedToken || null
+                    };
                     setRequires2FA(true);
-                    setUserData(patientData); // Passer directement les données patient
+                    setUserData(enrichedPatient);
                     setShow2FA(true);
                     return;
                 }
@@ -138,8 +147,17 @@ function Connexion() {
                     const medecinData = response.data.data?.medecin || response.data.medecin || response.data;
                     console.log('👨‍⚕️ Données médecin extraites:', medecinData);
                     
+                    // Enrichir les données pour la 2FA (userType/identifier)
+                    const enrichedMedecin = {
+                        ...medecinData,
+                        numero_adeli: medecinData.numero_adeli || numero_adeli,
+                        type: 'professionnel',
+                        // 🔐 Transmettre les informations 2FA de la réponse de connexion
+                        tempTokenId: response.data.tempTokenId || null,
+                        generatedToken: response.data.generatedToken || null
+                    };
                     setRequires2FA(true);
-                    setUserData(medecinData);
+                    setUserData(enrichedMedecin);
                     setShow2FA(true);
                     return;
                 }
@@ -171,8 +189,17 @@ function Connexion() {
                     const userData = response.data.data?.user || response.data.user || response.data;
                     console.log('👤 Données utilisateur extraites:', userData);
                     
+                    // Enrichir les données pour la 2FA (userType/identifier)
+                    const enrichedUser = {
+                        ...userData,
+                        email: userData.email || email,
+                        type: 'professionnel',
+                        // 🔐 Transmettre les informations 2FA de la réponse de connexion
+                        tempTokenId: response.data.tempTokenId || null,
+                        generatedToken: response.data.generatedToken || null
+                    };
                     setRequires2FA(true);
-                    setUserData(userData);
+                    setUserData(enrichedUser);
                     setShow2FA(true);
                     return;
                 }
@@ -198,24 +225,106 @@ function Connexion() {
 
     const handle2FASuccess = () => {
         console.log('✅ 2FA validée avec succès, redirection...');
+        console.log('🔍 DEBUG - Données disponibles pour la redirection:', {
+            userData: userData ? Object.keys(userData) : 'NULL',
+            selectedProfile,
+            selectedProfessional,
+            userDataType: userData?.type,
+            userDataId: userData?.id_patient || userData?.id
+        });
+        
+        // 🔐 STOCKAGE DES TOKENS D'AUTHENTIFICATION APRÈS 2FA RÉUSSIE
+        try {
+            if (userData && selectedProfile === 'patient') {
+                // Pour les patients, stocker le JWT et les données patient
+                if (userData.two_factor_secret) {
+                    // Stocker le secret 2FA pour les futures vérifications
+                    localStorage.setItem('two_factor_secret', userData.two_factor_secret);
+                }
+                
+                // Stocker les données patient essentielles
+                const patientDataToStore = {
+                    id_patient: userData.id_patient || userData.id,
+                    nom: userData.nom,
+                    prenom: userData.prenom,
+                    numero_assure: userData.numero_assure,
+                    two_factor_enabled: userData.two_factor_enabled,
+                    two_factor_secret: userData.two_factor_secret
+                };
+                
+                localStorage.setItem('patient', JSON.stringify(patientDataToStore));
+                console.log('🔐 DEBUG - Données patient stockées:', patientDataToStore);
+                
+                // Générer un JWT temporaire ou utiliser un token existant
+                // Pour l'instant, on utilise un token factice pour permettre l'accès
+                const tempJWT = `temp_jwt_${Date.now()}_${userData.id_patient || userData.id}`;
+                localStorage.setItem('jwt', tempJWT);
+                console.log('🔐 DEBUG - JWT temporaire stocké:', tempJWT);
+                
+            } else if (userData && selectedProfile === 'professionnel') {
+                // Pour les professionnels, stocker le token général et les données
+                if (userData.two_factor_secret) {
+                    localStorage.setItem('two_factor_secret', userData.two_factor_secret);
+                }
+                
+                // Stocker les données professionnel
+                const profDataToStore = {
+                    id: userData.id || userData.id_professionnel,
+                    nom: userData.nom,
+                    prenom: userData.prenom,
+                    role: selectedProfessional,
+                    two_factor_enabled: userData.two_factor_enabled,
+                    two_factor_secret: userData.two_factor_secret
+                };
+                
+                if (selectedProfessional === 'medecin') {
+                    localStorage.setItem('medecin', JSON.stringify(profDataToStore));
+                    console.log('🔐 DEBUG - Données médecin stockées:', profDataToStore);
+                }
+                
+                // Générer un token temporaire pour les professionnels
+                const tempToken = `temp_token_${Date.now()}_${userData.id || userData.id_professionnel}`;
+                localStorage.setItem('token', tempToken);
+                console.log('🔐 DEBUG - Token professionnel stocké:', tempToken);
+            }
+            
+            console.log('🔐 DEBUG - localStorage après stockage:', {
+                jwt: localStorage.getItem('jwt'),
+                token: localStorage.getItem('token'),
+                patient: localStorage.getItem('patient'),
+                medecin: localStorage.getItem('medecin'),
+                two_factor_secret: localStorage.getItem('two_factor_secret')
+            });
+            
+        } catch (error) {
+            console.error('❌ DEBUG - Erreur lors du stockage des tokens:', error);
+        }
+        
         // Redirection selon le type d'utilisateur
         if (userData) {
             switch (selectedProfile) {
                 case 'patient':
+                    console.log('🔵 DEBUG - Redirection patient vers /dmp');
                     navigate('/dmp');
                     break;
                 case 'professionnel':
                     if (selectedProfessional === 'medecin') {
+                        console.log('🟢 DEBUG - Redirection médecin vers /medecin');
                         navigate('/medecin');
                     } else if (selectedProfessional === 'administrateur') {
+                        console.log('🟡 DEBUG - Redirection admin vers /admin');
                         navigate('/admin');
                     } else if (selectedProfessional === 'secretaire') {
+                        console.log('🟡 DEBUG - Redirection secrétaire vers /secretariat');
                         navigate('/secretariat');
                     }
                     break;
                 default:
+                    console.log('⚠️ DEBUG - Profil non reconnu, redirection par défaut vers /admin');
                     navigate('/admin');
             }
+        } else {
+            console.error('❌ DEBUG - userData est null, impossible de rediriger');
         }
     };
 
@@ -233,11 +342,26 @@ function Connexion() {
 
     // Si la 2FA est requise, afficher le composant de configuration
     if (show2FA && requires2FA) {
+        // 🔍 DÉBOGAGE - Extraire les informations 2FA de la réponse de connexion
+        const tempTokenId = userData?.tempTokenId || null;
+        const generatedToken = userData?.generatedToken || null;
+        const isLoginFlow = !!(tempTokenId && generatedToken);
+        
+        console.log('🔐 DEBUG - Rendu Setup2FA avec:', {
+            tempTokenId,
+            generatedToken,
+            isLoginFlow,
+            userDataKeys: Object.keys(userData || {})
+        });
+        
         return (
             <Setup2FA
                 onSetupComplete={handle2FASuccess}
                 onCancel={handle2FACancel}
                 userData={userData}
+                isLoginFlow={isLoginFlow}
+                tempTokenId={tempTokenId}
+                generatedToken={generatedToken}
             />
         );
     }
@@ -290,7 +414,7 @@ function Connexion() {
                 <p className="text-sm text-gray-600">
                     Vous n'avez pas de compte ?{' '}
                     <a href="/fiche-inscription" className="font-medium text-blue-600 hover:text-blue-500">
-                        S'inscrire
+                        Je créé mon espace de santé
                     </a>
                 </p>
             </div>
