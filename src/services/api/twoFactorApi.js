@@ -39,6 +39,16 @@ api.interceptors.request.use(
             console.log('⚠️ Aucun token disponible pour l\'authentification');
         }
         
+        // 🔍 DÉBOGAGE DÉTAILLÉ - Afficher l'URL et le token utilisé
+        console.log('🔍 DEBUG - Requête authentifiée:', {
+            url: config.url,
+            method: config.method,
+            tokenUsed: config.headers.Authorization ? config.headers.Authorization.substring(0, 25) + '...' : 'AUCUN',
+            isPatientRoute: config.url.includes('/patient/') || config.url.includes('/access/patient/'),
+            isMedecinRoute: config.url.includes('/ProfessionnelSante/'),
+            isGeneralRoute: !config.url.includes('/patient/') && !config.url.includes('/ProfessionnelSante/')
+        });
+        
         console.log('📋 Headers de la requête:', config.headers);
         console.log('📦 Body de la requête:', config.data);
         console.log('🌐 URL appelée:', config.url);

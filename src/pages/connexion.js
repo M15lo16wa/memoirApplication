@@ -113,8 +113,18 @@ function Connexion() {
                         type: 'patient',
                         // 🔐 Transmettre les informations 2FA de la réponse de connexion
                         tempTokenId: response.data.tempTokenId || null,
-                        generatedToken: response.data.generatedToken || null
+                        generatedToken: response.data.generatedToken || null,
+                        // 🔑 CONSERVER LES TOKENS DE LA PREMIÈRE AUTHENTIFICATION
+                        originalJWT: response.data.token || response.data.jwt || response.data.accessToken || null,
+                        originalToken: response.data.token || null
                     };
+                    
+                    console.log('🔐 DEBUG - Patient enrichi avec tokens originaux:', {
+                        tempTokenId: enrichedPatient.tempTokenId,
+                        generatedToken: enrichedPatient.generatedToken,
+                        originalJWT: enrichedPatient.originalJWT,
+                        originalToken: enrichedPatient.originalToken
+                    });
                     setRequires2FA(true);
                     setUserData(enrichedPatient);
                     setShow2FA(true);
@@ -154,8 +164,18 @@ function Connexion() {
                         type: 'professionnel',
                         // 🔐 Transmettre les informations 2FA de la réponse de connexion
                         tempTokenId: response.data.tempTokenId || null,
-                        generatedToken: response.data.generatedToken || null
+                        generatedToken: response.data.generatedToken || null,
+                        // 🔑 CONSERVER LES TOKENS DE LA PREMIÈRE AUTHENTIFICATION
+                        originalJWT: response.data.token || response.data.jwt || response.data.accessToken || null,
+                        originalToken: response.data.token || null
                     };
+                    
+                    console.log('🔐 DEBUG - Médecin enrichi avec tokens originaux:', {
+                        tempTokenId: enrichedMedecin.tempTokenId,
+                        generatedToken: enrichedMedecin.generatedToken,
+                        originalJWT: enrichedMedecin.originalJWT,
+                        originalToken: enrichedMedecin.originalToken
+                    });
                     setRequires2FA(true);
                     setUserData(enrichedMedecin);
                     setShow2FA(true);
@@ -196,8 +216,18 @@ function Connexion() {
                         type: 'professionnel',
                         // 🔐 Transmettre les informations 2FA de la réponse de connexion
                         tempTokenId: response.data.tempTokenId || null,
-                        generatedToken: response.data.generatedToken || null
+                        generatedToken: response.data.generatedToken || null,
+                        // 🔑 CONSERVER LES TOKENS DE LA PREMIÈRE AUTHENTIFICATION
+                        originalJWT: response.data.token || response.data.jwt || response.data.accessToken || null,
+                        originalToken: response.data.token || null
                     };
+                    
+                    console.log('🔐 DEBUG - Utilisateur enrichi avec tokens originaux:', {
+                        tempTokenId: enrichedUser.tempTokenId,
+                        generatedToken: enrichedUser.generatedToken,
+                        originalJWT: enrichedUser.originalJWT,
+                        originalToken: enrichedUser.originalToken
+                    });
                     setRequires2FA(true);
                     setUserData(enrichedUser);
                     setShow2FA(true);
@@ -235,62 +265,94 @@ function Connexion() {
         
         // 🔐 STOCKAGE DES TOKENS D'AUTHENTIFICATION APRÈS 2FA RÉUSSIE
         try {
-            if (userData && selectedProfile === 'patient') {
-                // Pour les patients, stocker le JWT et les données patient
-                if (userData.two_factor_secret) {
-                    // Stocker le secret 2FA pour les futures vérifications
-                    localStorage.setItem('two_factor_secret', userData.two_factor_secret);
+            // Vérifier si les tokens ont déjà été stockés par Setup2FA
+            const existingJWT = localStorage.getItem('jwt');
+            const existingToken = localStorage.getItem('token');
+            const existingPatient = localStorage.getItem('patient');
+            const existingMedecin = localStorage.getItem('medecin');
+            
+            console.log('🔐 DEBUG - Tokens existants dans localStorage:', {
+                jwt: existingJWT,
+                token: existingToken,
+                patient: existingPatient,
+                medecin: existingMedecin
+            });
+            
+            // Si aucun token n'a été stocké par Setup2FA, stocker les données essentielles
+            if (!existingJWT && !existingToken) {
+                console.log('⚠️ DEBUG - Aucun token trouvé, stockage des données essentielles');
+                
+                if (userData && selectedProfile === 'patient') {
+                    // Pour les patients, stocker le secret 2FA et les données essentielles
+                    if (userData.two_factor_secret) {
+                        localStorage.setItem('two_factor_secret', userData.two_factor_secret);
+                    }
+                    
+                    // Stocker les données patient essentielles
+                    const patientDataToStore = {
+                        id_patient: userData.id_patient || userData.id,
+                        nom: userData.nom,
+                        prenom: userData.prenom,
+                        numero_assure: userData.numero_assure,
+                        two_factor_enabled: userData.two_factor_enabled,
+                        two_factor_secret: userData.two_factor_secret
+                    };
+                    
+                    localStorage.setItem('patient', JSON.stringify(patientDataToStore));
+                    console.log('🔐 DEBUG - Données patient stockées:', patientDataToStore);
+                    
+                    // 🔑 UTILISER LE TOKEN ORIGINAL DE LA PREMIÈRE AUTHENTIFICATION
+                    if (userData.originalJWT) {
+                        localStorage.setItem('jwt', userData.originalJWT);
+                        console.log('🔐 DEBUG - JWT original patient réutilisé:', userData.originalJWT.substring(0, 20) + '...');
+                    } else if (userData.tempTokenId) {
+                        // Fallback sur tempTokenId si pas de token original
+                        localStorage.setItem('jwt', userData.tempTokenId);
+                        console.log('🔐 DEBUG - tempTokenId utilisé comme JWT temporaire:', userData.tempTokenId);
+                    }
+                    
+                } else if (userData && selectedProfile === 'professionnel') {
+                    // Pour les professionnels, stocker le secret 2FA et les données
+                    if (userData.two_factor_secret) {
+                        localStorage.setItem('two_factor_secret', userData.two_factor_secret);
+                    }
+                    
+                    // Stocker les données professionnel
+                    const profDataToStore = {
+                        id: userData.id || userData.id_professionnel,
+                        nom: userData.nom,
+                        prenom: userData.prenom,
+                        role: selectedProfessional,
+                        two_factor_enabled: userData.two_factor_enabled,
+                        two_factor_secret: userData.two_factor_secret
+                    };
+                    
+                    if (selectedProfessional === 'medecin') {
+                        localStorage.setItem('medecin', JSON.stringify(profDataToStore));
+                        console.log('🔐 DEBUG - Données médecin stockées:', profDataToStore);
+                    }
+                    
+                    // 🔑 UTILISER LE TOKEN ORIGINAL DE LA PREMIÈRE AUTHENTIFICATION
+                    if (userData.originalToken) {
+                        localStorage.setItem('token', userData.originalToken);
+                        console.log('🔐 DEBUG - Token original professionnel réutilisé:', userData.originalToken.substring(0, 20) + '...');
+                    } else if (userData.originalJWT) {
+                        localStorage.setItem('token', userData.originalJWT);
+                        console.log('🔐 DEBUG - JWT original professionnel réutilisé:', userData.originalJWT.substring(0, 20) + '...');
+                    } else if (userData.tempTokenId) {
+                        // Fallback sur tempTokenId si pas de token original
+                        localStorage.setItem('token', userData.tempTokenId);
+                        console.log('🔐 DEBUG - tempTokenId utilisé comme token temporaire:', userData.tempTokenId);
+                    }
                 }
-                
-                // Stocker les données patient essentielles
-                const patientDataToStore = {
-                    id_patient: userData.id_patient || userData.id,
-                    nom: userData.nom,
-                    prenom: userData.prenom,
-                    numero_assure: userData.numero_assure,
-                    two_factor_enabled: userData.two_factor_enabled,
-                    two_factor_secret: userData.two_factor_secret
-                };
-                
-                localStorage.setItem('patient', JSON.stringify(patientDataToStore));
-                console.log('🔐 DEBUG - Données patient stockées:', patientDataToStore);
-                
-                // Générer un JWT temporaire ou utiliser un token existant
-                // Pour l'instant, on utilise un token factice pour permettre l'accès
-                const tempJWT = `temp_jwt_${Date.now()}_${userData.id_patient || userData.id}`;
-                localStorage.setItem('jwt', tempJWT);
-                console.log('🔐 DEBUG - JWT temporaire stocké:', tempJWT);
-                
-            } else if (userData && selectedProfile === 'professionnel') {
-                // Pour les professionnels, stocker le token général et les données
-                if (userData.two_factor_secret) {
-                    localStorage.setItem('two_factor_secret', userData.two_factor_secret);
-                }
-                
-                // Stocker les données professionnel
-                const profDataToStore = {
-                    id: userData.id || userData.id_professionnel,
-                    nom: userData.nom,
-                    prenom: userData.prenom,
-                    role: selectedProfessional,
-                    two_factor_enabled: userData.two_factor_enabled,
-                    two_factor_secret: userData.two_factor_secret
-                };
-                
-                if (selectedProfessional === 'medecin') {
-                    localStorage.setItem('medecin', JSON.stringify(profDataToStore));
-                    console.log('🔐 DEBUG - Données médecin stockées:', profDataToStore);
-                }
-                
-                // Générer un token temporaire pour les professionnels
-                const tempToken = `temp_token_${Date.now()}_${userData.id || userData.id_professionnel}`;
-                localStorage.setItem('token', tempToken);
-                console.log('🔐 DEBUG - Token professionnel stocké:', tempToken);
+            } else {
+                console.log('✅ DEBUG - Tokens déjà présents, pas de stockage supplémentaire nécessaire');
             }
             
-            console.log('🔐 DEBUG - localStorage après stockage:', {
+            console.log('🔐 DEBUG - localStorage final:', {
                 jwt: localStorage.getItem('jwt'),
                 token: localStorage.getItem('token'),
+                tempTokenId: localStorage.getItem('tempTokenId'),
                 patient: localStorage.getItem('patient'),
                 medecin: localStorage.getItem('medecin'),
                 two_factor_secret: localStorage.getItem('two_factor_secret')

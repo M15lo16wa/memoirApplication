@@ -170,47 +170,113 @@ function Setup2FA({ onSetupComplete, onCancel, userData = null, isLoginFlow = fa
                         const authData = verificationResult.data;
                         console.log('🔐 DEBUG - Données d\'authentification reçues:', authData);
                         
+                        // 🔑 PRIORITÉ ABSOLUE AU TOKEN JWT DE L'API validate2FASession
+                        const apiJWT = verificationResult.token || verificationResult.data.token;
+                        console.log('🔐 DEBUG - JWT de l\'API validate2FASession:', {
+                            fromVerificationResult: verificationResult.token || 'NON TROUVÉ',
+                            fromVerificationResultData: verificationResult.data.token || 'NON TROUVÉ',
+                            apiJWT: apiJWT || 'NON TROUVÉ'
+                        });
+                        
                         // Stocker les tokens selon le type d'utilisateur
                         if (userData.type === 'patient' || userData.numero_assure) {
-                            // Patient
-                            if (authData.jwt || authData.token) {
-                                const token = authData.jwt || authData.token;
-                                localStorage.setItem('jwt', token);
-                                console.log('🔐 DEBUG - JWT patient stocké:', token);
+                            // Patient - PRIORITÉ AUX TOKENS ORIGINAUX DE LA PREMIÈRE AUTHENTIFICATION
+                            let finalToken = null;
+                            
+                            if (apiJWT) {
+                                // 🔑 TOKEN JWT DE L'API EN PRIORITÉ ABSOLUE
+                                finalToken = apiJWT;
+                                localStorage.setItem('jwt', finalToken);
+                                console.log('🔐 DEBUG - JWT de l\'API validate2FASession stocké:', finalToken.substring(0, 20) + '...');
+                            } else if (userData.originalJWT) {
+                                finalToken = userData.originalJWT;
+                                localStorage.setItem('jwt', finalToken);
+                                console.log('🔐 DEBUG - JWT original patient réutilisé:', finalToken.substring(0, 20) + '...');
+                            } else if (authData.jwt) {
+                                finalToken = authData.jwt;
+                                localStorage.setItem('jwt', finalToken);
+                                console.log('🔐 DEBUG - JWT patient de l\'API stocké:', finalToken.substring(0, 20) + '...');
+                            } else if (authData.token) {
+                                finalToken = authData.token;
+                                localStorage.setItem('jwt', finalToken);
+                                console.log('🔐 DEBUG - Token patient de l\'API stocké:', finalToken.substring(0, 20) + '...');
+                            } else if (authData.accessToken) {
+                                finalToken = authData.accessToken;
+                                localStorage.setItem('jwt', finalToken);
+                                console.log('🔐 DEBUG - AccessToken patient de l\'API stocké:', finalToken.substring(0, 20) + '...');
+                            } else {
+                                // Si aucun token disponible, utiliser le tempTokenId comme fallback
+                                console.log('⚠️ DEBUG - Aucun token disponible, utilisation du tempTokenId');
+                                localStorage.setItem('jwt', tempTokenId);
                             }
                             
                             // Stocker les données patient mises à jour
                             const patientData = {
                                 ...userData,
                                 ...authData.patient,
-                                ...authData.user
+                                ...authData.user,
+                                // S'assurer que l'ID est présent
+                                id_patient: userData.id_patient || userData.id || authData.patient?.id || authData.user?.id
                             };
                             localStorage.setItem('patient', JSON.stringify(patientData));
-                            console.log('🔐 DEBUG - Données patient mises à jour stockées');
+                            console.log('🔐 DEBUG - Données patient mises à jour stockées:', patientData);
                             
                         } else if (userData.type === 'professionnel' || userData.numero_adeli || userData.email) {
-                            // Professionnel
-                            if (authData.token) {
-                                localStorage.setItem('token', authData.token);
-                                console.log('🔐 DEBUG - Token professionnel stocké:', authData.token);
+                            // Professionnel - PRIORITÉ AUX TOKENS ORIGINAUX DE LA PREMIÈRE AUTHENTIFICATION
+                            let finalToken = null;
+                            
+                            if (apiJWT) {
+                                // 🔑 TOKEN JWT DE L'API EN PRIORITÉ ABSOLUE
+                                finalToken = apiJWT;
+                                localStorage.setItem('token', finalToken);
+                                console.log('🔐 DEBUG - JWT de l\'API validate2FASession stocké:', finalToken.substring(0, 20) + '...');
+                            } else if (userData.originalToken) {
+                                finalToken = userData.originalToken;
+                                localStorage.setItem('token', finalToken);
+                                console.log('🔐 DEBUG - Token original professionnel réutilisé:', finalToken.substring(0, 20) + '...');
+                            } else if (userData.originalJWT) {
+                                finalToken = userData.originalJWT;
+                                localStorage.setItem('token', finalToken);
+                                console.log('🔐 DEBUG - JWT original professionnel réutilisé:', finalToken.substring(0, 20) + '...');
+                            } else if (authData.token) {
+                                finalToken = authData.token;
+                                localStorage.setItem('token', finalToken);
+                                console.log('🔐 DEBUG - Token professionnel de l\'API stocké:', finalToken.substring(0, 20) + '...');
+                            } else if (authData.accessToken) {
+                                finalToken = authData.accessToken;
+                                localStorage.setItem('token', finalToken);
+                                console.log('🔐 DEBUG - AccessToken professionnel de l\'API stocké:', finalToken.substring(0, 20) + '...');
+                            } else {
+                                // Si aucun token disponible, utiliser le tempTokenId comme fallback
+                                console.log('⚠️ DEBUG - Aucun token disponible, utilisation du tempTokenId');
+                                localStorage.setItem('token', tempTokenId);
                             }
                             
                             // Stocker les données professionnel mises à jour
                             const profData = {
                                 ...userData,
                                 ...authData.professionnel,
-                                ...authData.user
+                                ...authData.user,
+                                // S'assurer que l'ID est présent
+                                id: userData.id || userData.id_professionnel || authData.professionnel?.id || authData.user?.id
                             };
                             
                             if (userData.numero_adeli) {
                                 localStorage.setItem('medecin', JSON.stringify(profData));
-                                console.log('🔐 DEBUG - Données médecin mises à jour stockées');
+                                console.log('🔐 DEBUG - Données médecin mises à jour stockées:', profData);
                             }
+                        }
+                        
+                        // Stocker le tempTokenId pour référence
+                        if (tempTokenId) {
+                            localStorage.setItem('tempTokenId', tempTokenId);
+                            console.log('🔐 DEBUG - tempTokenId stocké pour référence:', tempTokenId);
                         }
                         
                         console.log('🔐 DEBUG - localStorage après stockage des tokens API:', {
                             jwt: localStorage.getItem('jwt'),
                             token: localStorage.getItem('token'),
+                            tempTokenId: localStorage.getItem('tempTokenId'),
                             patient: localStorage.getItem('patient'),
                             medecin: localStorage.getItem('medecin')
                         });
