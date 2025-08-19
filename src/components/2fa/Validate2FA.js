@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
-import { FaShieldAlt, FaTimes, FaCheck } from 'react-icons/fa';
+import React, { useState, useEffect } from 'react';
+import { FaShieldAlt, FaTimes, FaCheck, FaEnvelope, FaClock, FaRedo } from 'react-icons/fa';
 
-// Importez la fonction de validation 2FA du service API
-import { validate2FASession } from '../../services/api/twoFactorApi';
+// Importez les fonctions 2FA du service API
+import { validate2FASession, send2FATOTPCode } from '../../services/api/twoFactorApi';
 
 /**
  * Composant de validation 2FA pour la protection des dossiers patients
+ * Version adaptée pour le système 2FA basé sur l'email
  */
 const Validate2FA = ({ 
   onSuccess, 
@@ -18,6 +19,113 @@ const Validate2FA = ({
   const [code2FA, setCode2FA] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  
+  // Nouveaux états pour la gestion email
+  const [emailSent, setEmailSent] = useState(false);
+  const [emailAddress, setEmailAddress] = useState('');
+  const [countdown, setCountdown] = useState(0);
+  const [canResend, setCanResend] = useState(false);
+  const [emailLoading, setEmailLoading] = useState(false);
+  const [emailError, setEmailError] = useState('');
+
+  // Fonction pour démarrer le compteur
+  const startCountdown = (seconds) => {
+    setCountdown(seconds);
+    setCanResend(false);
+    
+    const timer = setInterval(() => {
+      setCountdown(prev => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          setCanResend(true);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  // Fonction pour envoyer le code TOTP par email
+  const sendTOTPCode = async () => {
+    if (!userData) {
+      setEmailError('Données utilisateur manquantes');
+      return;
+    }
+
+    try {
+      setEmailLoading(true);
+      setEmailError('');
+      
+      // Construction des paramètres selon le type d'utilisateur
+      const params = buildUserParams(userData);
+      
+      const response = await send2FATOTPCode(params);
+      
+      if (response.status === 'success') {
+        setEmailSent(true);
+        setEmailAddress(response.data.email);
+        startCountdown(30); // 30 secondes
+        console.log('✅ Code TOTP envoyé avec succès à:', response.data.email);
+      }
+      
+    } catch (error) {
+      setEmailError('Erreur lors de l\'envoi du code TOTP');
+      console.error('❌ Erreur envoi TOTP:', error);
+    } finally {
+      setEmailLoading(false);
+    }
+  };
+
+  // Construction des paramètres utilisateur
+  const buildUserParams = (userData) => {
+    if (userData.numero_assure) {
+      return { 
+        userType: 'patient', 
+        identifier: userData.numero_assure, 
+        userId: userData.id_patient || userData.id || userData.userId ? String(userData.id_patient || userData.id || userData.userId) : undefined 
+      };
+    }
+    if (userData.numero_adeli) {
+      return { 
+        userType: 'professionnel', 
+        identifier: userData.numero_adeli, 
+        userId: userData.id || userData.id_professionnel || userData.userId ? String(userData.id || userData.id_professionnel || userData.userId) : undefined 
+      };
+    }
+    if (userData.email) {
+      return { 
+        userType: 'professionnel', 
+        identifier: userData.email, 
+        userId: userData.id || userData.userId ? String(userData.id || userData.userId) : undefined 
+      };
+    }
+    if (userData.id || userData.userId) {
+      return { 
+        userType: userData.type === 'patient' ? 'patient' : 'professionnel', 
+        identifier: String(userData.id || userData.userId), 
+        userId: String(userData.id || userData.userId) 
+      };
+    }
+    throw new Error("Impossible de déterminer 'userType' et 'identifier'");
+  };
+
+  // Fonction de renvoi d'email
+  const handleResendEmail = async () => {
+    if (!canResend) return;
+    
+    try {
+      await sendTOTPCode();
+    } catch (error) {
+      console.error('Erreur lors du renvoi:', error);
+    }
+  };
+
+  // Envoyer automatiquement le code TOTP au montage du composant
+  useEffect(() => {
+    if (userData && !emailSent && !emailLoading) {
+      sendTOTPCode();
+    }
+  }, [userData]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -44,7 +152,7 @@ const Validate2FA = ({
     setError('');
 
     try {
-      console.log('🔐 Validate2FA - Tentative de validation avec le code:', code2FA);
+      console.log('�� Validate2FA - Tentative de validation avec le code:', code2FA);
       console.log('👤 Contexte utilisateur:', userData);
       
       // Vérifier que le tempTokenId est présent
@@ -123,6 +231,7 @@ const Validate2FA = ({
   const handleCancel = () => {
     setCode2FA('');
     setError('');
+    setEmailError('');
     onCancel();
   };
 
@@ -142,6 +251,43 @@ const Validate2FA = ({
           </p>
         </div>
 
+        {/* Informations sur l'envoi du code TOTP */}
+        {emailSent && (
+          <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <div className="flex items-center justify-center space-x-2 mb-2">
+              <FaEnvelope className="text-blue-600" />
+              <span className="text-sm font-medium text-blue-800">Code TOTP envoyé</span>
+            </div>
+            <p className="text-xs text-blue-700 text-center mb-2">
+              Vérifiez votre boîte de réception à l'adresse :
+            </p>
+            <p className="text-sm font-mono text-blue-800 bg-white p-2 rounded border text-center">
+              {emailAddress}
+            </p>
+            
+            {/* Compteur et bouton de renvoi */}
+            <div className="mt-3 text-center">
+              {countdown > 0 ? (
+                <div className="flex items-center justify-center space-x-2">
+                  <FaClock className="text-blue-600 text-sm" />
+                  <p className="text-xs text-blue-600">
+                    Renvoi possible dans {countdown}s
+                  </p>
+                </div>
+              ) : (
+                <button
+                  onClick={handleResendEmail}
+                  disabled={emailLoading}
+                  className="text-xs text-blue-600 underline hover:text-blue-800 flex items-center space-x-1 mx-auto"
+                >
+                  <FaRedo className="text-xs" />
+                  <span>Renvoyer le code</span>
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Formulaire */}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -160,7 +306,7 @@ const Validate2FA = ({
               autoFocus
             />
             <p className="text-xs text-gray-500 mt-1 text-center">
-              Saisissez le code à 6 chiffres reçu
+              Saisissez le code à 6 chiffres reçu par email
             </p>
           </div>
 
@@ -168,6 +314,13 @@ const Validate2FA = ({
           {error && (
             <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
               <p className="text-sm text-red-600 text-center">{error}</p>
+            </div>
+          )}
+
+          {/* Message d'erreur email */}
+          {emailError && (
+            <div className="p-3 bg-orange-50 border border-orange-200 rounded-lg">
+              <p className="text-sm text-orange-600 text-center">{emailError}</p>
             </div>
           )}
 
@@ -212,18 +365,28 @@ const Validate2FA = ({
           </div>
         </form>
 
-        {/* Aide */}
-        <div className="mt-6 text-center">
-          <p className="text-xs text-gray-500">
-            Vous n'avez pas reçu de code ?{' '}
-            <button
-              type="button"
-              className="text-blue-600 hover:text-blue-500 underline"
-              onClick={() => setError('Fonctionnalité de renvoi à implémenter')}
-            >
-              Renvoyer le code
-            </button>
-          </p>
+        {/* Aide et instructions */}
+        <div className="mt-6 space-y-3">
+          {/* Instructions pour l'utilisateur */}
+          <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+            <h4 className="text-sm font-medium text-green-900 mb-2 text-center">
+              📧 Comment procéder :
+            </h4>
+            <ol className="text-xs text-green-800 space-y-1 list-decimal list-inside">
+              <li>Vérifiez votre boîte de réception</li>
+              <li>Ouvrez l'email contenant le code TOTP</li>
+              <li>Saisissez le code à 6 chiffres ci-dessus</li>
+              <li>Cliquez sur "Valider" pour continuer</li>
+            </ol>
+          </div>
+
+          {/* Informations sur le délai */}
+          <div className="text-center">
+            <p className="text-xs text-gray-500">
+              Le code TOTP expire dans 30 secondes. Si vous ne l'avez pas reçu, 
+              utilisez le bouton "Renvoyer le code" ci-dessus.
+            </p>
+          </div>
         </div>
       </div>
     </div>

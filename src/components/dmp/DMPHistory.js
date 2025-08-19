@@ -11,13 +11,23 @@ function DMPHistory({ patientId = null }) {
   
   // Utilisation du hook centralisé use2FA
   const {
-    show2FA,
-    requires2FA,
-    pendingAction,
-    handle2FASuccess,
-    handle2FACancel,
+    show2FAModal,
+    isSubmitting,
+    validationError,
+    tempTokenId,
+    emailSent,
+    emailAddress,
+    countdown,
+    canResend,
+    emailLoading,
+    emailError,
     with2FAProtection,
-    reset2FA
+    handle2FAValidation,
+    handle2FACancel,
+    createTemporary2FASession,
+    sendTOTPCode,
+    handleResendEmail,
+    reset2FAState
   } = use2FA();
   
   const [history, setHistory] = useState([]);
@@ -126,12 +136,7 @@ function DMPHistory({ patientId = null }) {
     }
   }, [checkPatientAuthorization]);
 
-  // Vérifier les demandes d'accès quand l'autorisation est confirmée
-  useEffect(() => {
-    if (isPatientAuthorized) {
-      checkAccessRequests();
-    }
-  }, [isPatientAuthorized, checkAccessRequests]);
+
 
   // Fonction utilitaire pour extraire les données d'historique (mémorisée)
   const extractHistoryData = useMemo(() => (data) => {
@@ -167,10 +172,6 @@ function DMPHistory({ patientId = null }) {
     console.warn('⚠️ Aucun tableau trouvé dans les données reçues');
     return [];
   }, []);
-
-  // Utilisation du wrapper 2FA centralisé pour protéger les accès aux dossiers patients
-  const protectedLoadHistory = with2FAProtection(loadHistory, 'Chargement de l\'historique DMP');
-  const protectedCheckAccessRequests = with2FAProtection(checkAccessRequests, 'Vérification des demandes d\'accès');
 
   const loadHistory = useCallback(async (forceReload = false) => {
     // Vérifier l'autorisation avant de charger l'historique
@@ -234,35 +235,64 @@ function DMPHistory({ patientId = null }) {
     }
   }, [effectivePatientId, extractHistoryData, lastPatientId, history.length, loading, isPatientAuthorized, checkPatientAuthorization]);
 
+  // Utilisation du wrapper 2FA centralisé pour protéger les accès aux dossiers patients
+  const protectedLoadHistory = useCallback(
+    with2FAProtection(loadHistory, 'Chargement de l\'historique DMP'),
+    [loadHistory, with2FAProtection]
+  );
+  
+  const protectedCheckAccessRequests = useCallback(
+    with2FAProtection(checkAccessRequests, 'Vérification des demandes d\'accès'),
+    [checkAccessRequests, with2FAProtection]
+  );
+
+  // Vérifier les demandes d'accès quand l'autorisation est confirmée
+  useEffect(() => {
+    if (isPatientAuthorized && effectivePatientId) {
+      console.log('🔍 Vérification des demandes d\'accès pour patient:', effectivePatientId);
+      protectedCheckAccessRequests();
+    }
+  }, [isPatientAuthorized, effectivePatientId, protectedCheckAccessRequests]);
+
   // Effet pour gérer les changements de patientId
   useEffect(() => {
     console.log('🔍 useEffect - Changement de patient détecté:', { effectivePatientId, lastPatientId });
     
-    if (effectivePatientId && effectivePatientId !== lastPatientId && isPatientAuthorized) {
+    // Éviter les appels inutiles si les valeurs ne sont pas encore définies
+    if (!effectivePatientId || !isPatientAuthorized) {
+      return;
+    }
+    
+    // Vérifier si c'est vraiment un changement de patient
+    if (effectivePatientId !== lastPatientId) {
       console.log('✅ Changement de patient détecté, rechargement de l\'historique');
       setHistory([]);
       setError(null);
       setLoading(false);
       setPatientInfo(null);
-      loadHistory(true);
-    } else if (!effectivePatientId) {
-      console.warn('⚠️ effectivePatientId est undefined dans useEffect de changement de patient');
+      protectedLoadHistory(true);
     }
-  }, [effectivePatientId, lastPatientId, loadHistory, isPatientAuthorized]);
+  }, [effectivePatientId, lastPatientId, protectedLoadHistory, isPatientAuthorized]);
 
   // Effet initial pour charger l'historique au montage du composant
   useEffect(() => {
     console.log('🔍 useEffect - Montage initial du composant DMPHistory');
     
-    if (isPatientAuthorized && effectivePatientId) {
-      console.log('✅ Composant monté avec patientId valide, chargement initial de l\'historique');
-      loadHistory(true);
-    } else if (!isPatientAuthorized) {
-      console.log('⚠️ Composant monté mais patient non autorisé');
-    } else {
-      console.log('⚠️ Composant monté mais patientId manquant');
+    // Éviter les appels inutiles si les conditions ne sont pas remplies
+    if (!isPatientAuthorized || !effectivePatientId) {
+      console.log('⚠️ Conditions non remplies pour le chargement initial:', { isPatientAuthorized, effectivePatientId });
+      return;
     }
-  }, [isPatientAuthorized, effectivePatientId, loadHistory]);
+    
+    // Vérifier si on a déjà des données pour ce patient
+    if (lastPatientId === effectivePatientId && history.length > 0) {
+      console.log('✅ Données déjà disponibles pour ce patient, pas de rechargement');
+      return;
+    }
+    
+    console.log('✅ Composant monté avec patientId valide, chargement initial de l\'historique');
+    protectedLoadHistory(true);
+  }, [isPatientAuthorized, effectivePatientId, protectedLoadHistory, lastPatientId, history.length]);
 
   // Effet pour nettoyer les données lors du démontage ou changement de patient
   useEffect(() => {
@@ -279,17 +309,17 @@ function DMPHistory({ patientId = null }) {
   // Fonction pour forcer le rechargement
   const handleRefresh = useCallback(() => {
     console.log('Rechargement forcé de l\'historique');
-    loadHistory(true);
-  }, [loadHistory]);
+    protectedLoadHistory(true);
+  }, [protectedLoadHistory]);
 
   // Fonction pour nettoyer les erreurs
   const clearError = useCallback(() => {
     setError(null);
     // Recharger automatiquement après nettoyage de l'erreur
     if (effectivePatientId) {
-      loadHistory(true);
+      protectedLoadHistory(true);
     }
-  }, [effectivePatientId, loadHistory]);
+  }, [effectivePatientId, protectedLoadHistory]);
 
   const formatDate = (dateString) => {
     if (!dateString) return 'Date inconnue';
@@ -736,12 +766,14 @@ function DMPHistory({ patientId = null }) {
       )}
 
       {/* Protection 2FA pour l'accès aux dossiers patients */}
-      {show2FA && requires2FA && (
+      {show2FAModal && (
         <Validate2FA
-          onSuccess={handle2FASuccess}
+          onSuccess={handle2FAValidation}
           onCancel={handle2FACancel}
           isRequired={true}
           message="Vérification 2FA requise pour accéder à l'historique des dossiers patients"
+          userData={patientInfo}
+          tempTokenId={tempTokenId}
         />
       )}
     </div>

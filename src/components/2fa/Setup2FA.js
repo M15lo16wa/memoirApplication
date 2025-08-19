@@ -1,17 +1,150 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { QRCodeSVG } from 'qrcode.react';
-import { setup2FA, verifyAndEnable2FA, validate2FASession } from '../../services/api/twoFactorApi';
-import { FaShieldAlt, FaCheckCircle } from 'react-icons/fa';
+import { setup2FA, verifyAndEnable2FA, validate2FASession, send2FATOTPCode, resend2FAEmail } from '../../services/api/twoFactorApi';
+import { FaShieldAlt, FaCheckCircle, FaEnvelope, FaKey, FaClock, FaRedo } from 'react-icons/fa';
 
 function Setup2FA({ onSetupComplete, onCancel, userData = null, isLoginFlow = false, tempTokenId = null, generatedToken = null }) {
     const [step, setStep] = useState('setup'); // 'setup', 'verify', 'success'
-    const [qrCodeData, setQrCodeData] = useState(null);
     const [secret, setSecret] = useState(''); // secret de configuration reçu du serveur
     const [loginSecret, setLoginSecret] = useState(''); // secret de connexion déjà activé (si présent dans userData)
     const [recoveryCodes, setRecoveryCodes] = useState([]);
     const [verificationCode, setVerificationCode] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    
+    // Nouveaux états pour la gestion email
+    const [emailSent, setEmailSent] = useState(false);
+    const [emailAddress, setEmailAddress] = useState('');
+    const [countdown, setCountdown] = useState(0);
+    const [canResend, setCanResend] = useState(false);
+    const [emailLoading, setEmailLoading] = useState(false);
+    const [emailError, setEmailError] = useState('');
+    const [lastEmailSent, setLastEmailSent] = useState(null);
+
+    // Fonction pour démarrer le compteur
+    const startCountdown = useCallback((seconds) => {
+        setCountdown(seconds);
+        setCanResend(false);
+        
+        const timer = setInterval(() => {
+            setCountdown(prev => {
+                if (prev <= 1) {
+                    clearInterval(timer);
+                    setCanResend(true);
+                    return 0;
+                }
+                return prev - 1;
+            });
+        }, 1000);
+    }, []);
+
+    // Fonction pour envoyer le code TOTP (mode connexion)
+    const sendTOTPCode = useCallback(async (params) => {
+        try {
+            setEmailLoading(true);
+            setEmailError('');
+            
+            const response = await send2FATOTPCode(params);
+            
+            if (response.status === 'success') {
+                setEmailSent(true);
+                setEmailAddress(response.data.email);
+                setLastEmailSent(new Date());
+                startCountdown(30); // 30 secondes
+                setStep('verify');
+                console.log('✅ Code TOTP envoyé avec succès');
+            }
+            
+        } catch (error) {
+            setEmailError('Erreur lors de l\'envoi du code TOTP');
+            console.error('❌ Erreur TOTP:', error);
+        } finally {
+            setEmailLoading(false);
+        }
+    }, [startCountdown]);
+
+    // Fonction pour envoyer l'email de configuration (mode setup)
+    const sendSetupEmail = useCallback(async (params) => {
+        try {
+            setEmailLoading(true);
+            setEmailError('');
+            
+            const response = await setup2FA(params);
+            
+            if (response.status === 'success') {
+                setEmailSent(true);
+                setEmailAddress(response.data.user.email);
+                setSecret(response.data.secret);
+                setRecoveryCodes(response.data.recoveryCodes || []);
+                setLastEmailSent(new Date());
+                startCountdown(300); // 5 minutes
+                setStep('setup');
+                console.log('✅ Email de configuration envoyé avec succès');
+            }
+            
+        } catch (error) {
+            setEmailError('Erreur lors de l\'envoi de l\'email de configuration');
+            console.error('❌ Erreur setup:', error);
+        } finally {
+            setEmailLoading(false);
+        }
+    }, [startCountdown]);
+
+    // Fonction de renvoi d'email
+    const handleResendEmail = useCallback(async () => {
+        if (!canResend) return;
+        
+        try {
+            setEmailLoading(true);
+            const params = buildUserParams(userData);
+            
+            if (isLoginFlow) {
+                await sendTOTPCode(params);
+            } else {
+                await resend2FAEmail(params);
+            }
+            
+            setLastEmailSent(new Date());
+            startCountdown(isLoginFlow ? 30 : 300);
+            
+        } catch (error) {
+            setEmailError('Erreur lors du renvoi');
+        } finally {
+            setEmailLoading(false);
+        }
+    }, [canResend, isLoginFlow, userData, sendTOTPCode, startCountdown]);
+
+    // Construction des paramètres utilisateur
+    const buildUserParams = useCallback((userData) => {
+        if (userData.numero_assure) {
+            return { 
+                userType: 'patient', 
+                identifier: userData.numero_assure, 
+                userId: userData.id_patient || userData.id || userData.userId ? String(userData.id_patient || userData.id || userData.userId) : undefined 
+            };
+        }
+        if (userData.numero_adeli) {
+            return { 
+                userType: 'professionnel', 
+                identifier: userData.numero_adeli, 
+                userId: userData.id || userData.id_professionnel || userData.userId ? String(userData.id || userData.id_professionnel || userData.userId) : undefined 
+            };
+        }
+        if (userData.email) {
+            return { 
+                userType: 'professionnel', 
+                identifier: userData.email, 
+                userId: userData.id || userData.userId ? String(userData.id || userData.userId) : undefined 
+            };
+        }
+        if (userData.id || userData.userId) {
+            return { 
+                userType: userData.type === 'patient' ? 'patient' : 'professionnel', 
+                identifier: String(userData.id || userData.userId), 
+                userId: String(userData.id || userData.userId) 
+            };
+        }
+        throw new Error("Impossible de déterminer 'userType' et 'identifier' pour setup2FA");
+    }, []);
 
     const initialize2FA = useCallback(async () => {
         try {
@@ -38,65 +171,24 @@ function Setup2FA({ onSetupComplete, onCancel, userData = null, isLoginFlow = fa
                 return;
             }
 
-            const params = (() => {
-                if (userData.numero_assure) {
-                    return { userType: 'patient', identifier: userData.numero_assure, userId: userData.id_patient || userData.id || userData.userId ? String(userData.id_patient || userData.id || userData.userId) : undefined };
-                }
-                if (userData.numero_adeli) {
-                    return { userType: 'professionnel', identifier: userData.numero_adeli, userId: userData.id || userData.id_professionnel || userData.userId ? String(userData.id || userData.id_professionnel || userData.userId) : undefined };
-                }
-                if (userData.email) {
-                    return { userType: 'professionnel', identifier: userData.email, userId: userData.id || userData.userId ? String(userData.id || userData.userId) : undefined };
-                }
-                if (userData.id || userData.userId) {
-                    return { userType: userData.type === 'patient' ? 'patient' : 'professionnel', identifier: String(userData.id || userData.userId), userId: String(userData.id || userData.userId) };
-                }
-                throw new Error("Impossible de déterminer 'userType' et 'identifier' pour setup2FA");
-            })();
+            const params = buildUserParams(userData);
 
-            const response = await setup2FA(params);
-            if (response && response.status === 'success' && response.data) {
-                const payload = response.data;
-                
-                // 🔍 DÉBOGAGE DÉTAILLÉ - Traçage du secret reçu
-                console.log('🔐 DEBUG - Réponse complète de setup2FA:', response);
-                console.log('🔐 DEBUG - Payload extrait:', payload);
-                
-                // Secret EXACTEMENT tel que renvoyé par le serveur
-                const receivedSecret = payload.secret || payload.two_factor_secret || payload.setupSecret || payload.totpSecret || '';
-                console.log('🔐 DEBUG - Secret extrait:', {
-                    receivedSecret: receivedSecret || 'VIDE',
-                    length: receivedSecret ? receivedSecret.length : 0,
-                    fromSecret: payload.secret || 'NON TROUVÉ',
-                    fromTwoFactorSecret: payload.two_factor_secret || 'NON TROUVÉ',
-                    fromSetupSecret: payload.setupSecret || 'NON TROUVÉ',
-                    fromTotpSecret: payload.totpSecret || 'NON TROUVÉ'
-                });
-                
-                setSecret(receivedSecret);
-                
-                // QR EXACTEMENT tel que renvoyé par le serveur (data:image... ou otpauth://...)
-                const qrFromServer = payload.qrCode || payload.qrCodeData || payload.totpUrl || payload.otpauthUrl || null;
-                console.log('📱 DEBUG - QR Code reçu:', {
-                    qrFromServer: qrFromServer || 'NON FOURNI',
-                    type: qrFromServer ? (qrFromServer.startsWith('data:image/') ? 'IMAGE_BASE64' : 'URL_OTPAUTH') : 'AUCUN',
-                    fromQrCode: payload.qrCode || 'NON TROUVÉ',
-                    fromQrCodeData: payload.qrCodeData || 'NON TROUVÉ',
-                    fromTotpUrl: payload.totpUrl || 'NON TROUVÉ',
-                    fromOtpauthUrl: payload.otpauthUrl || 'NON TROUVÉ'
-                });
-                
-                setQrCodeData(qrFromServer);
-                setRecoveryCodes(payload.recoveryCodes || []);
-                setStep('setup');
+            if (isLoginFlow && userData.two_factor_enabled) {
+                // Mode CONNEXION : envoyer directement le code TOTP
+                console.log('🔐 DEBUG - Mode connexion, envoi du code TOTP');
+                await sendTOTPCode(params);
             } else {
-                throw new Error("Réponse invalide de l'API de configuration 2FA");
+                // Mode CONFIGURATION : envoyer le secret Base32
+                console.log('🔐 DEBUG - Mode configuration, envoi de l\'email de setup');
+                await sendSetupEmail(params);
             }
+            
         } catch (error) {
             let errorMessage = 'Erreur lors de la configuration 2FA';
             if (typeof error === 'string') errorMessage = error;
             else if (error.response?.data?.message) errorMessage = error.response.data.message;
             else if (error.message) errorMessage = error.message;
+            
             // Si déjà configuré, basculer sur vérification (2ème étape) avec le secret existant de userData
             if (errorMessage.includes('déjà configuré') || errorMessage.includes('already configured')) {
                 if (userData?.two_factor_secret) {
@@ -110,10 +202,11 @@ function Setup2FA({ onSetupComplete, onCancel, userData = null, isLoginFlow = fa
         } finally {
             setLoading(false);
         }
-    }, [userData, isLoginFlow, tempTokenId, generatedToken]);
+    }, [userData, isLoginFlow, tempTokenId, generatedToken, buildUserParams, sendTOTPCode, sendSetupEmail]);
 
     useEffect(() => {
         if (!userData) return;
+        
         // Si c'est un flux de connexion avec 2FA déjà activé, passer directement à la vérification
         if (isLoginFlow && userData.two_factor_enabled && tempTokenId && generatedToken) {
             console.log('🔐 DEBUG - Initialisation en mode connexion avec 2FA existant');
@@ -121,13 +214,15 @@ function Setup2FA({ onSetupComplete, onCancel, userData = null, isLoginFlow = fa
             setStep('verify');
             return;
         }
-        // Si un secret 2FA existe déjà côté compte, on est en phase de vérification (aucun QR local, aucun secret local)
+        
+        // Si un secret 2FA existe déjà côté compte, on est en phase de vérification
         if (userData.two_factor_secret) {
             setLoginSecret(userData.two_factor_secret);
             setStep('verify');
             return;
         }
-        // Sinon, on lance la configuration (et on n'utilise QUE ce que renvoie le serveur)
+        
+        // Sinon, on lance la configuration
         initialize2FA();
     }, [userData, initialize2FA, isLoginFlow, tempTokenId, generatedToken]);
 
@@ -172,7 +267,7 @@ function Setup2FA({ onSetupComplete, onCancel, userData = null, isLoginFlow = fa
                         
                         // 🔑 PRIORITÉ ABSOLUE AU TOKEN JWT DE L'API validate2FASession
                         const apiJWT = verificationResult.token || verificationResult.data.token;
-                        console.log('🔐 DEBUG - JWT de l\'API validate2FASession:', {
+                        console.log('�� DEBUG - JWT de l\'API validate2FASession:', {
                             fromVerificationResult: verificationResult.token || 'NON TROUVÉ',
                             fromVerificationResultData: verificationResult.data.token || 'NON TROUVÉ',
                             apiJWT: apiJWT || 'NON TROUVÉ'
@@ -184,10 +279,10 @@ function Setup2FA({ onSetupComplete, onCancel, userData = null, isLoginFlow = fa
                             let finalToken = null;
                             
                             if (apiJWT) {
-                                // 🔑 TOKEN JWT DE L'API EN PRIORITÉ ABSOLUE
+                                // �� TOKEN JWT DE L'API EN PRIORITÉ ABSOLUE
                                 finalToken = apiJWT;
                                 localStorage.setItem('jwt', finalToken);
-                                console.log('🔐 DEBUG - JWT de l\'API validate2FASession stocké:', finalToken.substring(0, 20) + '...');
+                                console.log('�� DEBUG - JWT de l\'API validate2FASession stocké:', finalToken.substring(0, 20) + '...');
                             } else if (userData.originalJWT) {
                                 finalToken = userData.originalJWT;
                                 localStorage.setItem('jwt', finalToken);
@@ -226,10 +321,10 @@ function Setup2FA({ onSetupComplete, onCancel, userData = null, isLoginFlow = fa
                             let finalToken = null;
                             
                             if (apiJWT) {
-                                // 🔑 TOKEN JWT DE L'API EN PRIORITÉ ABSOLUE
+                                // �� TOKEN JWT DE L'API EN PRIORITÉ ABSOLUE
                                 finalToken = apiJWT;
                                 localStorage.setItem('token', finalToken);
-                                console.log('🔐 DEBUG - JWT de l\'API validate2FASession stocké:', finalToken.substring(0, 20) + '...');
+                                console.log('�� DEBUG - JWT de l\'API validate2FASession stocké:', finalToken.substring(0, 20) + '...');
                             } else if (userData.originalToken) {
                                 finalToken = userData.originalToken;
                                 localStorage.setItem('token', finalToken);
@@ -263,7 +358,7 @@ function Setup2FA({ onSetupComplete, onCancel, userData = null, isLoginFlow = fa
                             
                             if (userData.numero_adeli) {
                                 localStorage.setItem('medecin', JSON.stringify(profData));
-                                console.log('🔐 DEBUG - Données médecin mises à jour stockées:', profData);
+                                console.log('�� DEBUG - Données médecin mises à jour stockées:', profData);
                             }
                         }
                         
@@ -356,8 +451,6 @@ function Setup2FA({ onSetupComplete, onCancel, userData = null, isLoginFlow = fa
         );
     }
 
-    const isImageQr = typeof qrCodeData === 'string' && qrCodeData.startsWith('data:image/');
-
     return (
         <div className="max-w-md mx-auto p-6 bg-white rounded-lg shadow-lg">
             <div className="text-center mb-6">
@@ -372,54 +465,195 @@ function Setup2FA({ onSetupComplete, onCancel, userData = null, isLoginFlow = fa
                 </div>
             )}
 
+            {emailError && (
+                <div className="mb-4 p-3 bg-orange-50 border-l-4 border-orange-500 text-orange-700 rounded-r">
+                    <p className="text-sm">{emailError}</p>
+                </div>
+            )}
+
             {step === 'setup' && (
                 <div className="space-y-6">
+                    {/* Nouveau design centré sur l'email */}
                     <div className="text-center">
-                        <div className="inline-block p-4 bg-gray-50 rounded-lg">
-                            {qrCodeData ? (
+                        <div className="inline-block p-6 bg-blue-50 rounded-lg border-2 border-blue-200">
+                            <FaEnvelope className="mx-auto h-16 w-16 text-blue-600 mb-4" />
+                            
+                            {emailSent ? (
                                 <>
-                                    {isImageQr ? (
-                                        <img src={qrCodeData} alt="QR Code 2FA" className="mx-auto" width={200} height={200} />
-                                    ) : (
-                                        <QRCodeSVG value={qrCodeData} size={200} className="mx-auto" />
-                                    )}
+                                    <h3 className="text-lg font-semibold text-blue-900 mb-2">
+                                        Email envoyé avec succès !
+                                    </h3>
+                                    <p className="text-sm text-blue-700 mb-3">
+                                        Vérifiez votre boîte de réception à l'adresse :
+                                    </p>
+                                    <p className="text-lg font-mono text-blue-800 bg-white p-3 rounded border">
+                                        {emailAddress}
+                                    </p>
+                                    
+                                    {/* Compteur et bouton de renvoi */}
+                                    <div className="mt-4">
+                                        {countdown > 0 ? (
+                                            <div className="flex items-center justify-center space-x-2">
+                                                <FaClock className="text-blue-600" />
+                                                <p className="text-sm text-blue-600">
+                                                    Renvoi possible dans {countdown}s
+                                                </p>
+                                            </div>
+                                        ) : (
+                                            <button
+                                                onClick={handleResendEmail}
+                                                disabled={emailLoading}
+                                                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 flex items-center space-x-2 mx-auto"
+                                            >
+                                                <FaRedo className="text-sm" />
+                                                <span>{emailLoading ? 'Envoi...' : 'Renvoyer l\'email'}</span>
+                                            </button>
+                                        )}
+                                    </div>
                                 </>
                             ) : (
-                                <div className="p-8 text-gray-500 text-sm">
-                                    Le serveur n'a pas fourni d'image QR. Utilisez le secret ci-dessous dans votre application d'authentification.
+                                <div className="p-4">
+                                    <p className="text-gray-600">Envoi de l'email de configuration...</p>
+                                    {emailLoading && (
+                                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto mt-2"></div>
+                                    )}
                                 </div>
                             )}
                         </div>
-                        <p className="text-xs text-gray-600 mt-2">Secret (exact serveur): {secret || 'Non fourni'}</p>
                     </div>
-                    <div className="bg-blue-50 p-4 rounded-lg">
-                        <h4 className="font-medium text-blue-900 mb-2">Instructions de configuration :</h4>
-                        <ol className="text-sm text-blue-800 space-y-1 list-decimal list-inside">
-                            <li>Ouvrez votre application d'authentification (Google Authenticator, etc.).</li>
-                            <li>Si le QR est affiché, scannez-le. Sinon, ajoutez un compte avec le secret ci-dessus.</li>
-                            <li>Entrez le code à 6 chiffres généré ci-dessous pour valider.</li>
+
+                    {/* Instructions mises à jour */}
+                    <div className="bg-green-50 p-4 rounded-lg">
+                        <h4 className="font-medium text-green-900 mb-2">
+                            📧 Instructions de configuration par email :
+                        </h4>
+                        <ol className="text-sm text-green-800 space-y-2 list-decimal list-inside">
+                            <li>Vérifiez votre boîte de réception</li>
+                            <li>Ouvrez l'email de configuration 2FA</li>
+                            <li>Copiez le secret Base32 fourni</li>
+                            <li>Configurez votre application d'authentification</li>
+                            <li>Générez un code à 6 chiffres</li>
+                            <li>Saisissez-le ci-dessous pour valider</li>
                         </ol>
                     </div>
-                    <button onClick={() => setStep('verify')} className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors">J'ai configuré l'application, continuer</button>
-                    <button onClick={onCancel} className="w-full bg-gray-300 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-400 transition-colors">Annuler</button>
+
+                    {/* Codes de récupération */}
+                    {recoveryCodes && recoveryCodes.length > 0 && (
+                        <div className="bg-yellow-50 p-4 rounded-lg">
+                            <h4 className="font-medium text-yellow-900 mb-2">
+                                🔑 Codes de récupération (à conserver précieusement) :
+                            </h4>
+                            <div className="grid grid-cols-2 gap-2">
+                                {recoveryCodes.map((code, index) => (
+                                    <code key={index} className="block p-2 bg-white text-sm font-mono text-center border rounded">
+                                        {code}
+                                    </code>
+                                ))}
+                            </div>
+                            <p className="text-xs text-yellow-800 mt-2">
+                                Conservez ces codes en lieu sûr. Ils vous permettront d'accéder à votre compte si vous perdez votre appareil.
+                            </p>
+                        </div>
+                    )}
+
+                    {/* Bouton de vérification */}
+                    <button 
+                        onClick={() => setStep('verify')} 
+                        disabled={!emailSent || countdown > 0}
+                        className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                    >
+                        J'ai configuré l'application, continuer
+                    </button>
+                    
+                    <button onClick={onCancel} className="w-full bg-gray-300 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-400 transition-colors">
+                        Annuler
+                    </button>
                 </div>
             )}
 
             {step === 'verify' && (
-                <form onSubmit={handleVerification} className="space-y-4">
-                    {loginSecret && (
+                <div className="space-y-4">
+                    {/* Affichage spécial pour le mode connexion */}
+                    {isLoginFlow && emailSent && (
+                        <div className="text-center mb-4">
+                            <FaKey className="mx-auto h-12 w-12 text-green-600 mb-3" />
+                            <h3 className="text-lg font-semibold text-gray-900">
+                                Validation 2FA requise
+                            </h3>
+                            <p className="text-sm text-gray-600">
+                                Un code de validation a été envoyé à votre email
+                            </p>
+                        </div>
+                    )}
+                    
+                    {/* Affichage email et compteur pour le mode connexion */}
+                    {isLoginFlow && emailSent && (
+                        <div className="bg-blue-50 p-4 rounded-lg text-center">
+                            <p className="text-sm text-blue-700 mb-2">
+                                Code envoyé à : <strong>{emailAddress}</strong>
+                            </p>
+                            {countdown > 0 ? (
+                                <div className="flex items-center justify-center space-x-2">
+                                    <FaClock className="text-blue-600" />
+                                    <p className="text-xs text-blue-600">
+                                        Code valide pendant encore {countdown}s
+                                    </p>
+                                </div>
+                            ) : (
+                                <button
+                                    onClick={handleResendEmail}
+                                    className="text-xs text-blue-600 underline hover:text-blue-800 flex items-center space-x-1 mx-auto"
+                                >
+                                    <FaRedo className="text-xs" />
+                                    <span>Renvoyer le code</span>
+                                </button>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Message pour le mode vérification existant */}
+                    {loginSecret && !isLoginFlow && (
                         <p className="text-xs text-gray-500">Mode vérification: votre compte a déjà un 2FA activé.</p>
                     )}
-                    <div>
-                        <label htmlFor="verificationCode" className="block text-sm font-medium text-gray-700 mb-2">Code de vérification</label>
-                        <input type="text" id="verificationCode" value={verificationCode} onChange={(e) => setVerificationCode(e.target.value)} placeholder="123456" maxLength="6" className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" required />
-                        <p className="text-xs text-gray-500 mt-1">Saisissez le code à 6 chiffres affiché dans votre application d'authentification</p>
-                    </div>
-                    <div className="flex space-x-3">
-                        <button type="button" onClick={() => setStep('setup')} className="flex-1 bg-gray-300 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-400 transition-colors">Retour</button>
-                        <button type="submit" className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors">Valider</button>
-                    </div>
-                </form>
+
+                    {/* Formulaire de validation */}
+                    <form onSubmit={handleVerification} className="space-y-4">
+                        <div>
+                            <label htmlFor="verificationCode" className="block text-sm font-medium text-gray-700 mb-2">
+                                Code de vérification
+                            </label>
+                            <input 
+                                type="text" 
+                                id="verificationCode" 
+                                value={verificationCode} 
+                                onChange={(e) => setVerificationCode(e.target.value)} 
+                                placeholder="123456" 
+                                maxLength="6" 
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
+                                required 
+                            />
+                            <p className="text-xs text-gray-500 mt-1">
+                                Saisissez le code à 6 chiffres affiché dans votre application d'authentification
+                            </p>
+                        </div>
+                        
+                        <div className="flex space-x-3">
+                            <button 
+                                type="button" 
+                                onClick={() => setStep('setup')} 
+                                className="flex-1 bg-gray-300 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-400 transition-colors"
+                            >
+                                Retour
+                            </button>
+                            <button 
+                                type="submit" 
+                                className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors"
+                            >
+                                Valider
+                            </button>
+                        </div>
+                    </form>
+                </div>
             )}
         </div>
     );

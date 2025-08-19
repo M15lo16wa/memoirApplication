@@ -1,9 +1,9 @@
-import { useState, useCallback } from 'react';
-// 1. Importer la fonction de validation depuis votre service API
-import { validate2FASession, create2FASession } from '../services/api/twoFactorApi'; // Assurez-vous que le chemin est correct
+import { useState, useCallback, useEffect } from 'react';
+// Importer les fonctions 2FA du service API
+import { validate2FASession, create2FASession, send2FATOTPCode } from '../services/api/twoFactorApi';
 
 /**
- * Hook personnalisé pour la gestion de la protection 2FA.
+ * Hook personnalisé pour la gestion de la protection 2FA basée sur l'email.
  * Il intercepte les erreurs 403, affiche une modale de validation,
  * et ré-exécute l'action initiale après une validation réussie.
  */
@@ -25,7 +25,124 @@ export const use2FA = () => {
   // Stocke l'identifiant de session temporaire 2FA
   const [tempTokenId, setTempTokenId] = useState(null);
 
+  // --- NOUVEAUX ÉTATS POUR LA GESTION EMAIL ---
+  
+  // Gère l'état de l'envoi du code TOTP par email
+  const [emailSent, setEmailSent] = useState(false);
+  const [emailAddress, setEmailAddress] = useState('');
+  const [countdown, setCountdown] = useState(0);
+  const [canResend, setCanResend] = useState(false);
+  const [emailLoading, setEmailLoading] = useState(false);
+  const [emailError, setEmailError] = useState('');
+  const [userDataFor2FA, setUserDataFor2FA] = useState(null);
+
   // --- FONCTIONS DE GESTION DU FLUX 2FA ---
+
+  /**
+   * Fonction pour démarrer le compteur avant renvoi d'email
+   */
+  const startCountdown = useCallback((seconds) => {
+    setCountdown(seconds);
+    setCanResend(false);
+    
+    const timer = setInterval(() => {
+      setCountdown(prev => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          setCanResend(true);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  }, []);
+
+  /**
+   * Fonction pour envoyer le code TOTP par email
+   */
+  const sendTOTPCode = useCallback(async (userData) => {
+    if (!userData) {
+      setEmailError('Données utilisateur manquantes');
+      return false;
+    }
+
+    try {
+      setEmailLoading(true);
+      setEmailError('');
+      
+      // Construction des paramètres selon le type d'utilisateur
+      const params = buildUserParams(userData);
+      
+      const response = await send2FATOTPCode(params);
+      
+      if (response.status === 'success') {
+        setEmailSent(true);
+        setEmailAddress(response.data.email);
+        startCountdown(30); // 30 secondes
+        console.log('✅ Code TOTP envoyé avec succès à:', response.data.email);
+        return true;
+      }
+      
+      return false;
+      
+    } catch (error) {
+      setEmailError('Erreur lors de l\'envoi du code TOTP');
+      console.error('❌ Erreur envoi TOTP:', error);
+      return false;
+    } finally {
+      setEmailLoading(false);
+    }
+  }, [startCountdown]);
+
+  /**
+   * Fonction pour renvoyer le code TOTP
+   */
+  const handleResendEmail = useCallback(async () => {
+    if (!canResend || !userDataFor2FA) return;
+    
+    try {
+      await sendTOTPCode(userDataFor2FA);
+    } catch (error) {
+      console.error('Erreur lors du renvoi:', error);
+    }
+  }, [canResend, userDataFor2FA, sendTOTPCode]);
+
+  /**
+   * Construction des paramètres utilisateur pour les appels API
+   */
+  const buildUserParams = useCallback((userData) => {
+    if (!userData) throw new Error('Données utilisateur manquantes');
+    
+    if (userData.numero_assure) {
+      return {
+        userType: 'patient',
+        identifier: userData.numero_assure,
+        userId: userData.id_patient || userData.id || userData.userId ? String(userData.id_patient || userData.id || userData.userId) : undefined,
+      };
+    }
+    if (userData.numero_adeli) {
+      return {
+        userType: 'professionnel',
+        identifier: userData.numero_adeli,
+        userId: userData.id || userData.id_professionnel || userData.userId ? String(userData.id || userData.id_professionnel || userData.userId) : undefined,
+      };
+    }
+    if (userData.email) {
+      return {
+        userType: 'professionnel',
+        identifier: userData.email,
+        userId: userData.id || userData.userId ? String(userData.id || userData.userId) : undefined,
+      };
+    }
+    if (userData.id || userData.userId) {
+      return {
+        userType: userData.type === 'patient' ? 'patient' : 'professionnel',
+        identifier: String(userData.id || userData.userId),
+        userId: String(userData.id || userData.userId),
+      };
+    }
+    throw new Error("Impossible de déterminer 'userType' et 'identifier' pour create2FASession");
+  }, []);
 
   /**
    * 1. Fonction pour créer une session temporaire 2FA
@@ -34,41 +151,14 @@ export const use2FA = () => {
   const createTemporary2FASession = useCallback(async (userData) => {
     try {
       console.log('🔐 Création session temporaire 2FA pour:', userData);
+      
+      // Stocker les données utilisateur pour l'envoi d'email
+      setUserDataFor2FA(userData);
+      
       // Construire les paramètres pour l'API: { userType, identifier, userId? }
-      const params = (() => {
-        if (!userData) throw new Error('Données utilisateur manquantes');
-        if (userData.numero_assure) {
-          return {
-            userType: 'patient',
-            identifier: userData.numero_assure,
-            userId: userData.id_patient || userData.id || userData.userId ? String(userData.id_patient || userData.id || userData.userId) : undefined,
-          };
-        }
-        if (userData.numero_adeli) {
-          return {
-            userType: 'professionnel',
-            identifier: userData.numero_adeli,
-            userId: userData.id || userData.id_professionnel || userData.userId ? String(userData.id || userData.id_professionnel || userData.userId) : undefined,
-          };
-        }
-        if (userData.email) {
-          return {
-            userType: 'professionnel',
-            identifier: userData.email,
-            userId: userData.id || userData.userId ? String(userData.id || userData.userId) : undefined,
-          };
-        }
-        if (userData.id || userData.userId) {
-          return {
-            userType: userData.type === 'patient' ? 'patient' : 'professionnel',
-            identifier: String(userData.id || userData.userId),
-            userId: String(userData.id || userData.userId),
-          };
-        }
-        throw new Error("Impossible de déterminer 'userType' et 'identifier' pour create2FASession");
-      })();
+      const params = buildUserParams(userData);
 
-      console.log('🧭 Paramètres create2FASession construits:', params);
+      console.log('�� Paramètres create2FASession construits:', params);
 
       const sessionResult = await create2FASession(params);
       console.log('✅ Session temporaire 2FA créée:', sessionResult);
@@ -77,7 +167,14 @@ export const use2FA = () => {
       const tempId = sessionResult?.data?.tempTokenId || sessionResult?.tempTokenId;
       if (tempId) {
         setTempTokenId(tempId);
-        console.log('🔑 TempTokenId stocké dans le hook:', tempId);
+        console.log('�� TempTokenId stocké dans le hook:', tempId);
+        
+        // Envoyer automatiquement le code TOTP par email
+        const emailSent = await sendTOTPCode(userData);
+        if (emailSent) {
+          console.log('📧 Code TOTP envoyé automatiquement après création de session');
+        }
+        
         return tempId;
       } else {
         throw new Error('Session temporaire 2FA invalide - tempTokenId manquant');
@@ -86,7 +183,7 @@ export const use2FA = () => {
       console.error('❌ Erreur création session temporaire 2FA:', error);
       throw error;
     }
-  }, []);
+  }, [buildUserParams, sendTOTPCode]);
 
   /**
    * 2. Fonction principale de validation.
@@ -115,6 +212,7 @@ export const use2FA = () => {
       console.log('✅ Session 2FA validée avec succès !', result);
       setShow2FAModal(false); // On ferme la modale
       setValidationError(''); // Réinitialiser l'erreur
+      setEmailError(''); // Réinitialiser l'erreur email
 
       // Si la validation réussit, on exécute l'action qui était en attente
       if (pendingAction) {
@@ -154,7 +252,7 @@ export const use2FA = () => {
       // Dans tous les cas, on réinitialise l'état de soumission
       setIsSubmitting(false);
     }
-  }, [isSubmitting, pendingAction, tempTokenId]); // Ajouté tempTokenId aux dépendances
+  }, [isSubmitting, pendingAction, tempTokenId]);
 
   /**
    * Gère l'annulation par l'utilisateur depuis la modale.
@@ -164,6 +262,11 @@ export const use2FA = () => {
     setShow2FAModal(false);
     setPendingAction(null);
     setValidationError('');
+    setEmailError('');
+    setEmailSent(false);
+    setEmailAddress('');
+    setCountdown(0);
+    setCanResend(false);
   }, []);
 
   /**
@@ -202,18 +305,51 @@ export const use2FA = () => {
         }
       }
     };
-  }, []); // Le useCallback ici assure que la fonction n'est pas recréée à chaque render.
+  }, []);
+
+  /**
+   * Fonction pour réinitialiser complètement l'état du hook
+   */
+  const reset2FAState = useCallback(() => {
+    setShow2FAModal(false);
+    setPendingAction(null);
+    setValidationError('');
+    setEmailError('');
+    setEmailSent(false);
+    setEmailAddress('');
+    setCountdown(0);
+    setCanResend(false);
+    setEmailLoading(false);
+    setUserDataFor2FA(null);
+    setTempTokenId(null);
+  }, []);
 
   // --- VALEURS RETOURNÉES PAR LE HOOK ---
   // On retourne tout ce dont les composants auront besoin pour interagir avec le hook.
   return {
+    // États de base 2FA
     show2FAModal,       // Pour savoir s'il faut afficher la modale
     isSubmitting,       // Pour afficher un spinner/loader dans la modale
     validationError,    // Pour afficher les erreurs de validation
+    tempTokenId,        // L'identifiant de session temporaire
+    
+    // Nouveaux états pour la gestion email
+    emailSent,          // Si l'email a été envoyé
+    emailAddress,       // L'adresse email où le code a été envoyé
+    countdown,          // Le compteur avant de pouvoir renvoyer
+    canResend,          // Si on peut renvoyer l'email
+    emailLoading,       // État de chargement pour l'envoi d'email
+    emailError,         // Erreur lors de l'envoi d'email
+    
+    // Fonctions principales
     with2FAProtection,  // La fonction "wrapper" pour protéger les actions
     handle2FAValidation,// La fonction à passer à la prop `onSubmit` de la modale
     handle2FACancel,    // La fonction à passer à la prop `onCancel` de la modale
     createTemporary2FASession, // Pour créer une session temporaire 2FA
-    tempTokenId,        // L'identifiant de session temporaire
+    
+    // Nouvelles fonctions pour la gestion email
+    sendTOTPCode,       // Pour envoyer le code TOTP
+    handleResendEmail,  // Pour renvoyer le code TOTP
+    reset2FAState,      // Pour réinitialiser complètement l'état
   };
 };

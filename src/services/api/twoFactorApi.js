@@ -17,7 +17,7 @@ api.interceptors.request.use(
         const jwtToken = localStorage.getItem('jwt');
         const generalToken = localStorage.getItem('token');
         
-        console.log('🔑 Tokens disponibles:', {
+        console.log('�� Tokens disponibles:', {
             jwtToken: jwtToken ? 'Présent' : 'Absent',
             generalToken: generalToken ? 'Présent' : 'Absent'
         });
@@ -31,7 +31,7 @@ api.interceptors.request.use(
         } else if (jwtToken) {
             // Pour les autres routes, prioriser le JWT
             config.headers.Authorization = `Bearer ${jwtToken}`;
-            console.log('🔐 JWT patient ajouté:', jwtToken.substring(0, 20) + '...');
+            console.log('�� JWT patient ajouté:', jwtToken.substring(0, 20) + '...');
         } else if (generalToken) {
             config.headers.Authorization = `Bearer ${generalToken}`;
             console.log('🔑 Token général ajouté:', generalToken.substring(0, 20) + '...');
@@ -49,8 +49,8 @@ api.interceptors.request.use(
             isGeneralRoute: !config.url.includes('/patient/') && !config.url.includes('/ProfessionnelSante/')
         });
         
-        console.log('📋 Headers de la requête:', config.headers);
-        console.log('📦 Body de la requête:', config.data);
+        console.log('�� Headers de la requête:', config.headers);
+        console.log('�� Body de la requête:', config.data);
         console.log('🌐 URL appelée:', config.url);
         
         return config;
@@ -95,7 +95,7 @@ export const setup2FA = async (params) => {
         // 🔍 DÉBOGAGE DÉTAILLÉ - Vérifier le contenu de la réponse
         if (response.data && response.data.data) {
             const payload = response.data.data;
-            console.log('🔐 DEBUG - Contenu de response.data.data:', {
+            console.log('�� DEBUG - Contenu de response.data.data:', {
                 secret: payload.secret || 'NON TROUVÉ',
                 two_factor_secret: payload.two_factor_secret || 'NON TROUVÉ',
                 setupSecret: payload.setupSecret || 'NON TROUVÉ',
@@ -192,6 +192,127 @@ export const verifyAndEnable2FA = async (verificationCode) => {
     }
 };
 
+// ================================
+// NOUVELLES FONCTIONS 2FA EMAIL
+// ================================
+
+/**
+ * Envoyer le code TOTP 2FA par email pour validation immédiate
+ * @param {Object} params - Paramètres de l'utilisateur
+ * @param {string} params.userType - Type d'utilisateur ('patient' ou 'professionnel')
+ * @param {string} params.identifier - Identifiant de l'utilisateur
+ * @param {string} params.userId - ID de l'utilisateur (optionnel)
+ * @returns {Promise<Object>} Réponse de l'API avec confirmation d'envoi
+ */
+export const send2FATOTPCode = async (params) => {
+    try {
+        console.log('📧 Send2FATOTPCode - Paramètres reçus:', params);
+        
+        // Vérifier que les paramètres requis sont présents
+        if (!params.userType || !params.identifier) {
+            throw new Error('userType et identifier sont requis pour send2FATOTPCode');
+        }
+        
+        const response = await api.post('/auth/send-2fa-totp', params);
+        console.log('✅ Send2FATOTPCode - Réponse reçue:', response.data);
+        
+        // 🔍 DÉBOGAGE DÉTAILLÉ - Vérifier le contenu de la réponse
+        if (response.data && response.data.data) {
+            const payload = response.data.data;
+            console.log('�� DEBUG - Contenu de la réponse TOTP:', {
+                email: payload.email || 'NON TROUVÉ',
+                timestamp: payload.timestamp || 'NON TROUVÉ',
+                message: payload.message || 'NON TROUVÉ',
+                status: response.data.status || 'NON TROUVÉ'
+            });
+        }
+        
+        return response.data;
+    } catch (error) {
+        console.error('❌ Send2FATOTPCode - Erreur:', error);
+        throw error;
+    }
+};
+
+/**
+ * Renvoyer le secret 2FA par email
+ * @param {Object} params - Paramètres de l'utilisateur
+ * @param {string} params.userType - Type d'utilisateur ('patient' ou 'professionnel')
+ * @param {string} params.identifier - Identifiant de l'utilisateur
+ * @param {string} params.userId - ID de l'utilisateur (optionnel)
+ * @returns {Promise<Object>} Réponse de l'API avec confirmation d'envoi
+ */
+export const resend2FAEmail = async (params) => {
+    try {
+        console.log('📧 Resend2FAEmail - Paramètres reçus:', params);
+        
+        // Vérifier que les paramètres requis sont présents
+        if (!params.userType || !params.identifier) {
+            throw new Error('userType et identifier sont requis pour resend2FAEmail');
+        }
+        
+        const response = await api.post('/auth/resend-2fa-email', params);
+        console.log('✅ Resend2FAEmail - Réponse reçue:', response.data);
+        
+        // 🔍 DÉBOGAGE DÉTAILLÉ - Vérifier le contenu de la réponse
+        if (response.data && response.data.data) {
+            const payload = response.data.data;
+            console.log('�� DEBUG - Contenu de la réponse resend:', {
+                email: payload.email || 'NON TROUVÉ',
+                timestamp: payload.timestamp || 'NON TROUVÉ',
+                status: response.data.status || 'NON TROUVÉ'
+            });
+        }
+        
+        return response.data;
+    } catch (error) {
+        console.error('❌ Resend2FAEmail - Erreur:', error);
+        throw error;
+    }
+};
+
+/**
+ * Obtenir le statut de la configuration 2FA
+ * @param {Object} params - Paramètres de l'utilisateur
+ * @param {string} params.userType - Type d'utilisateur ('patient' ou 'professionnel')
+ * @param {string} params.identifier - Identifiant de l'utilisateur
+ * @returns {Promise<Object>} Réponse de l'API avec statut 2FA
+ */
+export const get2FAStatus = async (params) => {
+    try {
+        console.log('🔍 Get2FAStatus - Paramètres reçus:', params);
+        
+        // Vérifier que les paramètres requis sont présents
+        if (!params.userType || !params.identifier) {
+            throw new Error('userType et identifier sont requis pour get2FAStatus');
+        }
+        
+        const response = await api.get('/auth/2fa-status', { params });
+        console.log('✅ Get2FAStatus - Réponse reçue:', response.data);
+        
+        // 🔍 DÉBOGAGE DÉTAILLÉ - Vérifier le contenu de la réponse
+        if (response.data && response.data.data) {
+            const payload = response.data.data;
+            console.log('�� DEBUG - Contenu du statut 2FA:', {
+                twoFactorEnabled: payload.twoFactorEnabled || 'NON TROUVÉ',
+                twoFactorConfigured: payload.twoFactorConfigured || 'NON TROUVÉ',
+                lastConfigured: payload.lastConfigured || 'NON TROUVÉ',
+                emailConfigured: payload.emailConfigured || 'NON TROUVÉ',
+                status: response.data.status || 'NON TROUVÉ'
+            });
+        }
+        
+        return response.data;
+    } catch (error) {
+        console.error('❌ Get2FAStatus - Erreur:', error);
+        throw error;
+    }
+};
+
+// ================================
+// FONCTIONS 2FA EXISTANTES
+// ================================
+
 /**
  * Désactivation du 2FA
  * @returns {Promise<Object>} Réponse de désactivation
@@ -273,10 +394,10 @@ export const is2FAEnabled = async () => {
 };
 
 /**
- * Récupère le statut 2FA de l'utilisateur actuel
+ * Récupère le statut 2FA de l'utilisateur actuel (version locale)
  * @returns {Promise<Object>} Statut 2FA
  */
-export const get2FAStatus = async () => {
+export const getLocal2FAStatus = async () => {
     try {
         const response = await api.get('/auth/me');
         const user = response.data?.data?.user || response.data?.user;
@@ -287,7 +408,7 @@ export const get2FAStatus = async () => {
             recoveryCodes: user?.recoveryCodes || []
         };
     } catch (error) {
-        console.error('❌ Get2FAStatus - Erreur:', error);
+        console.error('❌ GetLocal2FAStatus - Erreur:', error);
         throw error;
     }
 };
@@ -297,18 +418,25 @@ export const get2FAStatus = async () => {
 // ================================
 
 const twoFactorApi = {
-    // Fonctions principales
+    // Fonctions principales 2FA
     setup2FA,
     create2FASession,
     validate2FASession,
     verifyAndEnable2FA,
+    
+    // Nouvelles fonctions 2FA email
+    send2FATOTPCode,
+    resend2FAEmail,
+    get2FAStatus,
+    
+    // Fonctions 2FA existantes
     disable2FA,
     generateRecoveryCodes,
     verifyRecoveryCode,
     
     // Fonctions utilitaires
     is2FAEnabled,
-    get2FAStatus
+    getLocal2FAStatus
 };
 
 export default twoFactorApi;
