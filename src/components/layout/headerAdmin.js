@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 // gestion des services de deconnexion
-import { me, logout } from "../../services/api/authApi";
+import { me, logoutAll } from "../../services/api/authApi";
 
 function AdminHeader() {
     const [user, setUser] = useState(null);
@@ -32,7 +32,7 @@ function AdminHeader() {
     const handleLogout = async (e) => {
         e.preventDefault();
         try {
-            await logout();
+            await logoutAll();
             navigate('/connexion');
         } catch (error) {
             console.error('Erreur lors de la déconnexion :', error);

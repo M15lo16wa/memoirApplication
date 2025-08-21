@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { FaComments, FaBell } from "react-icons/fa";
 
 // gestion du profil medecin
-import { getMedecinProfile, logoutMedecin, fetchMedecinDetails } from "../../services/api/authApi";
+import { getMedecinProfile, logoutAll, fetchMedecinDetails } from "../../services/api/authApi";
 import { getAllConsultations, getAllDossiersMedical } from "../../services/api/medicalApi";
 import { getPatients } from "../../services/api/patientApi";
 
@@ -204,7 +204,7 @@ function MedHeader({ doctor = { nom: "{user?.nom || 'Utilisateur'}", specialite:
         // Ne déconnecter que si c'est vraiment une erreur d'authentification
         if(e.response?.status === 401 && !localStorage.getItem('medecin')){
           console.log('🚨 Erreur 401 sans données stockées, déconnexion forcée');
-          await logoutMedecin(); // Nettoie le localStorage
+          await logoutAll(); // Nettoie le localStorage
           navigate("/connexion");
         }
       } finally {
@@ -227,7 +227,7 @@ function MedHeader({ doctor = { nom: "{user?.nom || 'Utilisateur'}", specialite:
   const handleLogout = async (e) => {
     e.preventDefault();
     try {
-      await logoutMedecin();
+      await logoutAll();
       onLogout?.();
       navigate('/connexion');
     } catch (error) {

@@ -4,6 +4,7 @@ import DisconnectionMonitor from './DisconnectionMonitor';
 import TestNavigationDebug from '../test/TestNavigationDebug';
 import Test2FARouteFix from '../test/Test2FARouteFix';
 import ApiCallsMonitor from '../diagnostic/ApiCallsMonitor';
+import TokenCleanupTester from './TokenCleanupTester';
 
 const DiagnosticCenter = () => {
     const [activeTool, setActiveTool] = useState('overview');
@@ -12,6 +13,7 @@ const DiagnosticCenter = () => {
         { id: 'overview', name: '📊 Vue d\'ensemble', component: null },
         { id: 'auth-debugger', name: '🔍 Debugger d\'Authentification', component: <AuthenticationDebugger /> },
         { id: 'disconnection-monitor', name: '🚨 Moniteur de Déconnexion', component: <DisconnectionMonitor /> },
+        { id: 'token-cleanup-tester', name: '🧹 Testeur de Nettoyage des Tokens', component: <TokenCleanupTester /> },
         { id: 'navigation-test', name: '🧪 Test de Navigation', component: <TestNavigationDebug /> },
         { id: '2fa-route-test', name: '🔧 Test de Correction 2FA', component: <Test2FARouteFix /> },
         { id: 'api-calls-monitor', name: '🔍 Surveillance API', component: <ApiCallsMonitor /> },
@@ -78,6 +80,25 @@ const DiagnosticCenter = () => {
                         className="mt-3 px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"
                     >
                         Ouvrir les Tests
+                    </button>
+                </div>
+
+                <div className="bg-teal-50 border border-teal-200 rounded-lg p-4">
+                    <h3 className="text-lg font-semibold text-teal-800 mb-3">🧹 Testeur de Nettoyage des Tokens</h3>
+                    <p className="text-teal-700 mb-3">
+                        Vérifie que tous les tokens sont correctement nettoyés après déconnexion pour éviter les conflits.
+                    </p>
+                    <ul className="text-sm text-teal-600 space-y-1">
+                        <li>• Test des différentes fonctions de déconnexion</li>
+                        <li>• Vérification du nettoyage localStorage</li>
+                        <li>• Simulation de déconnexion patient/médecin</li>
+                        <li>• Contrôle de la déconnexion universelle</li>
+                    </ul>
+                    <button
+                        onClick={() => setActiveTool('token-cleanup-tester')}
+                        className="mt-3 px-4 py-2 bg-teal-500 text-white rounded hover:bg-teal-600"
+                    >
+                        Tester le Nettoyage
                     </button>
                 </div>
 

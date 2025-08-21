@@ -227,6 +227,44 @@ const clearAuthData = () => {
     console.log('🧹 clearAuthData - Nettoyage effectué, conservation de firstConnectionToken et originalJWT');
 };
 
+// ✅ NOUVELLE FONCTION : Nettoyage standardisé et complet
+export const standardCleanup = (userType = null) => {
+    const keysToRemove = [
+        'token', 'jwt', 'medecin', 'patient', 'tempTokenId',
+        'user', 'auth', 'session', 'userData', 'userProfile'
+    ];
+    
+    // Nettoyer toutes les clés standard
+    keysToRemove.forEach(key => {
+        if (localStorage.getItem(key)) {
+            localStorage.removeItem(key);
+            console.log(`🗑️ Supprimé: ${key}`);
+        }
+    });
+    
+    // Nettoyage spécifique selon le type d'utilisateur
+    if (userType === 'patient') {
+        const patientKeys = ['patientData', 'patientProfile', 'patientHistory'];
+        patientKeys.forEach(key => {
+            if (localStorage.getItem(key)) {
+                localStorage.removeItem(key);
+                console.log(`🗑️ Supprimé (patient): ${key}`);
+            }
+        });
+    } else if (userType === 'medecin') {
+        const medecinKeys = ['medecinData', 'medecinProfile', 'medecinHistory'];
+        medecinKeys.forEach(key => {
+            if (localStorage.getItem(key)) {
+                localStorage.removeItem(key);
+                console.log(`🗑️ Supprimé (médecin): ${key}`);
+            }
+        });
+    }
+    
+    // Conserver les tokens de première connexion
+    console.log('🧹 Nettoyage standardisé effectué pour:', userType || 'tous types');
+};
+
 // ✅ NOUVELLE FONCTION : Tentative de reconnexion automatique
 const attemptAutoReconnect = async () => {
     console.log('🔄 Tentative de reconnexion automatique...');
@@ -1659,6 +1697,7 @@ export const logoutAll = async () => {
     const userType = getUserType();
     
     try {
+        // Appel API de déconnexion selon le type d'utilisateur
         switch (userType) {
             case 'patient':
                 await logoutPatient();
@@ -1673,10 +1712,14 @@ export const logoutAll = async () => {
     } catch (error) {
         console.error("Erreur lors de la déconnexion:", error);
     } finally {
-        clearAuthData();
+        // ✅ NOUVEAU : Nettoyage standardisé et complet
+        standardCleanup(userType);
+        
         // Nettoyer aussi les tokens de première connexion lors de la déconnexion complète
         localStorage.removeItem('originalJWT');
         localStorage.removeItem('firstConnectionToken');
+        
+        console.log('✅ Déconnexion universelle terminée - Nettoyage complet effectué');
     }
 };
 
@@ -1747,6 +1790,7 @@ const authApi = {
     // Utilitaires
     getUserType,
     getCurrentUser,
+    standardCleanup,
     logoutAll,
     clearAuthData,
     cleanupTemporaryTokens,
