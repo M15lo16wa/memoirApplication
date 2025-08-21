@@ -13,6 +13,7 @@ import DMPAccess from './pages/DMPAccess';
 import PatientAutorisations from './pages/PatientAutorisations';
 import FicheInscription from './pages/ficheInscription';
 import DMPPatientView from './pages/DMPPatientView';
+import Agenda from './pages/agenda';
 
 
 // protection des routes
@@ -37,6 +38,7 @@ function App() {
       {/* Routes pour les médecins uniquement */}
       <Route path='/medecin' element={<ProtectedMedecinRoute><Medecin/></ProtectedMedecinRoute>}/>
       <Route path='/consultation' element={<ProtectedMedecinRoute><Consultation/></ProtectedMedecinRoute>}/>
+      <Route path='/agenda' element={<ProtectedMedecinRoute><Agenda/></ProtectedMedecinRoute>}/>
       
       {/* Routes pour les patients uniquement */}
       <Route path="/dossier-medical" element={<DossierMedical />} />

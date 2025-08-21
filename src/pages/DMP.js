@@ -23,6 +23,7 @@ import DMPMonEspaceSante from "../components/dmp/DMPMonEspaceSante";
 import DMPNotification from "../components/ui/DMPNotification";
 import AutorisationsEnAttente from "../components/dmp/AutorisationsEnAttente";
 import DMPHistory from "../components/dmp/DMPHistory";
+import NotificationManager from "../components/ui/NotificationManager";
 
 // APIs
 import * as dmpApi from "../services/api/dmpApi";
@@ -2356,6 +2357,9 @@ const DMP = () => {
               </span>
             </div>
             <div className="flex items-center space-x-4">
+              {/* Gestionnaire de notifications de rendez-vous */}
+              <NotificationManager />
+              
               <button
                 onClick={() => setShowAutoMesureModal(true)}
                 className="flex items-center px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
@@ -2851,32 +2855,135 @@ const DMP = () => {
           <div className="bg-white rounded-lg shadow">
             <div className="p-6 border-b">
               <h2 className="text-xl font-semibold">Mes rappels</h2>
-              <p className="text-gray-600">Gérez vos rappels médicaux</p>
+              <p className="text-gray-600">Gérez vos rappels médicaux et rendez-vous</p>
             </div>
             <div className="p-6">
-              {rappels.length > 0 ? (
-                <div className="space-y-4">
-                  {rappels.map((rappel, index) => (
-                    <div key={index} className="border rounded-lg p-4">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h3 className="font-medium">{rappel.titre}</h3>
-                          <p className="text-sm text-gray-600">{rappel.description}</p>
-                          <p className="text-sm text-gray-500">Date: {rappel.date_rappel}</p>
+              {/* Récupérer les rappels de rendez-vous depuis le localStorage */}
+              {(() => {
+                const storedPatient = getStoredPatient();
+                const patientId = storedPatient?.id_patient || storedPatient?.id;
+                const patientRemindersKey = `patient_reminders_${patientId}`;
+                const appointmentReminders = JSON.parse(localStorage.getItem(patientRemindersKey) || '[]');
+                const allReminders = [...rappels, ...appointmentReminders];
+                
+                if (allReminders.length > 0) {
+                  return (
+                    <div className="space-y-4">
+                      {allReminders.map((rappel, index) => (
+                        <div key={index} className="border rounded-lg p-4 hover:bg-gray-50 transition-colors">
+                          <div className="flex justify-between items-start">
+                            <div className="flex-1">
+                              <div className="flex items-center space-x-2 mb-2">
+                                <h3 className="font-medium text-lg">{rappel.titre}</h3>
+                                {rappel.type === 'rendez-vous' && (
+                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                    📅 Rendez-vous
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-sm text-gray-600 mb-2">{rappel.description}</p>
+                              
+                              {/* Informations spécifiques aux rendez-vous */}
+                              {rappel.type === 'rendez-vous' && (
+                                <div className="bg-blue-50 p-3 rounded-lg mb-3">
+                                  <div className="grid grid-cols-2 gap-4 text-sm">
+                                    <div>
+                                      <span className="font-medium text-gray-700">Heure :</span>
+                                      <p className="text-gray-600">{rappel.heure_debut} - {rappel.heure_fin}</p>
+                                    </div>
+                                    <div>
+                                      <span className="font-medium text-gray-700">Durée :</span>
+                                      <p className="text-gray-600">{rappel.duree} minutes</p>
+                                    </div>
+                                    <div>
+                                      <span className="font-medium text-gray-700">Médecin :</span>
+                                      <p className="text-gray-600">{rappel.medecin}</p>
+                                    </div>
+                                    <div>
+                                      <span className="font-medium text-gray-700">Lieu :</span>
+                                      <p className="text-gray-600">{rappel.lieu}</p>
+                                    </div>
+                                  </div>
+                                  
+                                  {/* Instructions pour le rendez-vous */}
+                                  {rappel.instructions && rappel.instructions.length > 0 && (
+                                    <div className="mt-3">
+                                      <span className="font-medium text-gray-700 text-sm">Instructions :</span>
+                                      <ul className="mt-1 space-y-1">
+                                        {rappel.instructions.map((instruction, idx) => (
+                                          <li key={idx} className="text-xs text-gray-600 flex items-start">
+                                            <span className="text-blue-500 mr-2">•</span>
+                                            {instruction}
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                              
+                              <div className="flex items-center justify-between text-sm text-gray-500">
+                                <span>Date : {new Date(rappel.date_rappel).toLocaleDateString('fr-FR', { 
+                                  weekday: 'long', 
+                                  year: 'numeric', 
+                                  month: 'long', 
+                                  day: 'numeric' 
+                                })}</span>
+                                {rappel.date_creation && (
+                                  <span>Créé le : {new Date(rappel.date_creation).toLocaleDateString('fr-FR')}</span>
+                                )}
+                              </div>
+                            </div>
+                            
+                            <div className="ml-4 flex flex-col items-end space-y-2">
+                              <span className={`px-2 py-1 rounded text-xs font-medium ${
+                                rappel.priorite === 'haute' ? 'bg-red-100 text-red-800' :
+                                rappel.priorite === 'moyenne' ? 'bg-yellow-100 text-yellow-800' :
+                                'bg-green-100 text-green-800'
+                              }`}>
+                                {rappel.priorite}
+                              </span>
+                              
+                              {/* Actions pour les rendez-vous */}
+                              {rappel.type === 'rendez-vous' && (
+                                <div className="flex space-x-2">
+                                  <button 
+                                    className="text-blue-600 hover:text-blue-800 text-xs p-1 rounded hover:bg-blue-50"
+                                    title="Voir les détails"
+                                  >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                    </svg>
+                                  </button>
+                                  <button 
+                                    className="text-green-600 hover:text-green-800 text-xs p-1 rounded hover:bg-green-50"
+                                    title="Confirmer"
+                                  >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                    </svg>
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
                         </div>
-                        <span className={`px-2 py-1 rounded text-xs font-medium ${rappel.priorite === 'haute' ? 'bg-red-100 text-red-800' :
-                            rappel.priorite === 'moyenne' ? 'bg-yellow-100 text-yellow-800' :
-                              'bg-green-100 text-green-800'
-                          }`}>
-                          {rappel.priorite}
-                        </span>
-                      </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-gray-500 text-center py-8">Aucun rappel actif</p>
-              )}
+                  );
+                } else {
+                  return (
+                    <div className="text-center py-8">
+                      <svg className="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                      <p className="text-gray-500">Aucun rappel actif</p>
+                      <p className="text-gray-400 text-sm mt-1">Vos rappels et rendez-vous apparaîtront ici</p>
+                    </div>
+                  );
+                }
+              })()}
             </div>
           </div>
         )}
