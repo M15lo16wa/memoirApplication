@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { createConsultation, getPatients, getServices, getDossierPatient } from "../services/api/medicalApi";
+import { createConsultation, getDossierPatient } from "../services/api/medicalApi";
+import { getPatients, getServices } from "../services/api/patientApi";
 
 function Consultation() {
     const navigate = useNavigate();

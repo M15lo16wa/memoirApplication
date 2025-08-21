@@ -11,23 +11,36 @@ const api = axios.create({
 });
 
 // Intercepteur pour ajouter le token à chaque requête
+// PRIORITÉ : Token médecin/professionnel pour accéder aux routes administratives
 api.interceptors.request.use(
     (config) => {
-        const jwtToken = localStorage.getItem('jwt');
-        const generalToken = localStorage.getItem('token');
-        const hasMedecin = !!localStorage.getItem('medecin');
-
-        // Prioriser le token médecin quand il est présent (afin d'accéder aux routes back côté pro)
-        if (generalToken && hasMedecin) {
-            config.headers.Authorization = `Bearer ${generalToken}`;
+        // ✅ SÉLECTION STRICTE : Prioriser les JWT de première connexion et rejeter les tokens temporaires
+        const candidates = [
+            localStorage.getItem('originalJWT'),
+            localStorage.getItem('firstConnectionToken'),
+            localStorage.getItem('jwt'),
+            localStorage.getItem('token'),
+        ];
+        
+        let usedToken = null;
+        for (const candidate of candidates) {
+            if (
+                candidate &&
+                candidate.startsWith('eyJ') &&
+                candidate.length > 100 &&
+                !candidate.startsWith('temp_') &&
+                !candidate.startsWith('auth_')
+            ) {
+                usedToken = candidate;
+                break;
+            }
         }
-        // Sinon, fallback sur le JWT patient
-        else if (jwtToken) {
-            config.headers.Authorization = `Bearer ${jwtToken}`;
-        }
-        // Dernier recours
-        else if (generalToken) {
-            config.headers.Authorization = `Bearer ${generalToken}`;
+        
+        if (usedToken) {
+            config.headers.Authorization = `Bearer ${usedToken}`;
+            console.log('🔐 [medicalApi] JWT valide utilisé pour Authorization:', `${usedToken.substring(0, 20)}...`);
+        } else {
+            console.warn('⚠️ [medicalApi] Aucun JWT valide disponible pour l\'authentification');
         }
 
         // IMPORTANT: Supprimer le Content-Type global pour les FormData
@@ -50,7 +63,11 @@ api.interceptors.response.use(
     }
 );
 
-// 1-) recuperation des rendez-vous d'un patient
+// ============================================================================
+// 🏥 FONCTIONS MÉDECIN/PROFESSIONNEL - GESTION ADMINISTRATIVE
+// ============================================================================
+
+// 1-) Récupération des rendez-vous d'un patient (médecin)
 const getPatientRendezVous = async (patientId) => {
     try {
         const response = await api.get(`/rendez-vous/patient/${patientId}`);
@@ -61,7 +78,7 @@ const getPatientRendezVous = async (patientId) => {
     }
 };
 
-// 2-) recuperation du prochain rendez-vous d'un patient
+// 2-) Récupération du prochain rendez-vous d'un patient (médecin)
 const getProchainRendezVous = async (patientId) => {
     try {
         const response = await api.get(`/rendez-vous/patient/${patientId}/prochain`);
@@ -72,7 +89,7 @@ const getProchainRendezVous = async (patientId) => {
     }
 };
 
-// 3-) recuperation des traitements actifs d'un patient
+// 3-) Récupération des traitements actifs d'un patient (médecin)
 const getTraitementsActifs = async (patientId) => {
     try {
         const response = await api.get(`/prescription/patient/${patientId}/actifs`);
@@ -83,7 +100,7 @@ const getTraitementsActifs = async (patientId) => {
     }
 };
 
-// 4-) creation d'une ordonnance
+// 4-) Création d'une ordonnance (médecin)
 const createOrdonnance = async (ordonnanceData) => {
     try {
         console.log('Creating ordonnance with data:', ordonnanceData);
@@ -95,7 +112,7 @@ const createOrdonnance = async (ordonnanceData) => {
     }
 };
 
-// 5-) creation d'un examen
+// 5-) Création d'un examen (médecin)
 const createExamen = async (examen) => {
     try {
         const response = await api.post(`/prescription/demande-examen`, examen);
@@ -106,24 +123,25 @@ const createExamen = async (examen) => {
     }
 };
 
-// 6-) Récupération de toutes les prescriptions
+// 6-) Récupération de toutes les prescriptions (médecin)
 const getAllPrescriptions = async (patient_id) => {
     try {
         const response = await api.get(`/prescription/patient/${patient_id}`);
-            console.log('Réponse prescriptions:', response);
+        console.log('Réponse prescriptions:', response);
         return response.data;
     } catch (error) {
-            if (error.response) {
-                console.error('Erreur lors de la récupération des prescriptions:', error.response.data);
-                console.error('Status:', error.response.status);
-                console.error('Headers:', error.response.headers);
-            } else {
-                console.error('Erreur lors de la récupération des prescriptions:', error.message);
-            }
+        if (error.response) {
+            console.error('Erreur lors de la récupération des prescriptions:', error.response.data);
+            console.error('Status:', error.response.status);
+            console.error('Headers:', error.response.headers);
+        } else {
+            console.error('Erreur lors de la récupération des prescriptions:', error.message);
+        }
         throw error;
     }
 };
-// -6-) Récupération des ordonnances récentes
+
+// 7-) Récupération des ordonnances récentes (médecin)
 const getOrdonnancesRecentes = async (filters = {}) => {
     try {
         const { limit, type, professionnel_id, patient_id } = filters;
@@ -147,7 +165,7 @@ const getOrdonnancesRecentes = async (filters = {}) => {
     }
 };
 
-// 7-) Création d'une ordonnance complète avec notification
+// 8-) Création d'une ordonnance complète avec notification (médecin)
 const createOrdonnanceComplete = async (ordonnanceData) => {
     try {
         console.log('Creating ordonnance complete with data:', ordonnanceData);
@@ -159,7 +177,7 @@ const createOrdonnanceComplete = async (ordonnanceData) => {
     }
 };
 
-// 8-) Ajouter une prescription au dossier patient
+// 9-) Ajouter une prescription au dossier patient (médecin)
 const ajouterPrescriptionAuDossier = async (prescriptionId, dossierId) => {
     try {
         const response = await api.post(`/prescription/${prescriptionId}/ajouter-dossier`, { dossier_id: dossierId });
@@ -170,7 +188,7 @@ const ajouterPrescriptionAuDossier = async (prescriptionId, dossierId) => {
     }
 };
 
-// 9-) Créer une notification
+// 10-) Créer une notification (médecin)
 const creerNotification = async (prescriptionId, notificationData) => {
     try {
         const response = await api.post(`/prescription/${prescriptionId}/notification`, notificationData);
@@ -181,7 +199,7 @@ const creerNotification = async (prescriptionId, notificationData) => {
     }
 };
 
-// 10-) Marquer une notification comme lue
+// 11-) Marquer une notification comme lue (médecin)
 const marquerNotificationLue = async (notificationId) => {
     try {
         const response = await api.patch(`/prescription/notification/${notificationId}/lue`);
@@ -192,7 +210,7 @@ const marquerNotificationLue = async (notificationId) => {
     }
 };
 
-// 11-) Récupérer les notifications d'un patient
+// 12-) Récupérer les notifications d'un patient (médecin)
 const getNotificationsPatient = async (patientId, statut = null) => {
     try {
         const url = statut ? 
@@ -206,7 +224,7 @@ const getNotificationsPatient = async (patientId, statut = null) => {
     }
 };
 
-// 12-) Récupérer le résumé des ordonnances d'aujourd'hui
+// 13-) Récupérer le résumé des ordonnances d'aujourd'hui (médecin)
 const getResumeAujourdhui = async () => {
     try {
         const response = await api.get(`/prescription/resume-aujourdhui`);
@@ -217,7 +235,11 @@ const getResumeAujourdhui = async () => {
     }
 };
 
-// 3.3.1-) creation de dossier medical
+// ============================================================================
+// 📁 GESTION DES DOSSIERS MÉDICAUX (MÉDECIN)
+// ============================================================================
+
+// 14-) Création de dossier medical (médecin)
 const createDossierMedical = async (dossierMedical) => {
     try {
         console.log('Creating dossier medical with data:', dossierMedical);
@@ -239,7 +261,7 @@ const createDossierMedical = async (dossierMedical) => {
     }
 };
 
-// 3.3.1.1-) recuperation d'un dossier medical specifique
+// 15-) Récupération d'un dossier medical spécifique (médecin)
 const getDossierMedical = async (Id) => {
     try {
         const response = await api.get(`/dossierMedical/${Id}`);
@@ -250,7 +272,7 @@ const getDossierMedical = async (Id) => {
     }
 };
 
-// 3.3.1.1-) recuperation de tous les dossiers medicaux avec informations complètes
+// 16-) Récupération de tous les dossiers medicaux (médecin)
 const getAllDossiersMedical = async () => {
     try {
         console.log('Fetching all dossiers medical from API...');
@@ -267,7 +289,7 @@ const getAllDossiersMedical = async () => {
             const dossiers = response.data.data.dossiers;
             console.log('Found dossiers:', dossiers);
             
-                         // Debug: Log the first dossier structure to see what fields are available
+            // Debug: Log the first dossier structure to see what fields are available
             if (dossiers.length > 0) {
                 console.log('=== RAW DOSSIER STRUCTURE DEBUG ===');
                 console.log('First dossier raw data:', dossiers[0]);
@@ -302,10 +324,10 @@ const getAllDossiersMedical = async () => {
                     const patient = dossier.patient_info || dossier.patient || dossier.Patient;
                     const service = dossier.service_info || dossier.service || dossier.Service;
                     
-                                         // Create proper file number - Prioriser le numeroDossier, sinon générer un numéro basé sur l'ID
+                    // Create proper file number - Prioriser le numeroDossier, sinon générer un numéro basé sur l'ID
                     let fileNumber = dossier.numeroDossier || dossier.numero_dossier;
                     
-                     // Si le numeroDossier n'est pas présent, générer un numéro basé sur l'ID
+                    // Si le numeroDossier n'est pas présent, générer un numéro basé sur l'ID
                     if (!fileNumber || fileNumber === 'N/A' || fileNumber === 'undefined') {
                         const dossierId = dossier.id_dossier || dossier.id;
                         fileNumber = `DOSSIER-${dossierId.toString().padStart(6, '0')}`;
@@ -365,7 +387,7 @@ const getAllDossiersMedical = async () => {
     }
 };
 
-// 3.3.2-) creation de dossier patient (qui est en fait un dossier medical)
+// 17-) Création de dossier patient (qui est en fait un dossier medical) (médecin)
 const createDossierPatient = async (dossierData) => {
     try {
         console.log('Creating dossier patient (medical) with data:', dossierData);
@@ -385,7 +407,7 @@ const createDossierPatient = async (dossierData) => {
     }
 };
 
-// 3.3.3-) recuperation des dossiers medicaux (tous les dossiers, ou filtrés par patient_id)
+// 18-) Récupération des dossiers medicaux (tous les dossiers, ou filtrés par patient_id) (médecin)
 const getDossiersPatients = async (patientId = null) => {
     try {
         console.log('Fetching dossiers medical from API...');
@@ -439,34 +461,15 @@ const getDossiersPatients = async (patientId = null) => {
                         
                         // If not embedded, fetch and find by ID
                         if (!patient || !service) {
-                            const [patientsData, servicesData] = await Promise.all([
-                                getPatients(),
-                                getServices()
-                            ]);
-                            
-                            // Find matching patient with more flexible ID matching
-                            if (!patient && Array.isArray(patientsData)) {
-                                patient = patientsData.find(p => {
-                                    const patientId = p.id_patient || p.id || p.patient_id;
-                                    const dossierId = dossier.patient_id || dossier.patientId || dossier.id_patient;
-                                    return patientId === dossierId;
-                                });
-                            }
-                            
-                            // Find matching service with more flexible ID matching
-                            if (!service && Array.isArray(servicesData)) {
-                                service = servicesData.find(s => {
-                                    const serviceId = s.id || s.id_service || s.service_id;
-                                    const dossierServiceId = dossier.service_id || dossier.serviceId || dossier.id_service;
-                                    return serviceId === dossierServiceId;
-                                });
-                            }
+                            // Note: getPatients and getServices moved to patientApi.js
+                            // We'll need to import them here or handle differently
+                            console.warn('Patient/Service enrichment requires getPatients/getServices from patientApi');
                         }
                         
-                                                 // Create proper file number - Prioriser le numeroDossier, sinon générer un numéro basé sur l'ID
+                        // Create proper file number - Prioriser le numeroDossier, sinon générer un numéro basé sur l'ID
                         let fileNumber = dossier.numeroDossier || dossier.numero_dossier;
                         
-                         // Si le numeroDossier n'est pas présent, générer un numéro basé sur l'ID
+                        // Si le numeroDossier n'est pas présent, générer un numéro basé sur l'ID
                         if (!fileNumber || fileNumber === 'N/A' || fileNumber === 'undefined') {
                             const dossierId = dossier.id_dossier || dossier.id;
                             fileNumber = `DOSSIER-${dossierId.toString().padStart(6, '0')}`;
@@ -523,7 +526,7 @@ const getDossiersPatients = async (patientId = null) => {
     }
 };
 
-// 3.3.4-) recuperation d'un dossier patient specifique (complet par patient_id)
+// 19-) Récupération d'un dossier patient spécifique (complet par patient_id) (médecin)
 const getDossierPatient = async (patientId) => {
     try {
         const response = await api.get(`/dossierMedical/patient/${patientId}/complet`);
@@ -535,7 +538,7 @@ const getDossierPatient = async (patientId) => {
     }
 };
 
-// 3.3.5-) mise à jour d'un dossier patient
+// 20-) Mise à jour d'un dossier patient (médecin)
 const updateDossierPatient = async (dossierId, dossierData) => {
     try {
         const response = await api.put(`/dossierMedical/${dossierId}`, dossierData);
@@ -547,7 +550,7 @@ const updateDossierPatient = async (dossierId, dossierData) => {
     }
 };
 
-// 3.3.6-) fermeture d'un dossier patient
+// 21-) Fermeture d'un dossier patient (médecin)
 const closeDossierPatient = async (dossierId, dateFermeture) => {
     try {
         const response = await api.patch(`/dossierMedical/${dossierId}/close`, {
@@ -561,190 +564,89 @@ const closeDossierPatient = async (dossierId, dateFermeture) => {
     }
 };
 
-// 3-3) recuperation des services
-const getServices = async () => {
-    try{
-        const response = await api.get('/service-sante');
-        
-        if (!response || !response.data) {
-            console.error('Invalid API response format for services');
-            return [];
-        }
-        
-        // Backend returns: { status: 'success', results: N, data: { services: [...] } }
-        if (response.data.status === 'success' && response.data.data && Array.isArray(response.data.data.services)) {
-            return response.data.data.services;
-        }
-        
-        // Fallback formats for compatibility
-        if (response.data && response.data.services && Array.isArray(response.data.services)) {
-            return response.data.services;
-        }
-        
-        if (Array.isArray(response.data)) {
-            return response.data;
-        }
-        
-        console.error('Unexpected services response format:', response.data);
-        return [];
-        
-    } catch (error) {
-        console.error('Service services non disponible:', error.message);
-        return [];
-    }
-};
+// ============================================================================
+// 📋 GESTION DES CONSULTATIONS (MÉDECIN)
+// ============================================================================
 
-// 3-4) recuperation des patients
-const getPatients = async () => {
+// 22-) Création d'une consultation (médecin)
+const createConsultation = async (consultation) => {
     try {
-        // Essayer d'abord l'endpoint spécifique pour les patients
-        let response = await api.get('/patients');
+        console.log('Creating consultation with data:', consultation);
         
-        // Si ça ne marche pas, essayer l'endpoint générique
-        if (!response || !response.data || response.data.length === 0) {
-            console.log('Tentative avec endpoint alternatif...');
-            response = await api.get('/patient');
+        // Validate required fields
+        if (!consultation.patient_id) {
+            throw new Error('ID du patient requis');
         }
         
-        if (!response || !response.data) {
-            console.error('Invalid API response format for patients');
-            return [];
-        }
-        
-        // Backend returns: { status: 'success', results: N, data: [...] }
-        if (response.data.status === 'success' && response.data.data && Array.isArray(response.data.data)) {
-            console.log('✅ Patients found in response.data.data:', response.data.data);
-            return response.data.data;
-        }
-        
-        // Nouveau format: { status: 'success', results: N, data: { patients: [...] } }
-        if (response.data.status === 'success' && response.data.data && response.data.data.patients && Array.isArray(response.data.data.patients)) {
-            console.log('✅ Patients found in response.data.data.patients:', response.data.data.patients);
-            return response.data.data.patients;
-        }
-        
-        // Debug: Log la structure exacte de data
-        if (response.data.status === 'success' && response.data.data) {
-            console.log('🔍 Structure de response.data.data:', response.data.data);
-            console.log('🔍 Type de response.data.data:', typeof response.data.data);
-            console.log('🔍 Clés disponibles:', Object.keys(response.data.data));
-        }
-        
-        // Fallback formats for compatibility
-        if (response.data && response.data.patients && Array.isArray(response.data.patients)) {
-            return response.data.patients;
-        }
-        
-        if (Array.isArray(response.data)) {
-            // Si les données sont des paramètres biologiques, extraire les patients uniques
-            const patientsMap = new Map();
-            
-            response.data.forEach(item => {
-                if (item.patient && item.patient.id_patient) {
-                    const patientId = item.patient.id_patient;
-                    if (!patientsMap.has(patientId)) {
-                        patientsMap.set(patientId, {
-                            id_patient: patientId,
-                            nom: item.patient.nom || '',
-                            prenom: item.patient.prenom || '',
-                            // Ajouter d'autres champs si disponibles
-                            statut: 'Actif',
-                            date_naissance: null,
-                            sexe: null,
-                            telephone: null,
-                            email: null,
-                            adresse: null,
-                            code_postal: null,
-                            ville: null,
-                            groupe_sanguin: null
-                        });
-                    }
-                }
-            });
-            
-            const patients = Array.from(patientsMap.values());
-            console.log('✅ Patients extraits des paramètres biologiques:', patients);
-            return patients;
-        }
-        
-        console.error('Unexpected patients response format:', response.data);
-        return [];
-        
-    } catch (error) {
-        console.error('Service patients non disponible:', error.message);
-        return [];
-    }
-};
-
-// 4-) recuperation des documents recents
-const getDocumentsRecents = async (Id) => {
-    try {
-        const response = await api.get(`/dossierMedical/${Id}`);
+        const response = await api.post('/consultation', consultation);
+        console.log('Consultation créée:', response.data);
         return response.data;
     } catch (error) {
-        console.error('Erreur lors de la récupération des documents récents:', error);
-        return [];
+        console.error('Erreur lors de la création de la consultation:', error);
+        throw error.response?.data?.message || error.message || 'Erreur lors de la création de la consultation';
     }
 };
 
-// 5-) recuperation des documents d'un patient
-const getPatientDocuments = async (patientId) => {
+// 23-) Récupération d'une consultation spécifique (médecin)
+const getConsultation = async (consultationId) => {
     try {
-        const response = await api.get(`/dossierMedical/patient/${patientId}/complet`);
+        const response = await api.get(`/consultation/${consultationId}`);
         return response.data;
     } catch (error) {
-        console.error('Erreur lors de la récupération des documents du patient:', error);
-        return [];
+        console.error('Erreur lors de la récupération de la consultation:', error);
+        throw error;
     }
 };
 
-// 6-) recuperation des parametres biologiques
-const getParametresBiologiques = async (patientId) => {
+// 24-) Récupération de toutes les consultations (médecin)
+const getAllConsultations = async () => {
     try {
-        const response = await api.get(`/parametres-biologiques/patient/${patientId}`);
+        const response = await api.get('/consultation');
         return response.data;
     } catch (error) {
-        console.error('Erreur lors de la récupération des paramètres biologiques:', error);
+        console.error('Erreur lors de la récupération des consultations:', error);
         return [];
     }
 };
 
-// 7-) recuperation des antecedents medicaux
-const getAntecedentsMedicaux = async (patientId) => {
-    try {
-        const response = await api.get(`/antecedents-medicaux/patient/${patientId}`);
-        return response.data;
-    } catch (error) {
-        console.error('Erreur lors de la récupération des antécédents médicaux:', error);
-        return [];
-    }
-};
-
-// 8-) recuperation des allergies
-const getAllergies = async (patientId) => {
-    try {
-        const response = await api.get(`/allergies/patient/${patientId}`);
-        return response.data;
-    } catch (error) {
-        console.error('Erreur lors de la récupération des allergies:', error);
-        return [];
-    }
-};
-
-// 9-) recuperation de l'historique des consultations
-const getHistoriqueConsultations = async (patientId) => {
+// 25-) Récupération des consultations d'un patient (médecin)
+const getConsultationsByPatient = async (patientId) => {
     try {
         const response = await api.get(`/consultation/patient/${patientId}`);
         return response.data;
     } catch (error) {
-        console.error('Erreur lors de la récupération de l\'historique des consultations:', error);
+        console.error('Erreur lors de la récupération des consultations du patient:', error);
         return [];
     }
 };
 
-// services/api/medicalApi.js
+// 26-) Suppression d'une consultation (médecin)
+const deleteConsultation = async (consultationId) => {
+    try {
+        const response = await api.delete(`/consultation/${consultationId}`);
+        return response.data;
+    } catch (error) {
+        console.error('Erreur lors de la suppression de la consultation:', error);
+        throw error;
+    }
+};
 
-// 10-) Upload de document 
+// 27-) Mise à jour d'une consultation (médecin)
+const updateConsultation = async (consultationId, consultationData) => {
+    try {
+        const response = await api.put(`/consultation/${consultationId}`, consultationData);
+        return response.data;
+    } catch (error) {
+        console.error('Erreur lors de la mise à jour de la consultation:', error);
+        throw error;
+    }
+};
+
+// ============================================================================
+// 📄 GESTION DES DOCUMENTS (MÉDECIN)
+// ============================================================================
+
+// 28-) Upload de document (médecin)
 const uploadDocument = async (patientId, formData) => {
     try {
         // Debug: Vérifier le FormData reçu
@@ -776,8 +678,7 @@ const uploadDocument = async (patientId, formData) => {
     }
 };
 
-
-// 11-) download de document
+// 29-) Download de document (médecin)
 const downloadDocument = async (documentId) => {
     try {
         const response = await api.get(`/documents/${documentId}/download`, {
@@ -790,8 +691,8 @@ const downloadDocument = async (documentId) => {
     }
 };
 
-// 12-) view de document avec gestion d'erreur améliorée
-export const viewDocument = async (filters = {}) => {
+// 30-) View de document avec gestion d'erreur améliorée (médecin)
+const viewDocument = async (filters = {}) => {
     try {
         // Construire les paramètres de requête
         const params = new URLSearchParams();
@@ -829,7 +730,11 @@ export const viewDocument = async (filters = {}) => {
     }
 };
 
-// 13-) recuperation du resume medical
+// ============================================================================
+// 📊 RÉSUMÉS ET STATISTIQUES (MÉDECIN)
+// ============================================================================
+
+// 31-) Récupération du résumé medical (médecin)
 const getResumeMedical = async (patientId) => {
     try {
         const response = await api.get(`/resume-medical/patient/${patientId}`);
@@ -840,84 +745,17 @@ const getResumeMedical = async (patientId) => {
     }
 };
 
-// 14-) creation d'une consultation
-const createConsultation = async (consultation) => {
-    try {
-        console.log('Creating consultation with data:', consultation);
-        
-        // Validate required fields
-        if (!consultation.patient_id) {
-            throw new Error('ID du patient requis');
-        }
-        
-        const response = await api.post('/consultation', consultation);
-        console.log('Consultation créée:', response.data);
-        return response.data;
-    } catch (error) {
-        console.error('Erreur lors de la création de la consultation:', error);
-        throw error.response?.data?.message || error.message || 'Erreur lors de la création de la consultation';
-    }
-};
-
-// 15-) recuperation d'une consultation specifique
-const getConsultation = async (consultationId) => {
-    try {
-        const response = await api.get(`/consultation/${consultationId}`);
-        return response.data;
-    } catch (error) {
-        console.error('Erreur lors de la récupération de la consultation:', error);
-        throw error;
-    }
-};
-
-// 16-) recuperation de toutes les consultations
-const getAllConsultations = async () => {
-    try {
-        const response = await api.get('/consultation');
-        return response.data;
-    } catch (error) {
-        console.error('Erreur lors de la récupération des consultations:', error);
-        return [];
-    }
-};
-
-// 17-) recuperation des consultations d'un patient
-const getConsultationsByPatient = async (patientId) => {
-    try {
-        const response = await api.get(`/consultation/patient/${patientId}`);
-        return response.data;
-    } catch (error) {
-        console.error('Erreur lors de la récupération des consultations du patient:', error);
-        return [];
-    }
-};
-
-// 18-) suppression d'une consultation
-const deleteConsultation = async (consultationId) => {
-    try {
-        const response = await api.delete(`/consultation/${consultationId}`);
-        return response.data;
-    } catch (error) {
-        console.error('Erreur lors de la suppression de la consultation:', error);
-        throw error;
-    }
-};
-
-// 19-) mise à jour d'une consultation
-const updateConsultation = async (consultationId, consultationData) => {
-    try {
-        const response = await api.put(`/consultation/${consultationId}`, consultationData);
-        return response.data;
-    } catch (error) {
-        console.error('Erreur lors de la mise à jour de la consultation:', error);
-        throw error;
-    }
-};
+// ============================================================================
+// 📋 EXPORT DES FONCTIONS MÉDECIN
+// ============================================================================
 
 export {
+    // Rendez-vous et traitements
     getPatientRendezVous,
     getProchainRendezVous,
     getTraitementsActifs,
+    
+    // Prescriptions
     createOrdonnance,
     createExamen,
     getAllPrescriptions,
@@ -928,6 +766,8 @@ export {
     marquerNotificationLue,
     getNotificationsPatient,
     getResumeAujourdhui,
+    
+    // Dossiers médicaux
     createDossierMedical,
     getDossierMedical,
     getAllDossiersMedical,
@@ -936,22 +776,20 @@ export {
     getDossierPatient,
     updateDossierPatient,
     closeDossierPatient,
-    getServices,
-    getPatients,
-    getDocumentsRecents,
-    getPatientDocuments,
-    getParametresBiologiques,
-    getAntecedentsMedicaux,
-    getAllergies,
-    getHistoriqueConsultations,
-    uploadDocument,
-    downloadDocument,
-    // viewDocument,
-    getResumeMedical,
+    
+    // Consultations
     createConsultation,
     getConsultation,
     getAllConsultations,
     getConsultationsByPatient,
     deleteConsultation,
-    updateConsultation
+    updateConsultation,
+    
+    // Documents
+    uploadDocument,
+    downloadDocument,
+    viewDocument,
+    
+    // Résumés
+    getResumeMedical
 }; 

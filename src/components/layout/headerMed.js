@@ -2,29 +2,91 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 // gestion du profil medecin
-import { getMedecinProfile, logoutMedecin, fetchMedecinDetails } from "../../services/api/authApi";
+import { getMedecinProfile, logoutMedecin, fetchMedecinDetails, fetchPatientsList, fetchPatientFiles } from "../../services/api/authApi";
+import { getAllConsultations } from "../../services/api/medicalApi";
 
 function MedHeader({ doctor = { nom: "{user?.nom || 'Utilisateur'}", specialite: "[Spécialité]", photo: "https://storage.googleapis.com/workspace-0f70711f-8b4e-4d94-86f1-2a93ccde5887/image/f9ed6aa5-deb1-41fb-9d2a-5f987e9ff42e.png" }, onLogout }) {
   const [user, setUser] = useState(null);
   const [role, setRole] = useState("");
+  const [patientsCount, setPatientsCount] = useState(0);
+  const [dossiersCount, setDossiersCount] = useState(0);
+  const [consultationsCount, setConsultationsCount] = useState(0);
+  const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+
+  // Fonction pour récupérer les données du tableau de bord
+  async function fetchDashboardData() {
+    try {
+      console.log('🔍 Récupération des données du tableau de bord...');
+      
+      // Récupérer la liste des patients
+      const patients = await fetchPatientsList();
+      setPatientsCount(patients.length);
+      console.log('✅ Nombre de patients récupéré:', patients.length);
+      
+      // Récupérer les dossiers patients
+      const dossiers = await fetchPatientFiles();
+      setDossiersCount(dossiers.length);
+      console.log('✅ Nombre de dossiers récupéré:', dossiers.length);
+      
+      // ✅ CORRECTION : Utiliser getAllConsultations de medicalApi au lieu de fetchConsultations
+      console.log('🔍 Récupération des consultations via getAllConsultations...');
+      const consultations = await getAllConsultations();
+      console.log('📊 Consultations reçues:', consultations);
+      
+      if (consultations && Array.isArray(consultations)) {
+        setConsultationsCount(consultations.length);
+        console.log('✅ Nombre de consultations récupéré:', consultations.length);
+      } else if (consultations && consultations.data && Array.isArray(consultations.data)) {
+        setConsultationsCount(consultations.data.length);
+        console.log('✅ Nombre de consultations récupéré (depuis data):', consultations.data.length);
+      } else {
+        console.warn('⚠️ Format de consultations inattendu:', consultations);
+        setConsultationsCount(0);
+      }
+      
+    } catch (error) {
+      console.error('❌ Erreur lors de la récupération des données du tableau de bord:', error);
+      setPatientsCount(0);
+      setDossiersCount(0);
+      setConsultationsCount(0);
+    }
+  }
 
   useEffect(()=>{
     async function fetchProfile(){
       console.log('🔍 Début de fetchProfile dans headerMed');
-      console.log('🔑 Token disponible:', localStorage.getItem('token'));
-      console.log('👨‍⚕️ Données médecin stockées:', localStorage.getItem('medecin'));
       
       try{
-        // D'abord essayer de récupérer les détails complets
-        console.log('🔍 Tentative de récupération des détails complets...');
         const details = await fetchMedecinDetails();
+        console.log('🔍 Détails reçus de fetchMedecinDetails:', details);
         
-        if (details && details.nom && details.prenom) {
-          console.log('✅ Détails complets récupérés:', details);
-          setUser(details);
-          setRole(details.role || "");
-          return;
+        if (details) {
+          let medecinData = null;
+          
+          if (details.professionnel) {
+            medecinData = details.professionnel;
+            console.log('✅ Données extraites de details.professionnel:', medecinData);
+          } else if (details.nom && details.prenom) {
+            medecinData = details;
+            console.log('✅ Données extraites directement de details:', medecinData);
+          }
+          
+          if (medecinData && medecinData.nom && medecinData.prenom) {
+            console.log('✅ Détails complets récupérés et validés:', medecinData);
+            setUser(medecinData);
+            setRole(medecinData.role || "");
+            
+            // Mettre à jour le localStorage avec les nouvelles données
+            localStorage.setItem('medecin', JSON.stringify(medecinData));
+            console.log('✅ Données mises à jour dans localStorage');
+            
+            // ✅ NOUVEAU : Récupérer les données du tableau de bord
+            await fetchDashboardData();
+            return;
+          } else {
+            console.log('⚠️ Données reçues mais structure invalide:', details);
+          }
         }
         
         // Si pas de détails complets, essayer getMedecinProfile
@@ -42,6 +104,9 @@ function MedHeader({ doctor = { nom: "{user?.nom || 'Utilisateur'}", specialite:
           console.log('✅ Profil médecin extrait avec succès:', professionnel);
           setUser(professionnel);
           setRole(professionnel.role || "");
+          
+          // ✅ NOUVEAU : Récupérer les données du tableau de bord
+          await fetchDashboardData();
         } else {
           // Utiliser les données stockées localement si disponibles
           const storedMedecin = JSON.parse(localStorage.getItem('medecin') || 'null');
@@ -74,8 +139,11 @@ function MedHeader({ doctor = { nom: "{user?.nom || 'Utilisateur'}", specialite:
           await logoutMedecin(); // Nettoie le localStorage
           navigate("/connexion");
         }
+      } finally {
+        setLoading(false);
       }
     }
+    
     fetchProfile();
   }, [navigate]);
   const handleLogout = async (e) => {
@@ -131,10 +199,58 @@ function MedHeader({ doctor = { nom: "{user?.nom || 'Utilisateur'}", specialite:
                 </div>
               </div>
             </div>
-            <div className="flex space-x-4 mt-2">
-              <button  onClick={consultation} className="bg-indigo-100 text-indigo-800 px-3 py-1 rounded-md text-sm">Nouvelle Consultation</button>
-              <button onClick={dossierPatient} className="bg-gray-100 text-gray-800 px-3 py-1 rounded-md text-sm">Dossiers Patients</button>
-              <button onClick={agenda} className="bg-gray-100 text-gray-800 px-3 py-1 rounded-md text-sm">Agenda</button>
+            
+            {/* Statistiques du tableau de bord */}
+            {!loading && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <div className="flex items-center">
+                    <div className="p-2 bg-blue-100 rounded-full">
+                      <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                      </svg>
+                    </div>
+                    <div className="ml-4">
+                      <p className="text-sm font-medium text-blue-600">Patients</p>
+                      <p className="text-2xl font-bold text-blue-900">{patientsCount}</p>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                  <div className="flex items-center">
+                    <div className="p-2 bg-green-100 rounded-full">
+                      <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                      </svg>
+                    </div>
+                    <div className="ml-4">
+                      <p className="text-sm font-medium text-green-600">Dossiers</p>
+                      <p className="text-2xl font-bold text-green-900">{dossiersCount}</p>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                  <div className="flex items-center">
+                    <div className="p-2 bg-purple-100 rounded-full">
+                      <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                      </svg>
+                    </div>
+                    <div className="ml-4">
+                      <p className="text-sm font-medium text-purple-600">Consultations</p>
+                      <p className="text-2xl font-bold text-purple-900">{consultationsCount}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            <div className="flex space-x-4 mt-6">
+              <button onClick={consultation} className="bg-indigo-100 text-indigo-800 px-3 py-1 rounded-md text-sm hover:bg-indigo-200 transition-colors duration-200">Nouvelle Consultation</button>
+              <button onClick={dossierPatient} className="bg-gray-100 text-gray-800 px-3 py-1 rounded-md text-sm hover:bg-gray-200 transition-colors duration-200">Dossiers Patients</button>
+              <button onClick={agenda} className="bg-gray-100 text-gray-800 px-3 py-1 rounded-md text-sm hover:bg-gray-200 transition-colors duration-200">Agenda</button>
             </div>
           </div>
         </div>

@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Setup2FA Debug</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+
+        .test-case {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+
+        .success {
+            background-color: #d4edda;
+            border-color: #c3e6cb;
+        }
+
+        .error {
+            background-color: #f8d7da;
+            border-color: #f5c6cb;
+        }
+
+        .info {
+            background-color: #d1ecf1;
+            border-color: #bee5eb;
+        }
+
+        pre {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 3px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>🔐 Test Debug Setup2FA - Récupération Email</h1>
+
+    <div class="test-case info">
+        <h3>📋 Test de la logique de récupération d'email</h3>
+        <p>Ce test simule la logique de récupération d'email utilisée dans Setup2FA.js</p>
+    </div>
+
+    <div class="test-case">
+        <h3>🧪 Test 1: Structure userData typique</h3>
+        <button onclick="testUserDataStructure()">Tester Structure userData</button>
+        <div id="result1"></div>
+    </div>
+
+    <div class="test-case">
+        <h3>🧪 Test 2: Récupération email depuis userData</h3>
+        <button onclick="testEmailExtraction()">Tester Extraction Email</button>
+        <div id="result2"></div>
+    </div>
+
+    <div class="test-case">
+        <h3>🧪 Test 3: Récupération email depuis la réponse API</h3>
+        <button onclick="testResponseEmailExtraction()">Tester Email depuis Réponse</button>
+        <div id="result3"></div>
+    </div>
+
+    <div class="test-case">
+        <h3>🧪 Test 4: buildUserParams complet</h3>
+        <button onclick="testBuildUserParams()">Tester buildUserParams</button>
+        <div id="result4"></div>
+    </div>
+
+    <script>
+        // Simulation des structures de données typiques
+        const mockUserData = {
+            id: 79,
+            nom: "Sakura",
+            prenom: "Saza",
+            numero_adeli: "123456789",
+            email: "saza@hopital.sn",
+            type: "professionnel",
+            tempTokenId: "temp_123",
+            generatedToken: "gen_456"
+        };
+
+        const mockResponse = {
+            status: 200,
+            data: {
+                secret: "0d258c49...",
+                two_factor_secret: "0d258c49...",
+                recoveryCodes: ["code1", "code2"],
+                email: "saza@hopital.sn",
+                user: {
+                    email: "saza@hopital.sn"
+                }
+            }
+        };
+
+        // Test 1: Structure userData
+        function testUserDataStructure() {
+            const result = document.getElementById('result1');
+            const keys = Object.keys(mockUserData);
+            const hasEmail = !!mockUserData.email;
+            const hasProfessionnel = !!mockUserData.professionnel;
+
+            result.innerHTML = `
+                <div class="success">
+                    <h4>✅ Structure userData analysée:</h4>
+                    <pre>Clés disponibles: ${keys.join(', ')}</pre>
+                    <pre>Email présent: ${hasEmail ? 'OUI' : 'NON'}</pre>
+                    <pre>Professionnel imbriqué: ${hasProfessionnel ? 'OUI' : 'NON'}</pre>
+                    <pre>${JSON.stringify(mockUserData, null, 2)}</pre>
+                </div>
+            `;
+        }
+
+        // Test 2: Extraction email depuis userData
+        function testEmailExtraction() {
+            const result = document.getElementById('result2');
+
+            // Logique de Setup2FA.js
+            const userEmail = mockUserData?.email ||
+                mockUserData?.professionnel?.email ||
+                mockUserData?.user?.email ||
+                mockUserData?.email_professionnel ||
+                mockUserData?.email_medecin;
+
+            result.innerHTML = `
+                <div class="${userEmail ? 'success' : 'error'}">
+                    <h4>${userEmail ? '✅' : '❌'} Extraction email depuis userData:</h4>
+                    <pre>Email trouvé: ${userEmail || 'AUCUN'}</pre>
+                    <pre>Logique utilisée: userData?.email || userData?.professionnel?.email || userData?.user?.email || userData?.email_professionnel || userData?.email_medecin</pre>
+                </div>
+            `;
+        }
+
+        // Test 3: Extraction email depuis la réponse API
+        function testResponseEmailExtraction() {
+            const result = document.getElementById('result3');
+
+            // Logique de fallback depuis la réponse
+            const responseEmail = mockResponse.data.email ||
+                mockResponse.data.data?.email ||
+                mockResponse.data.user?.email ||
+                mockResponse.data.professionnel?.email;
+
+            result.innerHTML = `
+                <div class="${responseEmail ? 'success' : 'error'}">
+                    <h4>${responseEmail ? '✅' : '❌'} Extraction email depuis la réponse API:</h4>
+                    <pre>Email trouvé: ${responseEmail || 'AUCUN'}</pre>
+                    <pre>Logique utilisée: response.data.email || response.data.data?.email || response.data.user?.email || response.data.professionnel?.email</pre>
+                </div>
+            `;
+        }
+
+        // Test 4: buildUserParams complet
+        function testBuildUserParams() {
+            const result = document.getElementById('result4');
+
+            try {
+                // Simulation de la fonction buildUserParams
+                const params = buildUserParams(mockUserData);
+
+                result.innerHTML = `
+                    <div class="success">
+                        <h4>✅ buildUserParams réussi:</h4>
+                        <pre>${JSON.stringify(params, null, 2)}</pre>
+                    </div>
+                `;
+            } catch (error) {
+                result.innerHTML = `
+                    <div class="error">
+                        <h4>❌ buildUserParams échoué:</h4>
+                        <pre>Erreur: ${error.message}</pre>
+                    </div>
+                `;
+            }
+        }
+
+        // Simulation de la fonction buildUserParams
+        function buildUserParams(userData) {
+            console.log('🔐 DEBUG - buildUserParams - Structure userData:', {
+                keys: Object.keys(userData || {}),
+                numero_assure: userData?.numero_assure,
+                numero_adeli: userData?.numero_adeli,
+                email: userData?.email,
+                email_professionnel: userData?.email_professionnel,
+                email_medecin: userData?.email_medecin,
+                professionnel: userData?.professionnel ? Object.keys(userData.professionnel) : 'N/A',
+                type: userData?.type,
+                id: userData?.id,
+                id_professionnel: userData?.id_professionnel,
+                userId: userData?.userId
+            });
+
+            if (userData.numero_assure) {
+                return {
+                    userType: 'patient',
+                    identifier: userData.numero_assure,
+                    userId: userData.id_patient || userData.id || userData.userId ? String(userData.id_patient || userData.id || userData.userId) : undefined
+                };
+            }
+            if (userData.numero_adeli) {
+                return {
+                    userType: 'professionnel',
+                    identifier: userData.numero_adeli,
+                    userId: userData.id || userData.id_professionnel || userData.userId ? String(userData.id || userData.id_professionnel || userData.userId) : undefined
+                };
+            }
+
+            // Recherche d'email dans différentes propriétés
+            const email = userData.email ||
+                userData.email_professionnel ||
+                userData.email_medecin ||
+                userData.professionnel?.email ||
+                userData.user?.email;
+
+            if (email) {
+                console.log('🔐 DEBUG - Email trouvé pour buildUserParams:', email);
+                return {
+                    userType: 'professionnel',
+                    identifier: email,
+                    userId: userData.id || userData.id_professionnel || userData.userId ? String(userData.id || userData.id_professionnel || userData.userId) : undefined
+                };
+            }
+
+            if (userData.id || userData.userId) {
+                return {
+                    userType: userData.type === 'patient' ? 'patient' : 'professionnel',
+                    identifier: String(userData.id || userData.userId),
+                    userId: String(userData.id || userData.userId)
+                };
+            }
+
+            console.error('❌ DEBUG - Impossible de déterminer userType et identifier:', userData);
+            throw new Error("Impossible de déterminer 'userType' et 'identifier' pour setup2FA");
+        }
+
+        // Test automatique au chargement
+        window.onload = function () {
+            console.log('🔐 Tests Setup2FA chargés');
+            console.log('📊 Données de test:', { mockUserData, mockResponse });
+        };
+    </script>
+</body>
+
+</html>

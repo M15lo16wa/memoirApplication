@@ -61,11 +61,30 @@ const Validate2FA = ({
       
       const response = await send2FATOTPCode(params);
       
-      if (response.status === 'success') {
-        setEmailSent(true);
-        setEmailAddress(response.data.email);
-        startCountdown(30); // 30 secondes
-        console.log('✅ Code TOTP envoyé avec succès à:', response.data.email);
+      // 🔍 DÉBOGAGE - Vérifier la structure de la réponse
+      console.log('🔐 DEBUG - Réponse send2FATOTPCode reçue:', {
+        response: response,
+        hasData: !!response.data,
+        hasEmail: !!response.data?.email,
+        status: response.status,
+        httpStatus: response.status === 200 || response.status === 'success'
+      });
+      
+      // Vérifier que la réponse est valide (statut HTTP 200 ou propriété status 'success')
+      if (response && (response.status === 200 || response.status === 'success' || response.data)) {
+        // Extraire l'email selon la structure de la réponse
+        const userEmail = response.data?.email || response.data?.user?.email || response.email;
+        
+        if (userEmail) {
+          setEmailSent(true);
+          setEmailAddress(userEmail);
+          startCountdown(30); // 30 secondes
+          console.log('✅ Code TOTP envoyé avec succès à:', userEmail);
+        } else {
+          throw new Error('Email non trouvé dans la réponse TOTP');
+        }
+      } else {
+        throw new Error('Réponse TOTP invalide');
       }
       
     } catch (error) {
@@ -160,12 +179,31 @@ const Validate2FA = ({
         throw new Error('Session temporaire 2FA manquante - veuillez vous reconnecter');
       }
       
-      // Appel à la fonction du service API
-      const validationResult = await validate2FASession(code2FA, tempTokenId);
+      // ✅ CORRECTION : Inclure userType et identifier requis par le serveur
+      const userParams = buildUserParams(userData);
+      console.log('🔐 DEBUG - Paramètres utilisateur extraits:', userParams);
+      
+      // Appel à la fonction du service API avec tous les paramètres requis
+      const validationResult = await validate2FASession({
+        verificationCode: code2FA,
+        userType: userParams.userType,
+        identifier: userParams.identifier,
+        tempTokenId: tempTokenId
+      });
       console.log('✅ Validate2FA - Résultat de validation:', validationResult);
       
+      // 🔍 DÉBOGAGE - Vérifier la structure de la réponse de validation
+      console.log('🔐 DEBUG - Réponse de validation reçue:', {
+        validationResult: validationResult,
+        hasSuccess: !!validationResult?.success,
+        hasStatusSuccess: !!validationResult?.status,
+        statusValue: validationResult?.status,
+        hasData: !!validationResult?.data,
+        isValid: validationResult && (validationResult.success || validationResult.status === 'success' || validationResult.status === 200)
+      });
+      
       // Vérifier que la validation a réussi
-      if (validationResult && validationResult.success) {
+      if (validationResult && (validationResult.success || validationResult.status === 'success' || validationResult.status === 200)) {
         console.log('🎉 Validate2FA - Validation 2FA réussie !');
         
         // Stocker le token si fourni

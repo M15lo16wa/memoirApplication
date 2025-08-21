@@ -8,38 +8,133 @@ const api = axios.create({
         "Content-Type": "application/json",
         "Accept": "application/json",
     },
-})
+});
 
+// Intercepteur pour ajouter le token à chaque requête
+// PRIORITÉ : Token patient (JWT) pour accéder aux données patient
 api.interceptors.request.use(
     (config) => {
-        // Priorité au token patient (JWT)
-        const jwtToken = localStorage.getItem('jwt');
-        const token = localStorage.getItem('token');
+        // ✅ SÉLECTION STRICTE : Prioriser les JWT de première connexion et rejeter les tokens temporaires
+        const candidates = [
+            localStorage.getItem('originalJWT'),
+            localStorage.getItem('firstConnectionToken'),
+            localStorage.getItem('jwt'),
+            localStorage.getItem('token'),
+        ];
+        
         let usedToken = null;
-        if (jwtToken) {
-            config.headers.Authorization = `Bearer ${jwtToken}`;
-            usedToken = jwtToken;
-        } else if (token) {
-            config.headers.Authorization = `Bearer ${token}`;
-            usedToken = token;
+        for (const candidate of candidates) {
+            if (
+                candidate &&
+                candidate.startsWith('eyJ') &&
+                candidate.length > 100 &&
+                !candidate.startsWith('temp_') &&
+                !candidate.startsWith('auth_')
+            ) {
+                usedToken = candidate;
+                break;
+            }
         }
-        console.log('[patientApi] Token utilisé pour Authorization:', usedToken);
+        
+        if (usedToken) {
+            config.headers.Authorization = `Bearer ${usedToken}`;
+            console.log('[patientApi] JWT valide utilisé pour Authorization:', `${usedToken.substring(0, 20)}...`);
+        } else {
+            console.warn('[patientApi] Aucun JWT valide disponible pour l\'authentification');
+        }
+        
         return config;
     },
     (error) => Promise.reject(error)
 );
 
-// 1-) affichage de tous les patients
+// ============================================================================
+// 👥 FONCTIONS PATIENT - GESTION DES DONNÉES PERSONNELLES
+// ============================================================================
+
+// 1-) Affichage de tous les patients (lecture seule)
 export const getPatients = async () => {
     try {
-        const response = await api.get(`/patient`);
-        return response.data;
+        // Essayer d'abord l'endpoint spécifique pour les patients
+        let response = await api.get('/patients');
+        
+        // Si ça ne marche pas, essayer l'endpoint générique
+        if (!response || !response.data || response.data.length === 0) {
+            console.log('Tentative avec endpoint alternatif...');
+            response = await api.get('/patient');
+        }
+        
+        if (!response || !response.data) {
+            console.error('Invalid API response format for patients');
+            return [];
+        }
+        
+        // Backend returns: { status: 'success', results: N, data: [...] }
+        if (response.data.status === 'success' && response.data.data && Array.isArray(response.data.data)) {
+            console.log('✅ Patients found in response.data.data:', response.data.data);
+            return response.data.data;
+        }
+        
+        // Nouveau format: { status: 'success', results: N, data: { patients: [...] } }
+        if (response.data.status === 'success' && response.data.data && response.data.data.patients && Array.isArray(response.data.data.patients)) {
+            console.log('✅ Patients found in response.data.data.patients:', response.data.data.patients);
+            return response.data.data.patients;
+        }
+        
+        // Debug: Log la structure exacte de data
+        if (response.data.status === 'success' && response.data.data) {
+            console.log('🔍 Structure de response.data.data:', response.data.data);
+            console.log('🔍 Type de response.data.data:', typeof response.data.data);
+            console.log('🔍 Clés disponibles:', Object.keys(response.data.data));
+        }
+        
+        // Fallback formats for compatibility
+        if (response.data && response.data.patients && Array.isArray(response.data.patients)) {
+            return response.data.patients;
+        }
+        
+        if (Array.isArray(response.data)) {
+            // Si les données sont des paramètres biologiques, extraire les patients uniques
+            const patientsMap = new Map();
+            
+            response.data.forEach(item => {
+                if (item.patient && item.patient.id_patient) {
+                    const patientId = item.patient.id_patient;
+                    if (!patientsMap.has(patientId)) {
+                        patientsMap.set(patientId, {
+                            id_patient: patientId,
+                            nom: item.patient.nom || '',
+                            prenom: item.patient.prenom || '',
+                            // Ajouter d'autres champs si disponibles
+                            statut: 'Actif',
+                            date_naissance: null,
+                            sexe: null,
+                            telephone: null,
+                            email: null,
+                            adresse: null,
+                            code_postal: null,
+                            ville: null,
+                            groupe_sanguin: null
+                        });
+                    }
+                }
+            });
+            
+            const patients = Array.from(patientsMap.values());
+            console.log('✅ Patients extraits des paramètres biologiques:', patients);
+            return patients;
+        }
+        
+        console.error('Unexpected patients response format:', response.data);
+        return [];
+        
     } catch (error) {
-        throw error;
+        console.error('Service patients non disponible:', error.message);
+        return [];
     }
 };
 
-// 2-) affichage d'un patient
+// 2-) Affichage d'un patient spécifique
 export const getPatient = async(id) => {
     try{
         const response = await api.get(`/patient/${id}`);
@@ -49,7 +144,7 @@ export const getPatient = async(id) => {
     }
 };
 
-// 3-) creation d'un patient
+// 3-) Création d'un patient (fonction administrative)
 export const createPatient = async(patient) => {
     try{
         const response = await api.post(`/patient`, patient);
@@ -59,7 +154,7 @@ export const createPatient = async(patient) => {
     }
 };
 
-// 4-) mise a jour d'un patient
+// 4-) Mise à jour d'un patient
 export const updatePatient = async(id, patient) => {
     try{
         const response = await api.put(`/patient/${id}`, patient);
@@ -69,7 +164,7 @@ export const updatePatient = async(id, patient) => {
     }
 };
 
-// 5-) suppression d'un patient
+// 5-) Suppression d'un patient (fonction administrative)
 export const deletePatient = async(id) => {
     try{
         const response = await api.delete(`/patient/${id}`);
@@ -79,7 +174,7 @@ export const deletePatient = async(id) => {
     }
 };
 
-// 6-) connexion d'un patient
+// 6-) Connexion d'un patient
 export const loginPatient = async(patient) => {
     try{
         const response = await api.post(`/patient/auth/login`, patient);
@@ -89,7 +184,48 @@ export const loginPatient = async(patient) => {
     }
 };
 
-// 7-) récupération des prescriptions d'un patient
+// ============================================================================
+// 🏥 FONCTIONS PATIENT - GESTION DES SERVICES DE SANTÉ
+// ============================================================================
+
+// 7-) Récupération des services de santé
+export const getServices = async () => {
+    try{
+        const response = await api.get('/service-sante');
+        
+        if (!response || !response.data) {
+            console.error('Invalid API response format for services');
+            return [];
+        }
+        
+        // Backend returns: { status: 'success', results: N, data: { services: [...] } }
+        if (response.data.status === 'success' && response.data.data && Array.isArray(response.data.data.services)) {
+            return response.data.data.services;
+        }
+        
+        // Fallback formats for compatibility
+        if (response.data && response.data.services && Array.isArray(response.data.services)) {
+            return response.data.services;
+        }
+        
+        if (Array.isArray(response.data)) {
+            return response.data;
+        }
+        
+        console.error('Unexpected services response format:', response.data);
+        return [];
+        
+    } catch (error) {
+        console.error('Service services non disponible:', error.message);
+        return [];
+    }
+};
+
+// ============================================================================
+// 📋 FONCTIONS PATIENT - GESTION DES PRESCRIPTIONS
+// ============================================================================
+
+// 8-) Récupération des prescriptions d'un patient
 export const getPrescriptionsByPatient = async (patientId, options = {}) => {
     try {
         // Validation des paramètres
@@ -191,7 +327,7 @@ export const getPrescriptionsByPatient = async (patientId, options = {}) => {
     }
 };
 
-// 8-) récupération de toutes les prescriptions d'un patient (avec pagination automatique)
+// 9-) Récupération de toutes les prescriptions d'un patient (avec pagination automatique)
 export const getAllPrescriptionsByPatient = async (patientId, options = {}) => {
     try {
         const allPrescriptions = [];
@@ -275,7 +411,7 @@ export const getAllPrescriptionsByPatient = async (patientId, options = {}) => {
     }
 };
 
-// 9-) récupération des prescriptions actives d'un patient
+// 10-) Récupération des prescriptions actives d'un patient
 export const getActivePrescriptionsByPatient = async (patientId) => {
     const result = await getPrescriptionsByPatient(patientId, { statut: 'active' });
     
@@ -288,7 +424,7 @@ export const getActivePrescriptionsByPatient = async (patientId) => {
     return result;
 };
 
-// 10-) récupération des ordonnances d'un patient
+// 11-) Récupération des ordonnances d'un patient
 export const getOrdonnancesByPatient = async (patientId, options = {}) => {
     const result = await getPrescriptionsByPatient(patientId, { 
         ...options, 
@@ -304,7 +440,7 @@ export const getOrdonnancesByPatient = async (patientId, options = {}) => {
     return result;
 };
 
-// 11-) récupération des demandes d'examen d'un patient
+// 12-) Récupération des demandes d'examen d'un patient
 export const getExamensByPatient = async (patientId, options = {}) => {
     const result = await getPrescriptionsByPatient(patientId, { 
         ...options, 
@@ -320,7 +456,81 @@ export const getExamensByPatient = async (patientId, options = {}) => {
     return result;
 };
 
-// 12-) Fonction utilitaire pour extraire facilement les informations
+// ============================================================================
+// 📊 FONCTIONS PATIENT - GESTION DES DONNÉES MÉDICALES
+// ============================================================================
+
+// 13-) Récupération des paramètres biologiques d'un patient
+export const getParametresBiologiques = async (patientId) => {
+    try {
+        const response = await api.get(`/parametres-biologiques/patient/${patientId}`);
+        return response.data;
+    } catch (error) {
+        console.error('Erreur lors de la récupération des paramètres biologiques:', error);
+        return [];
+    }
+};
+
+// 14-) Récupération des antécédents médicaux d'un patient
+export const getAntecedentsMedicaux = async (patientId) => {
+    try {
+        const response = await api.get(`/antecedents-medicaux/patient/${patientId}`);
+        return response.data;
+    } catch (error) {
+        console.error('Erreur lors de la récupération des antécédents médicaux:', error);
+        return [];
+    }
+};
+
+// 15-) Récupération des allergies d'un patient
+export const getAllergies = async (patientId) => {
+    try {
+        const response = await api.get(`/allergies/patient/${patientId}`);
+        return response.data;
+    } catch (error) {
+        console.error('Erreur lors de la récupération des allergies:', error);
+        return [];
+    }
+};
+
+// 16-) Récupération de l'historique des consultations d'un patient
+export const getHistoriqueConsultations = async (patientId) => {
+    try {
+        const response = await api.get(`/consultation/patient/${patientId}`);
+        return response.data;
+    } catch (error) {
+        console.error('Erreur lors de la récupération de l\'historique des consultations:', error);
+        return [];
+    }
+};
+
+// 17-) Récupération des documents d'un patient
+export const getPatientDocuments = async (patientId) => {
+    try {
+        const response = await api.get(`/dossierMedical/patient/${patientId}/complet`);
+        return response.data;
+    } catch (error) {
+        console.error('Erreur lors de la récupération des documents du patient:', error);
+        return [];
+    }
+};
+
+// 18-) Récupération des documents récents d'un patient
+export const getDocumentsRecents = async (Id) => {
+    try {
+        const response = await api.get(`/dossierMedical/${Id}`);
+        return response.data;
+    } catch (error) {
+        console.error('Erreur lors de la récupération des documents récents:', error);
+        return [];
+    }
+};
+
+// ============================================================================
+// 🔧 FONCTIONS UTILITAIRES POUR LES PATIENTS
+// ============================================================================
+
+// 19-) Fonction utilitaire pour extraire facilement les informations
 export const extractPrescriptionData = (apiResponse) => {
     if (!apiResponse || !apiResponse.success) {
         return null;
@@ -351,7 +561,7 @@ export const extractPrescriptionData = (apiResponse) => {
     };
 };
 
-// 13-) Fonction utilitaire pour vérifier si la réponse contient des données
+// 20-) Fonction utilitaire pour vérifier si la réponse contient des données
 export const hasPrescriptions = (apiResponse) => {
     return apiResponse && 
         apiResponse.success && 
@@ -359,23 +569,43 @@ export const hasPrescriptions = (apiResponse) => {
         apiResponse.prescriptions.length > 0;
 };
 
-// 14-) Fonction utilitaire pour obtenir le nombre de prescriptions
+// 21-) Fonction utilitaire pour obtenir le nombre de prescriptions
 export const getPrescriptionCount = (apiResponse) => {
     return apiResponse?.prescriptions?.length || 0;
 };
 
+// ============================================================================
+// 📋 EXPORT DES FONCTIONS PATIENT
+// ============================================================================
+
 const patientApi = {
+    // Gestion des patients
     getPatients,
     getPatient,
     createPatient,
     updatePatient,
     deletePatient,
     loginPatient,
+    
+    // Services de santé
+    getServices,
+    
+    // Prescriptions
     getPrescriptionsByPatient,       
     getAllPrescriptionsByPatient,
     getActivePrescriptionsByPatient, 
     getOrdonnancesByPatient,         
     getExamensByPatient,           
+    
+    // Données médicales
+    getParametresBiologiques,
+    getAntecedentsMedicaux,
+    getAllergies,
+    getHistoriqueConsultations,
+    getPatientDocuments,
+    getDocumentsRecents,
+    
+    // Fonctions utilitaires
     extractPrescriptionData,          
     hasPrescriptions,                 
     getPrescriptionCount              

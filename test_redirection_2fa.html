@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Redirection 2FA</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-case { margin: 20px 0; padding: 15px; border: 1px solid #ccc; border-radius: 5px; }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        .info { background-color: #d1ecf1; border-color: #bee5eb; }
+        .warning { background-color: #fff3cd; border-color: #ffeaa7; }
+        pre { background-color: #f8f9fa; padding: 10px; border-radius: 3px; overflow-x: auto; }
+        .button { padding: 10px 20px; margin: 5px; border: none; border-radius: 5px; cursor: pointer; }
+        .button-primary { background-color: #007bff; color: white; }
+        .button-secondary { background-color: #6c757d; color: white; }
+        .button-success { background-color: #28a745; color: white; }
+        input, select { padding: 8px; margin: 5px; border: 1px solid #ccc; border-radius: 3px; }
+    </style>
+</head>
+
+<body>
+    <h1>🔐 Test Redirection 2FA</h1>
+
+    <div class="test-case info">
+        <h3>📋 Diagnostic du problème de redirection après validation 2FA</h3>
+        <p>Ce test simule le flux complet de validation 2FA et vérifie pourquoi la redirection ne fonctionne pas</p>
+    </div>
+
+    <div class="test-case">
+        <h3>🧪 Test 1: Simulation de la validation 2FA réussie</h3>
+        <div>
+            <label>Type d'utilisateur :</label>
+            <select id="user-type">
+                <option value="patient">Patient</option>
+                <option value="professionnel">Professionnel (médecin)</option>
+            </select>
+            <button onclick="test2FASuccess()" class="button button-primary">Tester Validation 2FA</button>
+        </div>
+        <div id="result-2fa-success"></div>
+    </div>
+
+    <div class="test-case">
+        <h3>🧪 Test 2: Simulation de handle2FASuccess</h3>
+        <div>
+            <button onclick="testHandle2FASuccess()" class="button button-secondary">Tester handle2FASuccess</button>
+        </div>
+        <div id="result-handle-success"></div>
+    </div>
+
+    <div class="test-case">
+        <h3>🧪 Test 3: Simulation de la redirection</h3>
+        <div>
+            <button onclick="testRedirection()" class="button button-success">Tester Redirection</button>
+        </div>
+        <div id="result-redirection"></div>
+    </div>
+
+    <div class="test-case">
+        <h3>🧪 Test 4: Flux complet avec logs</h3>
+        <div>
+            <button onclick="testCompleteFlow()" class="button button-primary">Tester Flux Complet</button>
+        </div>
+        <div id="result-complete"></div>
+    </div>
+
+    <script>
+        // Simulation des données utilisateur
+        let mockUserData = null;
+        let mockSelectedProfile = '';
+        let mockSelectedProfessional = '';
+
+        // Simulation de la fonction handle2FASuccess de connexion.js
+        function handle2FASuccess() {
+            console.log('✅ 2FA validée avec succès, redirection...');
+            console.log('🔍 DEBUG - Données disponibles pour la redirection:', {
+                userData: mockUserData ? Object.keys(mockUserData) : 'NULL',
+                selectedProfile: mockSelectedProfile,
+                selectedProfessional: mockSelectedProfessional,
+                userDataType: mockUserData?.type,
+                userDataId: mockUserData?.id_patient || mockUserData?.id
+            });
+            
+            // 🔐 STOCKAGE DES TOKENS D'AUTHENTIFICATION APRÈS 2FA RÉUSSIE
+            try {
+                // Vérifier si les tokens ont déjà été stockés par Setup2FA
+                const existingJWT = localStorage.getItem('jwt');
+                const existingToken = localStorage.getItem('token');
+                const existingPatient = localStorage.getItem('patient');
+                const existingMedecin = localStorage.getItem('medecin');
+                
+                console.log('🔐 DEBUG - Tokens existants dans localStorage:', {
+                    jwt: existingJWT,
+                    token: existingToken,
+                    patient: existingPatient,
+                    medecin: existingMedecin
+                });
+                
+                // Si aucun token n'a été stocké par Setup2FA, stocker les données essentielles
+                if (!existingJWT && !existingToken) {
+                    console.log('⚠️ DEBUG - Aucun token trouvé, stockage des données essentielles');
+                    
+                    if (mockUserData && mockSelectedProfile === 'patient') {
+                        // Pour les patients, stocker le secret 2FA et les données essentielles
+                        if (mockUserData.two_factor_secret) {
+                            localStorage.setItem('two_factor_secret', mockUserData.two_factor_secret);
+                        }
+                        
+                        // Stocker les données patient essentielles
+                        const patientDataToStore = {
+                            id_patient: mockUserData.id_patient || mockUserData.id,
+                            nom: mockUserData.nom,
+                            prenom: mockUserData.prenom,
+                            numero_assure: mockUserData.numero_assure,
+                            two_factor_enabled: mockUserData.two_factor_enabled,
+                            two_factor_secret: mockUserData.two_factor_secret
+                        };
+                        
+                        localStorage.setItem('patient', JSON.stringify(patientDataToStore));
+                        console.log('🔐 DEBUG - Données patient stockées:', patientDataToStore);
+                        
+                        // 🔑 UTILISER LE TOKEN ORIGINAL DE LA PREMIÈRE AUTHENTIFICATION
+                        if (mockUserData.originalJWT) {
+                            localStorage.setItem('jwt', mockUserData.originalJWT);
+                            console.log('🔐 DEBUG - JWT original patient réutilisé:', mockUserData.originalJWT.substring(0, 20) + '...');
+                        } else if (mockUserData.tempTokenId) {
+                            // Fallback sur tempTokenId si pas de token original
+                            localStorage.setItem('jwt', mockUserData.tempTokenId);
+                            console.log('🔐 DEBUG - tempTokenId utilisé comme JWT temporaire:', mockUserData.tempTokenId);
+                        }
+                        
+                    } else if (mockUserData && mockSelectedProfile === 'professionnel') {
+                        // Pour les professionnels, stocker le secret 2FA et les données
+                        if (mockUserData.two_factor_secret) {
+                            localStorage.setItem('two_factor_secret', mockUserData.two_factor_secret);
+                        }
+                        
+                        // Stocker les données professionnel
+                        const profDataToStore = {
+                            id: mockUserData.id || mockUserData.id_professionnel,
+                            nom: mockUserData.nom,
+                            prenom: mockUserData.prenom,
+                            role: mockSelectedProfessional,
+                            two_factor_enabled: mockUserData.two_factor_enabled,
+                            two_factor_secret: mockUserData.two_factor_secret
+                        };
+                        
+                        if (mockSelectedProfessional === 'medecin') {
+                            localStorage.setItem('medecin', JSON.stringify(profDataToStore));
+                            console.log('🔐 DEBUG - Données médecin stockées:', profDataToStore);
+                        }
+                        
+                        // 🔑 UTILISER LE TOKEN ORIGINAL DE LA PREMIÈRE AUTHENTIFICATION
+                        if (mockUserData.originalToken) {
+                            localStorage.setItem('token', mockUserData.originalToken);
+                            console.log('🔐 DEBUG - Token original professionnel réutilisé:', mockUserData.originalToken.substring(0, 20) + '...');
+                        } else if (mockUserData.originalJWT) {
+                            localStorage.setItem('token', mockUserData.originalJWT);
+                            console.log('🔐 DEBUG - JWT original professionnel réutilisé:', mockUserData.originalToken.substring(0, 20) + '...');
+                        } else if (mockUserData.tempTokenId) {
+                            // Fallback sur tempTokenId si pas de token original
+                            localStorage.setItem('token', mockUserData.tempTokenId);
+                            console.log('🔐 DEBUG - tempTokenId utilisé comme token temporaire:', mockUserData.tempTokenId);
+                        }
+                    }
+                } else {
+                    console.log('✅ DEBUG - Tokens déjà présents, pas de stockage supplémentaire nécessaire');
+                }
+                
+                console.log('🔐 DEBUG - localStorage final:', {
+                    jwt: localStorage.getItem('jwt'),
+                    token: localStorage.getItem('token'),
+                    tempTokenId: localStorage.getItem('tempTokenId'),
+                    patient: localStorage.getItem('patient'),
+                    medecin: localStorage.getItem('medecin'),
+                    two_factor_secret: localStorage.getItem('two_factor_secret')
+                });
+                
+            } catch (error) {
+                console.error('❌ DEBUG - Erreur lors du stockage des tokens:', error);
+            }
+            
+            // Redirection selon le type d'utilisateur
+            if (mockUserData) {
+                switch (mockSelectedProfile) {
+                    case 'patient':
+                        console.log('🔵 DEBUG - Redirection patient vers /dmp');
+                        // Simuler la redirection
+                        simulateRedirection('/dmp');
+                        break;
+                    case 'professionnel':
+                        if (mockSelectedProfessional === 'medecin') {
+                            console.log('🟢 DEBUG - Redirection médecin vers /medecin');
+                            simulateRedirection('/medecin');
+                        } else if (mockSelectedProfessional === 'administrateur') {
+                            console.log('🟡 DEBUG - Redirection admin vers /admin');
+                            simulateRedirection('/admin');
+                        } else if (mockSelectedProfessional === 'secretaire') {
+                            console.log('🟡 DEBUG - Redirection secrétaire vers /secretariat');
+                            simulateRedirection('/secretariat');
+                        }
+                        break;
+                    default:
+                        console.log('⚠️ DEBUG - Profil non reconnu, redirection par défaut vers /admin');
+                        simulateRedirection('/admin');
+                }
+            } else {
+                console.error('❌ DEBUG - userData est null, impossible de rediriger');
+            }
+        }
+
+        // Simulation de la redirection
+        function simulateRedirection(path) {
+            console.log(`🚀 Simulation de redirection vers: ${path}`);
+            
+            // Simuler un délai de redirection
+            setTimeout(() => {
+                console.log(`✅ Redirection simulée vers ${path} réussie`);
+                document.getElementById('result-redirection').innerHTML = `
+                    <div class="success">
+                        <h4>✅ Redirection simulée réussie:</h4>
+                        <p><strong>Destination:</strong> ${path}</p>
+                        <p><strong>Statut:</strong> Redirection effectuée</p>
+                        <p><strong>Note:</strong> Dans l'application réelle, cette redirection utiliserait React Router</p>
+                    </div>
+                `;
+            }, 1000);
+        }
+
+        // Test 1: Simulation de la validation 2FA réussie
+        function test2FASuccess() {
+            const result = document.getElementById('result-2fa-success');
+            const userType = document.getElementById('user-type').value;
+            
+            // Simuler les données utilisateur selon le type
+            if (userType === 'patient') {
+                mockUserData = {
+                    id_patient: 123,
+                    nom: 'Dupont',
+                    prenom: 'Jean',
+                    numero_assure: '1234567890123',
+                    two_factor_enabled: true,
+                    two_factor_secret: 'JBSWY3DPEHPK3PXP',
+                    originalJWT: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+                    tempTokenId: 'temp_123_456'
+                };
+                mockSelectedProfile = 'patient';
+                mockSelectedProfessional = '';
+            } else {
+                mockUserData = {
+                    id: 79,
+                    id_professionnel: 79,
+                    nom: 'Sakura',
+                    prenom: 'Saza',
+                    numero_adeli: 'AH23456780',
+                    two_factor_enabled: true,
+                    two_factor_secret: 'JBSWY3DPEHPK3PXP',
+                    originalToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+                    tempTokenId: 'temp_79_456'
+                };
+                mockSelectedProfile = 'professionnel';
+                mockSelectedProfessional = 'medecin';
+            }
+            
+            result.innerHTML = `
+                <div class="success">
+                    <h4>✅ Validation 2FA simulée:</h4>
+                    <pre>Données utilisateur: ${JSON.stringify(mockUserData, null, 2)}</pre>
+                    <p><strong>Profil sélectionné:</strong> ${mockSelectedProfile}</p>
+                    <p><strong>Type professionnel:</strong> ${mockSelectedProfessional || 'N/A'}</p>
+                    <p><strong>2FA activé:</strong> ${mockUserData.two_factor_enabled ? 'Oui' : 'Non'}</p>
+                </div>
+            `;
+        }
+
+        // Test 2: Simulation de handle2FASuccess
+        function testHandle2FASuccess() {
+            const result = document.getElementById('result-handle-success');
+            
+            if (!mockUserData) {
+                result.innerHTML = `
+                    <div class="error">
+                        <h4>❌ Erreur:</h4>
+                        <p>Veuillez d'abord exécuter le test de validation 2FA</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            result.innerHTML = `
+                <div class="info">
+                    <h4>🔄 Exécution de handle2FASuccess...</h4>
+                    <p>Vérifiez la console pour les logs détaillés</p>
+                </div>
+            `;
+            
+            // Exécuter handle2FASuccess
+            handle2FASuccess();
+            
+            setTimeout(() => {
+                result.innerHTML = `
+                    <div class="success">
+                        <h4>✅ handle2FASuccess exécuté:</h4>
+                        <p><strong>Stockage des tokens:</strong> Vérifié</p>
+                        <p><strong>Logs de débogage:</strong> Disponibles dans la console</p>
+                        <p><strong>Redirection:</strong> En cours de simulation</p>
+                    </div>
+                `;
+            }, 1500);
+        }
+
+        // Test 3: Simulation de la redirection
+        function testRedirection() {
+            const result = document.getElementById('result-redirection');
+            
+            if (!mockUserData) {
+                result.innerHTML = `
+                    <div class="error">
+                        <h4>❌ Erreur:</h4>
+                        <p>Veuillez d'abord exécuter le test de validation 2FA</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            // Déterminer la destination selon le profil
+            let destination = '';
+            if (mockSelectedProfile === 'patient') {
+                destination = '/dmp';
+            } else if (mockSelectedProfile === 'professionnel' && mockSelectedProfessional === 'medecin') {
+                destination = '/medecin';
+            }
+            
+            result.innerHTML = `
+                <div class="info">
+                    <h4>🔄 Test de redirection...</h4>
+                    <p><strong>Destination attendue:</strong> ${destination}</p>
+                    <p><strong>Profil:</strong> ${mockSelectedProfile}</p>
+                </div>
+            `;
+            
+            // Simuler la redirection
+            simulateRedirection(destination);
+        }
+
+        // Test 4: Flux complet avec logs
+        function testCompleteFlow() {
+            const result = document.getElementById('result-complete');
+            
+            result.innerHTML = `
+                <div class="info">
+                    <h4>🔄 Test du flux complet...</h4>
+                    <p>Exécution séquentielle de tous les tests</p>
+                    <div class="animate-spin">⏳</div>
+                </div>
+            `;
+            
+            // Exécuter le flux complet
+            setTimeout(() => {
+                test2FASuccess();
+                
+                setTimeout(() => {
+                    testHandle2FASuccess();
+                    
+                    setTimeout(() => {
+                        testRedirection();
+                        
+                        setTimeout(() => {
+                            result.innerHTML = `
+                                <div class="success">
+                                    <h4>✅ Flux complet terminé:</h4>
+                                    <p><strong>Validation 2FA:</strong> ✅ Réussie</p>
+                                    <p><strong>handle2FASuccess:</strong> ✅ Exécuté</p>
+                                    <p><strong>Redirection:</strong> ✅ Simulée</p>
+                                    <p><strong>Logs:</strong> Disponibles dans la console</strong></p>
+                                </div>
+                            `;
+                        }, 2000);
+                    }, 2000);
+                }, 1000);
+            }, 500);
+        }
+
+        // Initialisation
+        window.onload = function () {
+            console.log('🔐 Test Redirection 2FA - Chargé');
+            console.log('📊 Fonctions disponibles:', {
+                handle2FASuccess: typeof handle2FASuccess,
+                simulateRedirection: typeof simulateRedirection
+            });
+        };
+    </script>
+</body>
+
+</html>

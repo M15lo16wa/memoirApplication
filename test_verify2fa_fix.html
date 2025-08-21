@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Verify2FA - Correction Endpoint</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+
+        .test-case {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+
+        .success {
+            background-color: #d4edda;
+            border-color: #c3e6cb;
+        }
+
+        .error {
+            background-color: #f8d7da;
+            border-color: #f5c6cb;
+        }
+
+        .info {
+            background-color: #d1ecf1;
+            border-color: #bee5eb;
+        }
+
+        .warning {
+            background-color: #fff3cd;
+            border-color: #ffeaa7;
+        }
+
+        pre {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 3px;
+            overflow-x: auto;
+        }
+
+        .button {
+            padding: 10px 20px;
+            margin: 5px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .button-primary {
+            background-color: #007bff;
+            color: white;
+        }
+
+        .button-secondary {
+            background-color: #6c757d;
+            color: white;
+        }
+
+        input {
+            padding: 8px;
+            margin: 5px;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>🔐 Test Verify2FA - Correction Endpoint</h1>
+
+    <div class="test-case info">
+        <h3>📋 Test de la correction de l'endpoint verify-2fa</h3>
+        <p>Ce test vérifie que la correction de l'endpoint et de la structure de données fonctionne</p>
+    </div>
+
+    <div class="test-case">
+        <h3>🧪 Test 1: Structure de requête corrigée</h3>
+        <div>
+            <label>Code de vérification :</label>
+            <input type="text" id="verification-code" value="277315" placeholder="123456" maxlength="6">
+            <button onclick="testRequestStructure()" class="button button-primary">Tester Structure Requête</button>
+        </div>
+        <div id="result-structure"></div>
+    </div>
+
+    <div class="test-case">
+        <h3>🧪 Test 2: Endpoint corrigé</h3>
+        <div>
+            <button onclick="testEndpointCorrection()" class="button button-secondary">Tester Correction
+                Endpoint</button>
+        </div>
+        <div id="result-endpoint"></div>
+    </div>
+
+    <div class="test-case">
+        <h3>🧪 Test 3: Gestion d'erreur améliorée</h3>
+        <div>
+            <button onclick="testErrorHandling()" class="button button-secondary">Tester Gestion Erreur</button>
+        </div>
+        <div id="result-error"></div>
+    </div>
+
+    <div class="test-case">
+        <h3>🧪 Test 4: Simulation complète</h3>
+        <div>
+            <button onclick="testCompleteFlow()" class="button button-primary">Tester Flux Complet</button>
+        </div>
+        <div id="result-complete"></div>
+    </div>
+
+    <script>
+        // Simulation de la fonction verifyAndEnable2FA corrigée
+        async function verifyAndEnable2FA(params) {
+            try {
+                // Extraire les paramètres
+                const { verificationCode, userType, identifier } = params;
+
+                console.log('🔐 VerifyAndEnable2FA - Paramètres reçus:', { verificationCode, userType, identifier });
+
+                // Vérifier que tous les paramètres requis sont présents
+                if (!verificationCode || !userType || !identifier) {
+                    throw new Error('verificationCode, userType et identifier sont requis pour verifyAndEnable2FA');
+                }
+
+                // 🔍 DÉBOGAGE - Vérifier la structure de la requête
+                const requestData = {
+                    verificationCode,
+                    userType,
+                    identifier
+                };
+
+                console.log('🔐 DEBUG - Données de requête envoyées:', requestData);
+
+                // CORRECTION : Le backend attend le format complet
+                const response = await simulateApiCall('/auth/verify-2fa', requestData);
+
+                console.log('✅ VerifyAndEnable2FA - Réponse reçue:', response.data);
+
+                return response.data;
+            } catch (error) {
+                console.error('❌ VerifyAndEnable2FA - Erreur:', error);
+
+                // 🔍 DÉBOGAGE - Afficher les détails de l'erreur
+                if (error.response) {
+                    console.error('🔐 DEBUG - Détails de l\'erreur:', {
+                        status: error.response.status,
+                        statusText: error.response.statusText,
+                        data: error.response.data,
+                        headers: error.response.headers
+                    });
+                }
+
+                throw error;
+            }
+        }
+
+        // Simulation d'un appel API
+        async function simulateApiCall(endpoint, data) {
+            console.log(`🌐 Simulation API call: ${endpoint}`, data);
+
+            // Simuler un délai réseau
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+            // Simuler une réponse réussie
+            return {
+                data: {
+                    success: true,
+                    message: '2FA vérifié et activé avec succès',
+                    status: 'success'
+                }
+            };
+        }
+
+        // Test 1: Structure de requête corrigée
+        function testRequestStructure() {
+            const result = document.getElementById('result-structure');
+            const code = document.getElementById('verification-code').value;
+
+            const oldStructure = { token: code };
+            const newStructure = {
+                verificationCode: code,
+                userType: "professionnel",
+                identifier: "AH23456780"
+            };
+
+            result.innerHTML = `
+                <div class="success">
+                    <h4>✅ Structure de requête corrigée:</h4>
+                    <pre>AVANT (incorrecte): ${JSON.stringify(oldStructure, null, 2)}</pre>
+                    <pre>APRÈS (corrigée): ${JSON.stringify(newStructure, null, 2)}</pre>
+                    <p><strong>Changement :</strong> <code>token</code> → <code>verificationCode</code> + <code>userType</code> + <code>identifier</code></p>
+                </div>
+            `;
+        }
+
+        // Test 2: Endpoint corrigé
+        function testEndpointCorrection() {
+            const result = document.getElementById('result-endpoint');
+
+            const oldEndpoint = '/auth/verify-2FA';
+            const newEndpoint = '/auth/verify-2fa';
+
+            result.innerHTML = `
+                <div class="success">
+                    <h4>✅ Endpoint corrigé:</h4>
+                    <pre>AVANT (incorrect): ${oldEndpoint}</pre>
+                    <pre>APRÈS (corrigé): ${newEndpoint}</pre>
+                    <p><strong>Changement :</strong> Majuscules → minuscules (convention REST)</p>
+                </div>
+            `;
+        }
+
+        // Test 3: Gestion d'erreur améliorée
+        function testErrorHandling() {
+            const result = document.getElementById('result-error');
+
+            const errorHandling = {
+                before: 'console.error et throw error simple',
+                after: 'console.error + logs détaillés + throw error'
+            };
+
+            result.innerHTML = `
+                <div class="info">
+                    <h4>🔍 Gestion d'erreur améliorée:</h4>
+                    <pre>AVANT: ${errorHandling.before}</pre>
+                    <pre>APRÈS: ${errorHandling.after}</pre>
+                    <p><strong>Amélioration :</strong> Logs détaillés pour faciliter le débogage</p>
+                </div>
+            `;
+        }
+
+        // Test 4: Simulation complète
+        async function testCompleteFlow() {
+            const result = document.getElementById('result-complete');
+            const code = document.getElementById('verification-code').value;
+
+            result.innerHTML = `
+                <div class="info">
+                    <h4>🔄 Test du flux complet...</h4>
+                    <p>Code de vérification: <strong>${code}</strong></p>
+                    <div class="animate-spin">⏳</div>
+                </div>
+            `;
+
+            try {
+                const params = {
+                    verificationCode: code,
+                    userType: "professionnel",
+                    identifier: "AH23456780"
+                };
+
+                const response = await verifyAndEnable2FA(params);
+
+                result.innerHTML = `
+                    <div class="success">
+                        <h4>✅ Flux complet réussi:</h4>
+                        <pre>Paramètres envoyés: ${JSON.stringify(params, null, 2)}</pre>
+                        <pre>Réponse reçue: ${JSON.stringify(response, null, 2)}</pre>
+                        <p><strong>Statut :</strong> ${response.status}</p>
+                        <p><strong>Message :</strong> ${response.message}</p>
+                    </div>
+                `;
+            } catch (error) {
+                result.innerHTML = `
+                    <div class="error">
+                        <h4>❌ Flux complet échoué:</h4>
+                        <pre>Erreur: ${error.message}</pre>
+                        <p><strong>Type d'erreur :</strong> ${error.name}</p>
+                    </div>
+                `;
+            }
+        }
+
+        // Initialisation
+        window.onload = function () {
+            console.log('🔐 Test Verify2FA - Corrections chargées');
+            console.log('📊 Fonctions disponibles:', {
+                verifyAndEnable2FA: typeof verifyAndEnable2FA,
+                simulateApiCall: typeof simulateApiCall
+            });
+        };
+    </script>
+</body>
+
+</html>

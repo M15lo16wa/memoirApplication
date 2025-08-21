@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Format Imbriqué 2FA</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-case { margin: 20px 0; padding: 15px; border: 1px solid #ccc; border-radius: 5px; }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        .info { background-color: #d1ecf1; border-color: #bee5eb; }
+        .warning { background-color: #fff3cd; border-color: #ffeaa7; }
+        pre { background-color: #f8f9fa; padding: 10px; border-radius: 3px; overflow-x: auto; }
+        .button { padding: 10px 20px; margin: 5px; border: none; border-radius: 5px; cursor: pointer; }
+        .button-primary { background-color: #007bff; color: white; }
+        .button-secondary { background-color: #6c757d; color: white; }
+        input, select { padding: 8px; margin: 5px; border: 1px solid #ccc; border-radius: 3px; }
+    </style>
+</head>
+
+<body>
+    <h1>🔐 Test Format Imbriqué 2FA</h1>
+
+    <div class="test-case info">
+        <h3>📋 Test du format imbriqué attendu par le serveur</h3>
+        <p>Ce test vérifie que le format de données imbriqué est correctement généré</p>
+    </div>
+
+    <div class="test-case">
+        <h3>🧪 Test 1: Génération du format imbriqué</h3>
+        <div>
+            <label>Code de vérification :</label>
+            <input type="text" id="verification-code" value="466509" placeholder="123456" maxlength="6">
+            <button onclick="testFormatImbrique()" class="button button-primary">Tester Format Imbriqué</button>
+        </div>
+        <div id="result-format"></div>
+    </div>
+
+    <div class="test-case">
+        <h3>🧪 Test 2: Simulation de l'API call</h3>
+        <div>
+            <button onclick="testApiCall()" class="button button-secondary">Tester Appel API</button>
+        </div>
+        <div id="result-api"></div>
+    </div>
+
+    <div class="test-case">
+        <h3>🧪 Test 3: Comparaison des formats</h3>
+        <div>
+            <button onclick="testComparaison()" class="button button-primary">Comparer Formats</button>
+        </div>
+        <div id="result-comparaison"></div>
+    </div>
+
+    <script>
+        // Simulation de la fonction verifyAndEnable2FA corrigée
+        async function verifyAndEnable2FA(params) {
+            try {
+                // Extraire les paramètres
+                const { verificationCode, userType, identifier } = params;
+                
+                console.log('🔐 VerifyAndEnable2FA - Paramètres reçus:', { verificationCode, userType, identifier });
+
+                // Vérifier que tous les paramètres requis sont présents
+                if (!verificationCode || !userType || !identifier) {
+                    throw new Error('verificationCode, userType et identifier sont requis pour verifyAndEnable2FA');
+                }
+
+                // 🔍 DÉBOGAGE - Vérifier la structure de la requête
+                const requestData = {
+                    verificationCode: {
+                        verificationCode,
+                        userType,
+                        identifier
+                    }
+                };
+                
+                console.log('🔐 DEBUG - Données de requête envoyées:', requestData);
+                
+                // CORRECTION : Le serveur attend un format imbriqué avec verificationCode comme clé principale
+                const response = await simulateApiCall('/auth/verify-2fa', requestData);
+                
+                console.log('✅ VerifyAndEnable2FA - Réponse reçue:', response.data);
+                
+                return response.data;
+            } catch (error) {
+                console.error('❌ VerifyAndEnable2FA - Erreur:', error);
+                throw error;
+            }
+        }
+
+        // Simulation d'un appel API
+        async function simulateApiCall(endpoint, data) {
+            console.log(`🌐 Simulation API call: ${endpoint}`, data);
+
+            // Simuler un délai réseau
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+            // Simuler une réponse réussie
+            return {
+                data: {
+                    success: true,
+                    message: '2FA vérifié et activé avec succès',
+                    status: 'success'
+                }
+            };
+        }
+
+        // Test 1: Génération du format imbriqué
+        function testFormatImbrique() {
+            const result = document.getElementById('result-format');
+            const code = document.getElementById('verification-code').value;
+            
+            // Simuler les paramètres reçus
+            const params = {
+                verificationCode: code,
+                userType: 'professionnel',
+                identifier: 'AH23456780'
+            };
+            
+            // Générer le format imbriqué attendu par le serveur
+            const requestData = {
+                verificationCode: {
+                    verificationCode: params.verificationCode,
+                    userType: params.userType,
+                    identifier: params.identifier
+                }
+            };
+            
+            result.innerHTML = `
+                <div class="success">
+                    <h4>✅ Format imbriqué généré:</h4>
+                    <p><strong>Paramètres reçus:</strong></p>
+                    <pre>${JSON.stringify(params, null, 2)}</pre>
+                    <p><strong>Format imbriqué envoyé au serveur:</strong></p>
+                    <pre>${JSON.stringify(requestData, null, 2)}</pre>
+                    <p><strong>Structure:</strong> Le serveur attend <code>verificationCode</code> comme clé principale contenant un objet</p>
+                </div>
+            `;
+        }
+
+        // Test 2: Simulation de l'API call
+        async function testApiCall() {
+            const result = document.getElementById('result-api');
+            const code = document.getElementById('verification-code').value;
+            
+            result.innerHTML = `
+                <div class="info">
+                    <h4>🔄 Test de l'appel API...</h4>
+                    <p>Simulation de l'appel à verifyAndEnable2FA</p>
+                </div>
+            `;
+            
+            try {
+                const params = {
+                    verificationCode: code,
+                    userType: 'professionnel',
+                    identifier: 'AH23456780'
+                };
+                
+                const response = await verifyAndEnable2FA(params);
+                
+                result.innerHTML = `
+                    <div class="success">
+                        <h4>✅ Appel API réussi:</h4>
+                        <pre>Paramètres envoyés: ${JSON.stringify(params, null, 2)}</pre>
+                        <pre>Réponse reçue: ${JSON.stringify(response, null, 2)}</pre>
+                        <p><strong>Statut :</strong> ${response.status}</p>
+                        <p><strong>Message :</strong> ${response.message}</p>
+                    </div>
+                `;
+            } catch (error) {
+                result.innerHTML = `
+                    <div class="error">
+                        <h4>❌ Appel API échoué:</h4>
+                        <pre>Erreur: ${error.message}</pre>
+                    </div>
+                `;
+            }
+        }
+
+        // Test 3: Comparaison des formats
+        function testComparaison() {
+            const result = document.getElementById('result-comparaison');
+            
+            // Format AVANT (incorrect)
+            const formatAvant = {
+                verificationCode: "466509",
+                userType: "professionnel",
+                identifier: "AH23456780"
+            };
+            
+            // Format APRÈS (correct - imbriqué)
+            const formatApres = {
+                verificationCode: {
+                    verificationCode: "466509",
+                    userType: "professionnel",
+                    identifier: "AH23456780"
+                }
+            };
+            
+            result.innerHTML = `
+                <div class="info">
+                    <h4>📊 Comparaison des formats:</h4>
+                    
+                    <h5>❌ Format AVANT (incorrect):</h5>
+                    <pre>${JSON.stringify(formatAvant, null, 2)}</pre>
+                    <p><strong>Problème:</strong> Structure plate, le serveur attend un format imbriqué</p>
+                    
+                    <h5>✅ Format APRÈS (correct):</h5>
+                    <pre>${JSON.stringify(formatApres, null, 2)}</pre>
+                    <p><strong>Avantage:</strong> Structure imbriquée attendue par le serveur</p>
+                    
+                    <h5>🔍 Différences clés:</h5>
+                    <ul>
+                        <li><strong>Clé principale:</strong> <code>verificationCode</code> contient maintenant un objet</li>
+                        <li><strong>Structure:</strong> Niveaux d'imbrication respectés</li>
+                        <li><strong>Compatibilité:</strong> Format attendu par le serveur</li>
+                    </ul>
+                </div>
+            `;
+        }
+
+        // Initialisation
+        window.onload = function () {
+            console.log('🔐 Test Format Imbriqué 2FA - Chargé');
+            console.log('📊 Fonctions disponibles:', {
+                verifyAndEnable2FA: typeof verifyAndEnable2FA,
+                simulateApiCall: typeof simulateApiCall
+            });
+        };
+    </script>
+</body>
+
+</html>

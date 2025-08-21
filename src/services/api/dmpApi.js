@@ -594,10 +594,10 @@ export const getAutoMesuresDMP = async (patientId = null, type = null) => {
     let url;
     if (patientId) {
         // ✅ Utiliser le nouvel endpoint auto-mesures dédié
-        url = `/patient/${patientId}/auto-mesures`;
+        url = `/patients/${patientId}/dmp/auto-mesures`;
     } else {
         // ✅ Récupérer toutes les auto-mesures
-        url = '/patient/auto-mesures';
+        url = '/patients/dmp/auto-mesures';
     }
     
     console.log('🔍 getAutoMesuresDMP - URL appelée:', url);
@@ -626,7 +626,7 @@ export const getAutoMesuresDMP = async (patientId = null, type = null) => {
 
 // Créer une nouvelle auto-mesure
 export const createAutoMesureDMP = async (autoMesureData) => {
-    const url = '/patient/auto-mesures';
+    const url = '/patients/dmp/auto-mesures';
     console.log('🔍 createAutoMesureDMP - Création auto-mesure:', autoMesureData);
     
     const response = await dmpApi.post(url, autoMesureData);

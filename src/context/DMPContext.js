@@ -133,26 +133,46 @@ export const DMPProvider = ({ children }) => {
             const loadInitialAutoMesures = async () => {
                 try {
                     const response = await dmpApi.getAutoMesuresDMP(state.patientId, null);
-                    console.log('📊 Auto-mesures chargées dans le contexte:', response);
+                    console.log('📊 Auto-mesures chargées dans le contexte (initial):', response);
                     
                     // S'assurer que nous avons un tableau d'auto-mesures
                     let autoMesures = [];
-                    if (response && response.data && response.data.auto_mesures && Array.isArray(response.data.auto_mesures)) {
-                        autoMesures = response.data.auto_mesures;
-                    } else if (response && response.data && Array.isArray(response.data)) {
+                    
+                    // Log détaillé pour déboguer le format des données (même logique que loadAutoMesures)
+                    console.log('🔍 Format de réponse reçu (initial):', {
+                        response: response,
+                        responseData: response?.data,
+                        responseDataType: typeof response?.data,
+                        isArray: Array.isArray(response?.data),
+                        hasAutoMesures: response?.data?.auto_mesures,
+                        autoMesuresType: typeof response?.data?.auto_mesures,
+                        autoMesuresIsArray: Array.isArray(response?.data?.auto_mesures)
+                    });
+                    
+                    // Traitement simplifié et optimisé (même logique que loadAutoMesures)
+                    if (response && response.data && Array.isArray(response.data)) {
+                        // Format actuel : { data: [...] }
                         autoMesures = response.data;
+                        console.log('✅ Format détecté (initial) : response.data (tableau direct)');
+                    } else if (response && response.data && response.data.auto_mesures && Array.isArray(response.data.auto_mesures)) {
+                        // Format alternatif : { data: { auto_mesures: [...] } }
+                        autoMesures = response.data.auto_mesures;
+                        console.log('✅ Format détecté (initial) : response.data.auto_mesures');
                     } else if (response && Array.isArray(response)) {
+                        // Format direct : [...]
                         autoMesures = response;
-                    } else if (response && response.data && response.data.data && Array.isArray(response.data.data)) {
-                        autoMesures = response.data.data;
+                        console.log('✅ Format détecté (initial) : response (tableau direct)');
+                    } else {
+                        console.warn('⚠️ Format de réponse non reconnu (initial), initialisation avec tableau vide');
+                        autoMesures = [];
                     }
                     
-                    console.log('📊 Auto-mesures finales pour le contexte:', autoMesures);
+                    console.log('📊 Auto-mesures finales pour le contexte (initial):', autoMesures);
                     dispatch({ type: 'SET_AUTO_MESURES', payload: autoMesures });
                 } catch (error) {
-                    console.error('❌ Erreur lors du chargement des auto-mesures dans le contexte:', error);
+                    console.error('❌ Erreur lors du chargement des auto-mesures dans le contexte (initial):', error);
                     // En cas d'erreur, initialiser avec un tableau vide
-                    console.warn("Erreur API: initialisation des auto-mesures avec tableau vide");
+                    console.warn("Erreur API: initialisation des auto-mesures avec tableau vide (initial)");
                     dispatch({ type: 'SET_AUTO_MESURES', payload: [] });
                 }
             };
@@ -232,14 +252,34 @@ export const DMPProvider = ({ children }) => {
                 
                 // S'assurer que nous avons un tableau d'auto-mesures
                 let autoMesures = [];
-                if (response && response.data && response.data.auto_mesures && Array.isArray(response.data.auto_mesures)) {
-                    autoMesures = response.data.auto_mesures;
-                } else if (response && response.data && Array.isArray(response.data)) {
+                
+                // Log détaillé pour déboguer le format des données
+                console.log('🔍 Format de réponse reçu:', {
+                    response: response,
+                    responseData: response?.data,
+                    responseDataType: typeof response?.data,
+                    isArray: Array.isArray(response?.data),
+                    hasAutoMesures: response?.data?.auto_mesures,
+                    autoMesuresType: typeof response?.data?.auto_mesures,
+                    autoMesuresIsArray: Array.isArray(response?.data?.auto_mesures)
+                });
+                
+                // Traitement simplifié et optimisé
+                if (response && response.data && Array.isArray(response.data)) {
+                    // Format actuel : { data: [...] }
                     autoMesures = response.data;
+                    console.log('✅ Format détecté : response.data (tableau direct)');
+                } else if (response && response.data && response.data.auto_mesures && Array.isArray(response.data.auto_mesures)) {
+                    // Format alternatif : { data: { auto_mesures: [...] } }
+                    autoMesures = response.data.auto_mesures;
+                    console.log('✅ Format détecté : response.data.auto_mesures');
                 } else if (response && Array.isArray(response)) {
+                    // Format direct : [...]
                     autoMesures = response;
-                } else if (response && response.data && response.data.data && Array.isArray(response.data.data)) {
-                    autoMesures = response.data.data;
+                    console.log('✅ Format détecté : response (tableau direct)');
+                } else {
+                    console.warn('⚠️ Format de réponse non reconnu, initialisation avec tableau vide');
+                    autoMesures = [];
                 }
                 
                 console.log('📊 Auto-mesures finales via actions:', autoMesures);

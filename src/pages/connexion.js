@@ -7,6 +7,7 @@ import {login, loginPatient, loginMedecin} from "../services/api/authApi";
 
 // authentification 2FA
 import Setup2FA from "../components/2fa/Setup2FA";
+import { create2FASession } from "../services/api/twoFactorApi";
 
 
 function Connexion() {
@@ -25,6 +26,17 @@ function Connexion() {
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
+        
+        // 🧹 NETTOYAGE PRÉVENTIF : Supprimer les tokens temporaires avant nouvelle connexion
+        console.log('🧹 NETTOYAGE PRÉVENTIF - Suppression des tokens temporaires avant nouvelle connexion...');
+        const keysToClean = ['jwt', 'token'];
+        keysToClean.forEach(key => {
+            const token = localStorage.getItem(key);
+            if (token && (token.startsWith('temp_') || token.startsWith('auth_'))) {
+                localStorage.removeItem(key);
+                console.log(`🧹 Token temporaire "${key}" supprimé: ${token.substring(0, 20)}...`);
+            }
+        });
         
         // Validation des champs
         if (selectedProfile === 'patient' && (!numero_assure || !mot_de_passe)) {
@@ -114,16 +126,23 @@ function Connexion() {
                         // 🔐 Transmettre les informations 2FA de la réponse de connexion
                         tempTokenId: response.data.tempTokenId || null,
                         generatedToken: response.data.generatedToken || null,
-                        // 🔑 CONSERVER LES TOKENS DE LA PREMIÈRE AUTHENTIFICATION
+                        // 🔑 CONSERVATION PRIORITAIRE DES TOKENS DE LA PREMIÈRE AUTHENTIFICATION
                         originalJWT: response.data.token || response.data.jwt || response.data.accessToken || null,
                         originalToken: response.data.token || null
                     };
+                    
+                                            // ✅ CONSERVATION SIMPLIFIÉE : Stocker les données patient pour la 2FA
+                        console.log('🔐 CONSERVATION - Données patient stockées pour la 2FA');
                     
                     console.log('🔐 DEBUG - Patient enrichi avec tokens originaux:', {
                         tempTokenId: enrichedPatient.tempTokenId,
                         generatedToken: enrichedPatient.generatedToken,
                         originalJWT: enrichedPatient.originalJWT,
-                        originalToken: enrichedPatient.originalToken
+                        originalToken: enrichedPatient.originalToken,
+                        stockageLocalStorage: {
+                            originalJWT: localStorage.getItem('originalJWT') ? 'Présent' : 'Absent',
+                            firstConnectionToken: localStorage.getItem('firstConnectionToken') ? 'Présent' : 'Absent'
+                        }
                     });
                     setRequires2FA(true);
                     setUserData(enrichedPatient);
@@ -157,29 +176,71 @@ function Connexion() {
                     const medecinData = response.data.data?.medecin || response.data.medecin || response.data;
                     console.log('👨‍⚕️ Données médecin extraites:', medecinData);
                     
-                    // Enrichir les données pour la 2FA (userType/identifier)
-                    const enrichedMedecin = {
-                        ...medecinData,
-                        numero_adeli: medecinData.numero_adeli || numero_adeli,
-                        type: 'professionnel',
-                        // 🔐 Transmettre les informations 2FA de la réponse de connexion
-                        tempTokenId: response.data.tempTokenId || null,
-                        generatedToken: response.data.generatedToken || null,
-                        // 🔑 CONSERVER LES TOKENS DE LA PREMIÈRE AUTHENTIFICATION
-                        originalJWT: response.data.token || response.data.jwt || response.data.accessToken || null,
-                        originalToken: response.data.token || null
-                    };
-                    
-                    console.log('🔐 DEBUG - Médecin enrichi avec tokens originaux:', {
-                        tempTokenId: enrichedMedecin.tempTokenId,
-                        generatedToken: enrichedMedecin.generatedToken,
-                        originalJWT: enrichedMedecin.originalJWT,
-                        originalToken: enrichedMedecin.originalToken
-                    });
-                    setRequires2FA(true);
-                    setUserData(enrichedMedecin);
-                    setShow2FA(true);
-                    return;
+                    try {
+                        // 🔐 CRÉER UNE SESSION 2FA POUR RÉCUPÉRER LE TEMPTOKENID
+                        console.log('🔐 Création de session 2FA pour récupérer tempTokenId...');
+                        const twoFAResponse = await create2FASession({
+                            userType: 'professionnel',
+                            identifier: medecinData.numero_adeli || numero_adeli
+                        });
+                        
+                        console.log('🔐 Réponse create2FASession:', twoFAResponse);
+                        
+                        // Extraire le tempTokenId de la réponse
+                        const tempTokenId = twoFAResponse.data?.tempTokenId || 
+                                          twoFAResponse.tempTokenId || 
+                                          twoFAResponse.data?.sessionId ||
+                                          twoFAResponse.sessionId;
+                        
+                        console.log('🔐 tempTokenId extrait:', tempTokenId);
+                        
+                        // Enrichir les données pour la 2FA (userType/identifier)
+                        const enrichedMedecin = {
+                            ...medecinData,
+                            numero_adeli: medecinData.numero_adeli || numero_adeli,
+                            type: 'professionnel',
+                            // 🔐 TEMPTOKENID RÉCUPÉRÉ DE LA SESSION 2FA
+                            tempTokenId: tempTokenId,
+                            generatedToken: tempTokenId, // Utiliser tempTokenId comme fallback
+                            // 🔑 CONSERVATION PRIORITAIRE DES TOKENS DE LA PREMIÈRE AUTHENTIFICATION
+                            originalJWT: response.data.token || response.data.jwt || response.data.accessToken || null,
+                            originalToken: response.data.token || null
+                        };
+                        
+                        // ✅ CONSERVATION SIMPLIFIÉE : Stocker les données médecin pour la 2FA
+                        console.log('🔐 CONSERVATION - Données médecin stockées pour la 2FA');
+                        
+                        console.log('🔐 DEBUG - Médecin enrichi avec tokens originaux:', {
+                            tempTokenId: enrichedMedecin.tempTokenId,
+                            generatedToken: enrichedMedecin.generatedToken,
+                            originalJWT: enrichedMedecin.originalJWT,
+                            originalToken: enrichedMedecin.originalToken,
+                            stockageLocalStorage: {
+                                originalJWT: localStorage.getItem('originalJWT') ? 'Présent' : 'Absent',
+                                firstConnectionToken: localStorage.getItem('firstConnectionToken') ? 'Présent' : 'Absent'
+                            }
+                        });
+                        setRequires2FA(true);
+                        setUserData(enrichedMedecin);
+                        setShow2FA(true);
+                        return;
+                    } catch (error) {
+                        console.error('❌ Erreur lors de la création de la session 2FA:', error);
+                        // En cas d'erreur, continuer sans tempTokenId
+                        const enrichedMedecin = {
+                            ...medecinData,
+                            numero_adeli: medecinData.numero_adeli || numero_adeli,
+                            type: 'professionnel',
+                            tempTokenId: null,
+                            generatedToken: null,
+                            originalJWT: response.data.token || response.data.jwt || response.data.accessToken || null,
+                            originalToken: response.data.token || null
+                        };
+                        setRequires2FA(true);
+                        setUserData(enrichedMedecin);
+                        setShow2FA(true);
+                        return;
+                    }
                 }
                 
                 // Connexion normale si pas de 2FA
@@ -209,29 +270,64 @@ function Connexion() {
                     const userData = response.data.data?.user || response.data.user || response.data;
                     console.log('👤 Données utilisateur extraites:', userData);
                     
-                    // Enrichir les données pour la 2FA (userType/identifier)
-                    const enrichedUser = {
-                        ...userData,
-                        email: userData.email || email,
-                        type: 'professionnel',
-                        // 🔐 Transmettre les informations 2FA de la réponse de connexion
-                        tempTokenId: response.data.tempTokenId || null,
-                        generatedToken: response.data.generatedToken || null,
-                        // 🔑 CONSERVER LES TOKENS DE LA PREMIÈRE AUTHENTIFICATION
-                        originalJWT: response.data.token || response.data.jwt || response.data.accessToken || null,
-                        originalToken: response.data.token || null
-                    };
-                    
-                    console.log('🔐 DEBUG - Utilisateur enrichi avec tokens originaux:', {
-                        tempTokenId: enrichedUser.tempTokenId,
-                        generatedToken: enrichedUser.generatedToken,
-                        originalJWT: enrichedUser.originalJWT,
-                        originalToken: enrichedUser.originalToken
-                    });
-                    setRequires2FA(true);
-                    setUserData(enrichedUser);
-                    setShow2FA(true);
-                    return;
+                    try {
+                        // 🔐 CRÉER UNE SESSION 2FA POUR RÉCUPÉRER LE TEMPTOKENID
+                        console.log('🔐 Création de session 2FA pour récupérer tempTokenId...');
+                        const twoFAResponse = await create2FASession({
+                            userType: 'professionnel',
+                            identifier: userData.email || email
+                        });
+                        
+                        console.log('🔐 Réponse create2FASession:', twoFAResponse);
+                        
+                        // Extraire le tempTokenId de la réponse
+                        const tempTokenId = twoFAResponse.data?.tempTokenId || 
+                                          twoFAResponse.tempTokenId || 
+                                          twoFAResponse.data?.sessionId ||
+                                          twoFAResponse.sessionId;
+                        
+                        console.log('🔐 tempTokenId extrait:', tempTokenId);
+                        
+                        // Enrichir les données pour la 2FA (userType/identifier)
+                        const enrichedUser = {
+                            ...userData,
+                            email: userData.email || email,
+                            type: 'professionnel',
+                            // 🔐 TEMPTOKENID RÉCUPÉRÉ DE LA SESSION 2FA
+                            tempTokenId: tempTokenId,
+                            generatedToken: tempTokenId, // Utiliser tempTokenId comme fallback
+                            // 🔑 CONSERVER LES TOKENS DE LA PREMIÈRE AUTHENTIFICATION
+                            originalJWT: response.data.token || response.data.jwt || response.data.accessToken || null,
+                            originalToken: response.data.token || null
+                        };
+                        
+                        console.log('🔐 DEBUG - Utilisateur enrichi avec tokens originaux:', {
+                            tempTokenId: enrichedUser.tempTokenId,
+                            generatedToken: enrichedUser.generatedToken,
+                            originalJWT: enrichedUser.originalJWT,
+                            originalToken: enrichedUser.originalToken
+                        });
+                        setRequires2FA(true);
+                        setUserData(enrichedUser);
+                        setShow2FA(true);
+                        return;
+                    } catch (error) {
+                        console.error('❌ Erreur lors de la création de la session 2FA:', error);
+                        // En cas d'erreur, continuer sans tempTokenId
+                        const enrichedUser = {
+                            ...userData,
+                            email: userData.email || email,
+                            type: 'professionnel',
+                            tempTokenId: null,
+                            generatedToken: null,
+                            originalJWT: response.data.token || response.data.jwt || response.data.accessToken || null,
+                            originalToken: response.data.token || null
+                        };
+                        setRequires2FA(true);
+                        setUserData(enrichedUser);
+                        setShow2FA(true);
+                        return;
+                    }
                 }
                 
                 // Connexion normale si pas de 2FA
@@ -255,112 +351,9 @@ function Connexion() {
 
     const handle2FASuccess = () => {
         console.log('✅ 2FA validée avec succès, redirection...');
-        console.log('🔍 DEBUG - Données disponibles pour la redirection:', {
-            userData: userData ? Object.keys(userData) : 'NULL',
-            selectedProfile,
-            selectedProfessional,
-            userDataType: userData?.type,
-            userDataId: userData?.id_patient || userData?.id
-        });
         
-        // 🔐 STOCKAGE DES TOKENS D'AUTHENTIFICATION APRÈS 2FA RÉUSSIE
-        try {
-            // Vérifier si les tokens ont déjà été stockés par Setup2FA
-            const existingJWT = localStorage.getItem('jwt');
-            const existingToken = localStorage.getItem('token');
-            const existingPatient = localStorage.getItem('patient');
-            const existingMedecin = localStorage.getItem('medecin');
-            
-            console.log('🔐 DEBUG - Tokens existants dans localStorage:', {
-                jwt: existingJWT,
-                token: existingToken,
-                patient: existingPatient,
-                medecin: existingMedecin
-            });
-            
-            // Si aucun token n'a été stocké par Setup2FA, stocker les données essentielles
-            if (!existingJWT && !existingToken) {
-                console.log('⚠️ DEBUG - Aucun token trouvé, stockage des données essentielles');
-                
-                if (userData && selectedProfile === 'patient') {
-                    // Pour les patients, stocker le secret 2FA et les données essentielles
-                    if (userData.two_factor_secret) {
-                        localStorage.setItem('two_factor_secret', userData.two_factor_secret);
-                    }
-                    
-                    // Stocker les données patient essentielles
-                    const patientDataToStore = {
-                        id_patient: userData.id_patient || userData.id,
-                        nom: userData.nom,
-                        prenom: userData.prenom,
-                        numero_assure: userData.numero_assure,
-                        two_factor_enabled: userData.two_factor_enabled,
-                        two_factor_secret: userData.two_factor_secret
-                    };
-                    
-                    localStorage.setItem('patient', JSON.stringify(patientDataToStore));
-                    console.log('🔐 DEBUG - Données patient stockées:', patientDataToStore);
-                    
-                    // 🔑 UTILISER LE TOKEN ORIGINAL DE LA PREMIÈRE AUTHENTIFICATION
-                    if (userData.originalJWT) {
-                        localStorage.setItem('jwt', userData.originalJWT);
-                        console.log('🔐 DEBUG - JWT original patient réutilisé:', userData.originalJWT.substring(0, 20) + '...');
-                    } else if (userData.tempTokenId) {
-                        // Fallback sur tempTokenId si pas de token original
-                        localStorage.setItem('jwt', userData.tempTokenId);
-                        console.log('🔐 DEBUG - tempTokenId utilisé comme JWT temporaire:', userData.tempTokenId);
-                    }
-                    
-                } else if (userData && selectedProfile === 'professionnel') {
-                    // Pour les professionnels, stocker le secret 2FA et les données
-                    if (userData.two_factor_secret) {
-                        localStorage.setItem('two_factor_secret', userData.two_factor_secret);
-                    }
-                    
-                    // Stocker les données professionnel
-                    const profDataToStore = {
-                        id: userData.id || userData.id_professionnel,
-                        nom: userData.nom,
-                        prenom: userData.prenom,
-                        role: selectedProfessional,
-                        two_factor_enabled: userData.two_factor_enabled,
-                        two_factor_secret: userData.two_factor_secret
-                    };
-                    
-                    if (selectedProfessional === 'medecin') {
-                        localStorage.setItem('medecin', JSON.stringify(profDataToStore));
-                        console.log('🔐 DEBUG - Données médecin stockées:', profDataToStore);
-                    }
-                    
-                    // 🔑 UTILISER LE TOKEN ORIGINAL DE LA PREMIÈRE AUTHENTIFICATION
-                    if (userData.originalToken) {
-                        localStorage.setItem('token', userData.originalToken);
-                        console.log('🔐 DEBUG - Token original professionnel réutilisé:', userData.originalToken.substring(0, 20) + '...');
-                    } else if (userData.originalJWT) {
-                        localStorage.setItem('token', userData.originalJWT);
-                        console.log('🔐 DEBUG - JWT original professionnel réutilisé:', userData.originalJWT.substring(0, 20) + '...');
-                    } else if (userData.tempTokenId) {
-                        // Fallback sur tempTokenId si pas de token original
-                        localStorage.setItem('token', userData.tempTokenId);
-                        console.log('🔐 DEBUG - tempTokenId utilisé comme token temporaire:', userData.tempTokenId);
-                    }
-                }
-            } else {
-                console.log('✅ DEBUG - Tokens déjà présents, pas de stockage supplémentaire nécessaire');
-            }
-            
-            console.log('🔐 DEBUG - localStorage final:', {
-                jwt: localStorage.getItem('jwt'),
-                token: localStorage.getItem('token'),
-                tempTokenId: localStorage.getItem('tempTokenId'),
-                patient: localStorage.getItem('patient'),
-                medecin: localStorage.getItem('medecin'),
-                two_factor_secret: localStorage.getItem('two_factor_secret')
-            });
-            
-        } catch (error) {
-            console.error('❌ DEBUG - Erreur lors du stockage des tokens:', error);
-        }
+        // ✅ SIMPLIFICATION : Les données sont déjà stockées par Setup2FA
+        console.log('✅ DEBUG - Données utilisateur déjà stockées par Setup2FA');
         
         // Redirection selon le type d'utilisateur
         if (userData) {

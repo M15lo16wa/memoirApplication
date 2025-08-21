@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🧪 Test Nouveau Format 2FA avec tempTokenId</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: #f5f5f5;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+
+        .success {
+            background: #efe;
+            border-color: #cfc;
+        }
+
+        .info {
+            background: #eef;
+            border-color: #ccf;
+        }
+
+        .code {
+            background: #f8f8f8;
+            padding: 10px;
+            border-radius: 3px;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+
+        button {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+
+        button:hover {
+            background: #1e7e34;
+        }
+
+        .result {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 3px;
+        }
+
+        .input-group {
+            margin: 10px 0;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+
+        input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>🧪 Test Nouveau Format 2FA avec tempTokenId</h1>
+
+        <div class="section info">
+            <h3>📊 Nouveau format identifié</h3>
+            <p>Le serveur attend maintenant <strong>4 champs</strong> au lieu de 3 :</p>
+            <div class="code">{
+                "verificationCode": {
+                "verificationCode": "921455",
+                "userType": "professionnel",
+                "identifier": "AH23456780",
+                "tempTokenId": "temp_1755627126315_n6fw28a4j"
+                }
+                }</div>
+        </div>
+
+        <div class="section">
+            <h3>🔧 Test du nouveau format</h3>
+
+            <div class="input-group">
+                <label for="verificationCode">Code de vérification :</label>
+                <input type="text" id="verificationCode" placeholder="921455" value="921455">
+            </div>
+
+            <div class="input-group">
+                <label for="userType">Type d'utilisateur :</label>
+                <input type="text" id="userType" placeholder="professionnel" value="professionnel">
+            </div>
+
+            <div class="input-group">
+                <label for="identifier">Identifiant :</label>
+                <input type="text" id="identifier" placeholder="AH23456780" value="AH23456780">
+            </div>
+
+            <div class="input-group">
+                <label for="tempTokenId">Temp Token ID :</label>
+                <input type="text" id="tempTokenId" placeholder="temp_1755627126315_n6fw28a4j"
+                    value="temp_1755627126315_n6fw28a4j">
+            </div>
+
+            <button onclick="testNouveauFormat()">🧪 Tester le nouveau format</button>
+        </div>
+
+        <div class="section">
+            <h3>📝 Résultat du test</h3>
+            <div id="result"></div>
+        </div>
+
+        <div class="section info">
+            <h3>🔍 Changements appliqués</h3>
+            <ul>
+                <li><strong>twoFactorApi.js :</strong> Ajout de `tempTokenId` dans les paramètres requis</li>
+                <li><strong>Setup2FA.js :</strong> Passage du `tempTokenId` lors de l'appel à `verifyAndEnable2FA`</li>
+                <li><strong>Format de requête :</strong> Structure imbriquée avec 4 champs</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:3000/api';
+
+        async function testNouveauFormat() {
+            const verificationCode = document.getElementById('verificationCode').value;
+            const userType = document.getElementById('userType').value;
+            const identifier = document.getElementById('identifier').value;
+            const tempTokenId = document.getElementById('tempTokenId').value;
+
+            if (!verificationCode || !userType || !identifier || !tempTokenId) {
+                alert('Veuillez remplir tous les champs !');
+                return;
+            }
+
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = '<div class="loading">🧪 Test en cours...</div>';
+
+            try {
+                // Format exact attendu par le serveur
+                const requestData = {
+                    verificationCode: {
+                        verificationCode,
+                        userType,
+                        identifier,
+                        tempTokenId
+                    }
+                };
+
+                console.log('🔐 Test - Données envoyées:', requestData);
+
+                const response = await fetch(`${API_BASE}/auth/verify-2fa`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify(requestData)
+                });
+
+                const responseData = await response.json();
+
+                if (response.ok) {
+                    resultDiv.innerHTML = `
+                        <div class="success">
+                            <h4>✅ SUCCÈS ! (${response.status})</h4>
+                            <p>Le nouveau format avec tempTokenId fonctionne !</p>
+                            <div class="code">${JSON.stringify(responseData, null, 2)}</div>
+                        </div>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `
+                        <div class="error">
+                            <h4>❌ ERREUR ${response.status}</h4>
+                            <p>Le serveur a rejeté la requête :</p>
+                            <div class="code">${JSON.stringify(responseData, null, 2)}</div>
+                        </div>
+                    `;
+                }
+
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="error">
+                        <h4>❌ ERREUR RÉSEAU</h4>
+                        <p>${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+
+        // Test automatique au chargement
+        document.addEventListener('DOMContentLoaded', function () {
+            console.log('🧪 Test automatique du nouveau format 2FA avec tempTokenId');
+        });
+    </script>
+</body>
+
+</html>

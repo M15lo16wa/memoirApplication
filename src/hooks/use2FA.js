@@ -75,12 +75,29 @@ export const use2FA = () => {
       
       const response = await send2FATOTPCode(params);
       
-      if (response.status === 'success') {
-        setEmailSent(true);
-        setEmailAddress(response.data.email);
-        startCountdown(30); // 30 secondes
-        console.log('✅ Code TOTP envoyé avec succès à:', response.data.email);
-        return true;
+      // 🔍 DÉBOGAGE - Vérifier la structure de la réponse
+      console.log('🔐 DEBUG - Réponse send2FATOTPCode reçue dans use2FA:', {
+        response: response,
+        hasData: !!response.data,
+        hasEmail: !!response.data?.email,
+        status: response.status,
+        httpStatus: response.status === 200 || response.status === 'success'
+      });
+      
+      // Vérifier que la réponse est valide (statut HTTP 200 ou propriété status 'success')
+      if (response && (response.status === 200 || response.status === 'success' || response.data)) {
+        // Extraire l'email selon la structure de la réponse
+        const userEmail = response.data?.email || response.data?.user?.email || response.email;
+        
+        if (userEmail) {
+          setEmailSent(true);
+          setEmailAddress(userEmail);
+          startCountdown(30); // 30 secondes
+          console.log('✅ Code TOTP envoyé avec succès à:', userEmail);
+          return true;
+        } else {
+          throw new Error('Email non trouvé dans la réponse TOTP');
+        }
       }
       
       return false;
@@ -163,6 +180,16 @@ export const use2FA = () => {
       const sessionResult = await create2FASession(params);
       console.log('✅ Session temporaire 2FA créée:', sessionResult);
       
+      // 🔍 DÉBOGAGE - Vérifier la structure de la réponse
+      console.log('🔐 DEBUG - Réponse create2FASession reçue dans use2FA:', {
+        sessionResult: sessionResult,
+        hasData: !!sessionResult?.data,
+        hasTempTokenId: !!sessionResult?.data?.tempTokenId,
+        hasDirectTempTokenId: !!sessionResult?.tempTokenId,
+        status: sessionResult?.status,
+        httpStatus: sessionResult?.status === 200 || sessionResult?.status === 'success'
+      });
+      
       // Harmoniser selon doc API: success + data.tempTokenId
       const tempId = sessionResult?.data?.tempTokenId || sessionResult?.tempTokenId;
       if (tempId) {
@@ -206,8 +233,23 @@ export const use2FA = () => {
     }
 
     try {
+      // ✅ CORRECTION : Inclure userType et identifier requis par le serveur
+      if (!userDataFor2FA) {
+        setValidationError('Données utilisateur manquantes pour la validation 2FA');
+        setIsSubmitting(false);
+        return;
+      }
+      
+      const userParams = buildUserParams(userDataFor2FA);
+      console.log('🔐 DEBUG - Paramètres utilisateur extraits dans use2FA:', userParams);
+      
       // Appel à l'API pour valider la session avec le code fourni
-      const result = await validate2FASession(code, tempTokenId);
+      const result = await validate2FASession({
+        verificationCode: code,
+        userType: userParams.userType,
+        identifier: userParams.identifier,
+        tempTokenId: tempTokenId
+      });
       
       console.log('✅ Session 2FA validée avec succès !', result);
       setShow2FAModal(false); // On ferme la modale

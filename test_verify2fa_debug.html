@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Debug verifyAndEnable2FA</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+
+        .success {
+            background-color: #d4edda;
+            border-color: #c3e6cb;
+        }
+
+        .error {
+            background-color: #f8d7da;
+            border-color: #f5c6cb;
+        }
+
+        .info {
+            background-color: #d1ecf1;
+            border-color: #bee5eb;
+        }
+
+        pre {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 3px;
+            overflow-x: auto;
+        }
+
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>🔐 Test Debug verifyAndEnable2FA</h1>
+
+    <div class="test-section info">
+        <h3>📋 Test des structures de paramètres</h3>
+        <p>Ce test vérifie que la fonction verifyAndEnable2FA peut gérer correctement les deux structures de paramètres.
+        </p>
+    </div>
+
+    <div class="test-section">
+        <h3>🧪 Test 1: Structure imbriquée (Setup2FA.js)</h3>
+        <button onclick="testNestedStructure()">Tester Structure Imbriquée</button>
+        <div id="result1"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>🧪 Test 2: Structure plate</h3>
+        <button onclick="testFlatStructure()">Tester Structure Plate</button>
+        <div id="result2"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>🧪 Test 3: Paramètres manquants</h3>
+        <button onclick="testMissingParams()">Tester Paramètres Manquants</button>
+        <div id="result3"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>🧪 Test 4: Simulation Setup2FA.js</h3>
+        <button onclick="testSetup2FAStructure()">Tester Structure Setup2FA</button>
+        <div id="result4"></div>
+    </div>
+
+    <script>
+        // Simulation de la fonction verifyAndEnable2FA corrigée
+        function verifyAndEnable2FA(params) {
+            try {
+                console.log('🔐 VerifyAndEnable2FA - Paramètres reçus (bruts):', params);
+
+                // ✅ CORRECTION : Extraire les paramètres de la structure imbriquée OU plate
+                let verificationCode, userType, identifier, tempTokenId;
+
+                if (params.verificationCode && typeof params.verificationCode === 'object') {
+                    // Structure imbriquée : { verificationCode: { verificationCode, userType, identifier, tempTokenId } }
+                    console.log('🔐 DEBUG - Structure imbriquée détectée');
+                    verificationCode = params.verificationCode.verificationCode;
+                    userType = params.verificationCode.userType;
+                    identifier = params.verificationCode.identifier;
+                    tempTokenId = params.verificationCode.tempTokenId;
+                } else {
+                    // Structure plate : { verificationCode, userType, identifier, tempTokenId }
+                    console.log('🔐 DEBUG - Structure plate détectée');
+                    verificationCode = params.verificationCode;
+                    userType = params.userType;
+                    identifier = params.identifier;
+                    tempTokenId = params.tempTokenId;
+                }
+
+                console.log('🔐 DEBUG - Paramètres extraits:', {
+                    verificationCode,
+                    userType,
+                    identifier,
+                    tempTokenId,
+                    hasVerificationCode: !!verificationCode,
+                    hasUserType: !!userType,
+                    hasIdentifier: !!identifier,
+                    hasTempTokenId: !!tempTokenId
+                });
+
+                // Vérifier que tous les paramètres requis sont présents
+                if (!verificationCode || !userType || !identifier || !tempTokenId) {
+                    console.error('❌ VerifyAndEnable2FA - Paramètres manquants:', {
+                        verificationCode: verificationCode || 'MANQUANT',
+                        userType: userType || 'MANQUANT',
+                        identifier: identifier || 'MANQUANT',
+                        tempTokenId: tempTokenId || 'MANQUANT',
+                        paramsReceived: params,
+                        paramsType: typeof params,
+                        paramsKeys: Object.keys(params || {})
+                    });
+                    throw new Error(`Paramètres manquants pour verifyAndEnable2FA: verificationCode=${!!verificationCode}, userType=${!!userType}, identifier=${!!identifier}, tempTokenId=${!!tempTokenId}`);
+                }
+
+                // 🔍 DÉBOGAGE - Vérifier la structure de la requête
+                const requestData = {
+                    verificationCode: {
+                        verificationCode,
+                        userType,
+                        identifier,
+                        tempTokenId
+                    }
+                };
+
+                console.log('🔐 DEBUG - Données de requête envoyées:', requestData);
+
+                return {
+                    status: 'success',
+                    message: 'Paramètres extraits avec succès',
+                    data: {
+                        verificationCode,
+                        userType,
+                        identifier,
+                        tempTokenId,
+                        requestData
+                    }
+                };
+
+            } catch (error) {
+                console.error('❌ VerifyAndEnable2FA - Erreur:', error);
+                throw error;
+            }
+        }
+
+        // Test 1: Structure imbriquée (comme dans Setup2FA.js)
+        function testNestedStructure() {
+            const resultDiv = document.getElementById('result1');
+            resultDiv.innerHTML = '<p>🔄 Test en cours...</p>';
+
+            try {
+                const params = {
+                    verificationCode: {
+                        verificationCode: "123456",
+                        userType: "professionnel",
+                        identifier: "AH23456780",
+                        tempTokenId: "temp_1234567890_abc123"
+                    }
+                };
+
+                console.log('🧪 Test 1 - Paramètres envoyés:', params);
+                const result = verifyAndEnable2FA(params);
+
+                resultDiv.innerHTML = `
+                    <div class="success">
+                        <h4>✅ Test réussi !</h4>
+                        <pre>${JSON.stringify(result, null, 2)}</pre>
+                    </div>
+                `;
+
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="error">
+                        <h4>❌ Test échoué</h4>
+                        <p><strong>Erreur:</strong> ${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+
+        // Test 2: Structure plate
+        function testFlatStructure() {
+            const resultDiv = document.getElementById('result2');
+            resultDiv.innerHTML = '<p>🔄 Test en cours...</p>';
+
+            try {
+                const params = {
+                    verificationCode: "123456",
+                    userType: "patient",
+                    identifier: "TEMP000005",
+                    tempTokenId: "temp_1234567890_def456"
+                };
+
+                console.log('🧪 Test 2 - Paramètres envoyés:', params);
+                const result = verifyAndEnable2FA(params);
+
+                resultDiv.innerHTML = `
+                    <div class="success">
+                        <h4>✅ Test réussi !</h4>
+                        <pre>${JSON.stringify(result, null, 2)}</pre>
+                    </div>
+                `;
+
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="error">
+                        <h4>❌ Test échoué</h4>
+                        <p><strong>Erreur:</strong> ${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+
+        // Test 3: Paramètres manquants
+        function testMissingParams() {
+            const resultDiv = document.getElementById('result3');
+            resultDiv.innerHTML = '<p>🔄 Test en cours...</p>';
+
+            try {
+                const params = {
+                    verificationCode: "123456"
+                    // userType, identifier et tempTokenId manquants
+                };
+
+                console.log('🧪 Test 3 - Paramètres envoyés:', params);
+                const result = verifyAndEnable2FA(params);
+
+                resultDiv.innerHTML = `
+                    <div class="success">
+                        <h4>✅ Test réussi !</h4>
+                        <pre>${JSON.stringify(result, null, 2)}</pre>
+                    </div>
+                `;
+
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="error">
+                        <h4>❌ Test échoué (attendu)</h4>
+                        <p><strong>Erreur:</strong> ${error.message}</p>
+                        <p>✅ Ce test doit échouer car des paramètres sont manquants</p>
+                    </div>
+                `;
+            }
+        }
+
+        // Test 4: Simulation exacte de Setup2FA.js
+        function testSetup2FAStructure() {
+            const resultDiv = document.getElementById('result4');
+            resultDiv.innerHTML = '<p>🔄 Test en cours...</p>';
+
+            try {
+                // Simulation exacte de la structure dans Setup2FA.js
+                const userData = {
+                    numero_adeli: "AH23456780",
+                    type: "professionnel",
+                    id: "12345"
+                };
+
+                // Simulation de buildUserParams
+                const buildUserParams = (userData) => {
+                    if (userData.numero_adeli) {
+                        return {
+                            userType: 'professionnel',
+                            identifier: userData.numero_adeli,
+                            userId: userData.id || userData.id_professionnel || userData.userId ? String(userData.id || userData.id_professionnel || userData.userId) : undefined
+                        };
+                    }
+                    throw new Error("Impossible de déterminer 'userType' et 'identifier'");
+                };
+
+                const userParams = buildUserParams(userData);
+                const verificationCode = "123456";
+                const finalTempTokenId = "temp_1234567890_xyz789";
+
+                const verificationParams = {
+                    verificationCode: {
+                        verificationCode: verificationCode,
+                        userType: userParams.userType,
+                        identifier: userParams.identifier,
+                        tempTokenId: finalTempTokenId
+                    }
+                };
+
+                console.log('🧪 Test 4 - Paramètres envoyés (Setup2FA.js):', verificationParams);
+                const result = verifyAndEnable2FA(verificationParams);
+
+                resultDiv.innerHTML = `
+                    <div class="success">
+                        <h4>✅ Test Setup2FA.js réussi !</h4>
+                        <pre>${JSON.stringify(result, null, 2)}</pre>
+                    </div>
+                `;
+
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="error">
+                        <h4>❌ Test Setup2FA.js échoué</h4>
+                        <p><strong>Erreur:</strong> ${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+    </script>
+</body>
+
+</html>

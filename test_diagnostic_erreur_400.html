@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔍 Diagnostic Erreur 400 - Format Imbriqué 2FA</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: #f5f5f5;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+
+        .error {
+            background: #fee;
+            border-color: #fcc;
+        }
+
+        .success {
+            background: #efe;
+            border-color: #cfc;
+        }
+
+        .info {
+            background: #eef;
+            border-color: #ccf;
+        }
+
+        .code {
+            background: #f8f8f8;
+            padding: 10px;
+            border-radius: 3px;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+
+        button:hover {
+            background: #0056b3;
+        }
+
+        .result {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 3px;
+        }
+
+        .loading {
+            color: #666;
+            font-style: italic;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>🔍 Diagnostic Erreur 400 - Format Imbriqué 2FA</h1>
+
+        <div class="section info">
+            <h3>📊 Analyse de l'erreur reçue</h3>
+            <p><strong>Erreur :</strong> Request failed with status code 400</p>
+            <p><strong>Endpoint :</strong> POST /auth/verify-2fa</p>
+            <p><strong>Données envoyées :</strong></p>
+            <div class="code">{
+                "verificationCode": {
+                "verificationCode": "106507",
+                "userType": "professionnel",
+                "identifier": "AH23456780"
+                }
+                }</div>
+        </div>
+
+        <div class="section">
+            <h3>🧪 Test des différents formats possibles</h3>
+            <p>Testons plusieurs variantes pour identifier le format exact attendu par le serveur :</p>
+
+            <button onclick="testFormat1()">Test 1: Format plat simple</button>
+            <button onclick="testFormat2()">Test 2: Format avec code</button>
+            <button onclick="testFormat3()">Test 3: Format avec token</button>
+            <button onclick="testFormat4()">Test 4: Format imbriqué actuel</button>
+            <button onclick="testFormat5()">Test 5: Format avec userType/identifier au niveau racine</button>
+        </div>
+
+        <div class="section">
+            <h3>📝 Résultats des tests</h3>
+            <div id="results"></div>
+        </div>
+
+        <div class="section info">
+            <h3>🔍 Hypothèses sur le problème</h3>
+            <ul>
+                <li><strong>Format imbriqué incorrect :</strong> Le serveur pourrait attendre une structure différente
+                </li>
+                <li><strong>Champ manquant :</strong> Il pourrait manquer un champ requis (ex: userId, sessionId)</li>
+                <li><strong>Validation côté serveur :</strong> Le serveur pourrait avoir des règles de validation
+                    strictes</li>
+                <li><strong>Headers manquants :</strong> Il pourrait manquer des headers d'authentification</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:3000/api';
+
+        function addResult(title, data, isError = false) {
+            const resultsDiv = document.getElementById('results');
+            const resultDiv = document.createElement('div');
+            resultDiv.className = `result ${isError ? 'error' : 'success'}`;
+
+            resultDiv.innerHTML = `
+                <h4>${title}</h4>
+                <div class="code">${JSON.stringify(data, null, 2)}</div>
+            `;
+
+            resultsDiv.appendChild(resultDiv);
+        }
+
+        async function testAPI(endpoint, data, testName) {
+            try {
+                addResult(`${testName} - Envoi...`, data, false);
+
+                const response = await fetch(`${API_BASE}${endpoint}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                const responseData = await response.json();
+
+                if (response.ok) {
+                    addResult(`${testName} - ✅ SUCCÈS (${response.status})`, responseData, false);
+                } else {
+                    addResult(`${testName} - ❌ ERREUR ${response.status}`, responseData, true);
+                }
+
+            } catch (error) {
+                addResult(`${testName} - ❌ ERREUR RÉSEAU`, error.message, true);
+            }
+        }
+
+        // Test 1: Format plat simple
+        async function testFormat1() {
+            const data = {
+                verificationCode: "106507"
+            };
+            await testAPI('/auth/verify-2fa', data, 'Format 1: Plat simple');
+        }
+
+        // Test 2: Format avec code
+        async function testFormat2() {
+            const data = {
+                code: "106507",
+                userType: "professionnel",
+                identifier: "AH23456780"
+            };
+            await testAPI('/auth/verify-2fa', data, 'Format 2: Avec code');
+        }
+
+        // Test 3: Format avec token
+        async function testFormat3() {
+            const data = {
+                token: "106507",
+                userType: "professionnel",
+                identifier: "AH23456780"
+            };
+            await testAPI('/auth/verify-2fa', data, 'Format 3: Avec token');
+        }
+
+        // Test 4: Format imbriqué actuel
+        async function testFormat4() {
+            const data = {
+                verificationCode: {
+                    verificationCode: "106507",
+                    userType: "professionnel",
+                    identifier: "AH23456780"
+                }
+            };
+            await testAPI('/auth/verify-2fa', data, 'Format 4: Imbriqué actuel');
+        }
+
+        // Test 5: Format avec userType/identifier au niveau racine
+        async function testFormat5() {
+            const data = {
+                verificationCode: "106507",
+                userType: "professionnel",
+                identifier: "AH23456780"
+            };
+            await testAPI('/auth/verify-2fa', data, 'Format 5: Racine avec userType/identifier');
+        }
+
+        // Test automatique de tous les formats
+        async function testAllFormats() {
+            document.getElementById('results').innerHTML = '<div class="loading">🧪 Test de tous les formats en cours...</div>';
+
+            await testFormat1();
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            await testFormat2();
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            await testFormat3();
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            await testFormat4();
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            await testFormat5();
+
+            document.getElementById('results').innerHTML += '<div class="success"><h4>✅ Tests terminés !</h4><p>Vérifiez les résultats ci-dessus pour identifier le format correct.</p></div>';
+        }
+
+        // Ajouter un bouton pour tester tous les formats
+        document.addEventListener('DOMContentLoaded', function () {
+            const testAllButton = document.createElement('button');
+            testAllButton.textContent = '🧪 Tester TOUS les formats automatiquement';
+            testAllButton.onclick = testAllFormats;
+            testAllButton.style.background = '#28a745';
+            testAllButton.style.marginTop = '10px';
+
+            document.querySelector('.section button:last-of-type').after(testAllButton);
+        });
+    </script>
+</body>
+
+</html>

@@ -1,48 +1,73 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { QRCodeCanvas } from 'qrcode.react';
 
-import { getPatients, createDossierMedical, getServices, getAllDossiersMedical, getDossierMedical, closeDossierPatient, updateDossierPatient, createOrdonnance, createExamen, getAllPrescriptions, getOrdonnancesRecentes, createOrdonnanceComplete, ajouterPrescriptionAuDossier, marquerNotificationLue, getNotificationsPatient, getResumeAujourdhui } from "../services/api/medicalApi";
+import { createDossierMedical, getAllDossiersMedical, getDossierMedical, closeDossierPatient, updateDossierPatient, createOrdonnance, createExamen, getAllPrescriptions, getOrdonnancesRecentes, createOrdonnanceComplete, ajouterPrescriptionAuDossier, marquerNotificationLue, getNotificationsPatient, getResumeAujourdhui } from "../services/api/medicalApi";
+import { getPatients, getServices } from "../services/api/patientApi";
 import { isAuthenticated, isMedecinAuthenticated, isPatientAuthenticated } from "../services/api/authApi";
 
 import { useDMP } from "../context/DMPContext";
+import TokenChecker from "../components/debug/TokenChecker";
 
 function DossierPatient() {
   const navigate = useNavigate();
   const { state: dmpState } = useDMP();
 
-  // États pour l'authentification
-  const [isUserAuthenticated, setIsUserAuthenticated] = useState(false);
-  const [authLoading, setAuthLoading] = useState(true);
+  // États consolidés
+  const [authState, setAuthState] = useState({
+    isAuthenticated: false,
+    loading: true
+  });
 
-  // États pour la gestion des onglets et des patients
-  const [activeTab, setActiveTab] = useState("patients-list");
-  const [patients, setPatients] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [showPatientModal, setShowPatientModal] = useState(false);
-  const [modalPatient, setModalPatient] = useState(null);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [editPatient, setEditPatient] = useState(null);
-  const [showShareModal, setShowShareModal] = useState(false);
-  const [sharePatient, setSharePatient] = useState(null);
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [showPatientFileModal, setShowPatientFileModal] = useState(false);
-  const [search, setSearch] = useState("");
-  const [filterRecent, setFilterRecent] = useState(false);
-  const [filterShared, setFilterShared] = useState(false);
+  const [uiState, setUIState] = useState({
+    activeTab: "patients-list",
+    loading: false,
+    search: "",
+    filterRecent: false,
+    filterShared: false
+  });
 
-  // États pour les services et dossiers
-  const [services, setServices] = useState([]);
-  const [servicesLoading, setServicesLoading] = useState(false);
-  const [patientsForSelect, setPatientsForSelect] = useState([]);
-  const [dossiersPatients, setDossiersPatients] = useState([]);
-  const [dossiersLoading, setDossiersLoading] = useState(false);
-  const [selectedDossier, setSelectedDossier] = useState(null);
-  const [showDossierModal, setShowDossierModal] = useState(false);
-  const [dossierDetails, setDossierDetails] = useState(null);
-  const [dossierDetailsLoading, setDossierDetailsLoading] = useState(false);
-  const [showEditDossierModal, setShowEditDossierModal] = useState(false);
-  const [editDossierForm, setEditDossierForm] = useState({
+  const [modalState, setModalState] = useState({
+    showPatientModal: false,
+    showEditModal: false,
+    showShareModal: false,
+    showAddModal: false,
+    showPatientFile: false,
+    showDossierModal: false,
+    showEditDossierModal: false,
+    showPrescriptionModal: false,
+    showExamenModal: false,
+    showQRModal: false,
+    showNotificationModal: false,
+    showOrdonnanceCompleteModal: false
+  });
+
+  const [dataState, setDataState] = useState({
+    patients: [],
+    services: [],
+    patientsForSelect: [],
+    dossiersPatients: [],
+    selectedDossier: null,
+    dossierDetails: null,
+    prescriptions: [],
+    selectedPatientForPrescription: null,
+    ordonnancesRecentes: [],
+    resumeAujourdhui: null,
+    prescriptionNotifications: []
+  });
+
+  const [loadingState, setLoadingState] = useState({
+    services: false,
+    dossiers: false,
+    dossierDetails: false,
+    dataState_prescriptions: false,
+    ordonnances: false,
+    resume: false,
+    notifications: false
+  });
+
+  // Formulaires avec useRef pour éviter les re-renders
+  const editDossierFormRef = useRef({
     statut: '',
     type_dossier: '',
     service_id: '',
@@ -64,8 +89,7 @@ function DossierPatient() {
     motif_fermeture: ''
   });
   
-  // Form state for patient file creation
-  const [patientFileForm, setPatientFileForm] = useState({
+  const patientFileFormRef = useRef({
     patient_id: '',
     service_id: '',
     statut: 'actif',
@@ -81,13 +105,7 @@ function DossierPatient() {
     directives_anticipees: ''
   });
 
-  // États pour l'onglet prescription
-  const [prescriptions, setPrescriptions] = useState([]);
-  const [prescriptionsLoading, setPrescriptionsLoading] = useState(false);
-  const [showPrescriptionModal, setShowPrescriptionModal] = useState(false);
-  const [showExamenModal, setShowExamenModal] = useState(false);
-  const [selectedPatientForPrescription, setSelectedPatientForPrescription] = useState(null);
-  const [prescriptionForm, setPrescriptionForm] = useState({
+  const prescriptionFormRef = useRef({
     patient_id: '',
     principe_actif: '',
     nom_commercial: '',
@@ -98,13 +116,13 @@ function DossierPatient() {
     renouvelable: false,
     nb_renouvellements: 0,
     observations: '',
-    // Informations du médecin traitant
     medecin_nom: '',
     medecin_prenom: '',
     medecin_specialite: '',
     medecin_numero_ordre: ''
   });
-  const [examenForm, setExamenForm] = useState({
+
+  const examenFormRef = useRef({
     patient_id: '',
     type_examen: '',
     parametres: '',
@@ -117,21 +135,10 @@ function DossierPatient() {
   });
 
   // États pour les modals et notifications
-  const [showQRModal, setShowQRModal] = useState(false);
-  const [qrCodeData, setQrCodeData] = useState(null);
-  const [createdPrescription, setCreatedPrescription] = useState(null);
-
-  // États pour les notifications et ordonnances
-  const [prescriptionNotifications, setPrescriptionNotifications] = useState([]);
-  const [notificationsLoading, setNotificationsLoading] = useState(false);
-  const [ordonnancesRecentes, setOrdonnancesRecentes] = useState([]);
-  const [ordonnancesRecentesLoading, setOrdonnancesRecentesLoading] = useState(false);
-  const [resumeAujourdhui, setResumeAujourdhui] = useState(null);
-  const [resumeLoading, setResumeLoading] = useState(false);
-  const [selectedNotification, setSelectedNotification] = useState(null);
-  const [showNotificationModal, setShowNotificationModal] = useState(false);
-  const [showOrdonnanceCompleteModal, setShowOrdonnanceCompleteModal] = useState(false);
-  const [ordonnanceCompleteForm, setOrdonnanceCompleteForm] = useState({
+  const qrCodeDataRef = useRef(null);
+  const createdPrescriptionRef = useRef(null);
+  const selectedNotificationRef = useRef(null);
+  const ordonnanceCompleteFormRef = useRef({
     patient_id: '',
     dossier_id: '',
     principe_actif: '',
@@ -147,11 +154,50 @@ function DossierPatient() {
     canal: 'application'
   });
 
+  // Références pour les éléments sélectionnés
+  const selectedDossierRef = useRef(null);
+  const selectedPatientForPrescriptionRef = useRef(null);
+  const modalPatientRef = useRef(null);
+  const editPatientRef = useRef(null);
+  const sharePatientRef = useRef(null);
+  const dossierDetailsRef = useRef(null);
+
+  // Fonctions utilitaires pour la mise à jour des états
+  const updateAuthState = useCallback((updates) => {
+    setAuthState(prev => ({ ...prev, ...updates }));
+  }, []);
+
+  const updateUIState = useCallback((updates) => {
+    setUIState(prev => ({ ...prev, ...updates }));
+  }, []);
+
+  const updateModalState = useCallback((updates) => {
+    setModalState(prev => ({ ...prev, ...updates }));
+  }, []);
+
+  const updateDataState = useCallback((updates) => {
+    setDataState(prev => ({ ...prev, ...updates }));
+  }, []);
+
+  const updateLoadingState = useCallback((updates) => {
+    setLoadingState(prev => ({ ...prev, ...updates }));
+  }, []);
+
+  // Données dérivées avec useMemo
+  const derivedData = useMemo(() => ({
+    hasPatients: dataState.patients.length > 0,
+    hasServices: dataState.services.length > 0,
+    hasDossiers: dataState.dossiersPatients.length > 0,
+    hasPrescriptions: dataState.prescriptions.length > 0,
+    isLoading: uiState.loading || loadingState.services || loadingState.dossiers || loadingState.dossierDetails,
+    canCreateDossier: dataState.patients.length > 0 && dataState.services.length > 0
+  }), [dataState, uiState, loadingState]);
+
   // Maintenant toutes les fonctions sont définies après les useState
   const openDossierModal = async (dossier) => {
-    setSelectedDossier(dossier);
-    setShowDossierModal(true);
-    setDossierDetailsLoading(true);
+    selectedDossierRef.current = dossier;
+    updateModalState({ showDossierModal: true });
+    updateLoadingState({ dossierDetails: true });
     
     try {
       // Use the correct ID field - backend uses 'id' not 'Id'
@@ -183,27 +229,27 @@ function DossierPatient() {
         dossierData.numeroDossier = dossier.numeroDossier || dossier.id_dossier || dossier.id;
       }
       
-      setDossierDetails(dossierData);
+      dossierDetailsRef.current = dossierData;
     } catch (error) {
       console.error('Erreur lors du chargement des détails du dossier:', error);
-      setDossierDetails(null);
+      dossierDetailsRef.current = null;
     } finally {
-      setDossierDetailsLoading(false);
+      updateLoadingState({ dossierDetails: false });
     }
   };
 
   const closeDossierModal = () => {
-    setShowDossierModal(false);
-    setSelectedDossier(null);
-    setDossierDetails(null);
+    updateModalState({ showDossierModal: false });
+    selectedDossierRef.current = null;
+    dossierDetailsRef.current = null;
   };
 
   const handleEditDossier = (dossier) => {
     console.log('Opening edit modal for dossier:', dossier);
-    setSelectedDossier(dossier);
+    selectedDossierRef.current = dossier;
     
     // Pre-fill the form with existing data
-    setEditDossierForm({
+    editDossierFormRef.current = {
       statut: dossier.statut || '',
       type_dossier: dossier.type_dossier || '',
       service_id: dossier.service_id || '',
@@ -223,48 +269,47 @@ function DossierPatient() {
       observations: dossier.observations || '',
       date_fermeture: dossier.date_fermeture || '',
       motif_fermeture: dossier.motif_fermeture || ''
-    });
-    setShowEditDossierModal(true);
+    };
+    updateModalState({ showEditDossierModal: true });
   };
 
-  const handleEditDossierInputChange = (e) => {
+  const handleEditDossierInputChange = useCallback((e) => {
     const { name, value } = e.target;
-    setEditDossierForm(prev => ({ ...prev, [name]: value }));
-  };
+    editDossierFormRef.current = { ...editDossierFormRef.current, [name]: value };
+  }, []);
 
-  const handleUpdateDossier = async (e) => {
+  const handleUpdateDossier = useCallback(async (e) => {
     e.preventDefault();
-    setLoading(true);
+    updateUIState({ loading: true });
     
     try {
-      const dossierId = selectedDossier.id_dossier || selectedDossier.id;
-      console.log('Updating dossier:', dossierId, editDossierForm);
+      const dossierId = selectedDossierRef.current.id_dossier || selectedDossierRef.current.id;
+      console.log('Updating dossier:', dossierId, editDossierFormRef.current);
       
       // Convert date to ISO format if provided
       const formData = {
-        ...editDossierForm,
-        date_fermeture: editDossierForm.date_fermeture ? new Date(editDossierForm.date_fermeture).toISOString() : null
+        ...editDossierFormRef.current,
+        date_fermeture: editDossierFormRef.current.date_fermeture ? new Date(editDossierFormRef.current.date_fermeture).toISOString() : null
       };
       
       await updateDossierPatient(dossierId, formData);
       alert('Dossier mis à jour avec succès!');
-      setShowEditDossierModal(false);
+      updateModalState({ showEditDossierModal: false });
       
       // Reload dossiers list
       await loadDossiersPatients();
-      
     } catch (error) {
       console.error('Erreur lors de la mise à jour du dossier:', error);
       alert('Erreur lors de la mise à jour du dossier: ' + error);
     } finally {
-      setLoading(false);
+      updateUIState({ loading: false });
     }
-  };
+  }, []);
 
-  const closeEditDossierModal = () => {
-    setShowEditDossierModal(false);
-    setSelectedDossier(null);
-    setEditDossierForm({
+  const closeEditDossierModal = useCallback(() => {
+    updateModalState({ showEditDossierModal: false });
+    selectedDossierRef.current = null;
+    editDossierFormRef.current = {
       statut: '',
       type_dossier: '',
       service_id: '',
@@ -284,8 +329,8 @@ function DossierPatient() {
       observations: '',
       date_fermeture: '',
       motif_fermeture: ''
-    });
-  };
+    };
+  }, []);
 
   const handleCloseDossier = async (dossier) => {
     if (window.confirm('Êtes-vous sûr de vouloir fermer ce dossier ?')) {
@@ -322,23 +367,23 @@ function DossierPatient() {
     console.log('Opening patient file modal...');
     
     // Set modal to open first
-    setShowPatientFileModal(true);
+    updateModalState({ showPatientFile: true });
     
-    // Load services and patients in parallel
+    // Load dataState.services and dataState.patients in parallel
     try {
       await Promise.all([
         loadServices(),
         loadPatientsForSelect()
       ]);
-      console.log('Services and patients loaded successfully');
+      console.log('Services and dataState.patients loaded successfully');
     } catch (error) {
-      console.error('Error loading data for modal:', error);
+      console.error('Error uiState.loading data for modal:', error);
     }
   };
 
   const closePatientFileModal = () => {
-    setShowPatientFileModal(false);
-    setPatientFileForm({
+    updateModalState({ showPatientFile: false });
+    patientFileFormRef.current = {
       patient_id: '',
       service_id: '',
       statut: 'actif',
@@ -352,11 +397,11 @@ function DossierPatient() {
       histoire_familiale: '',
       observations: '',
       directives_anticipees: ''
-    });
+    };
   };
 
   const loadServices = useCallback(async () => {
-    setServicesLoading(true);
+    updateLoadingState({ services: true });
     try {
       console.log('Début du chargement des services...');
       const servicesData = await getServices();
@@ -370,25 +415,25 @@ function DossierPatient() {
           console.log('First service structure:', servicesData[0]);
           console.log('Available keys in first service:', Object.keys(servicesData[0]));
         }
-        setServices(servicesData);
+        updateDataState({ services: servicesData });
         console.log(`${servicesData.length} services chargés avec succès`);
       } else if (servicesData && typeof servicesData === 'object') {
         console.log('Services data is an object, checking for nested services...');
         const possibleServices = servicesData.services || servicesData.data || servicesData.result || [];
         if (Array.isArray(possibleServices)) {
           console.log('Found services in nested object:', possibleServices);
-          setServices(possibleServices);
+          updateDataState({ services: possibleServices });
           console.log(`${possibleServices.length} services chargés depuis l'objet imbriqué`);
         } else {
           console.error('No valid services array found in object:', servicesData);
-          setServices([]);
+          updateDataState({ services: [] });
         }
       } else {
         console.error('Unexpected services data format:', servicesData);
         if (servicesData && typeof servicesData === 'object') {
           console.error('Services data keys:', Object.keys(servicesData));
         }
-        setServices([]);
+        updateDataState({ services: [] });
       }
     } catch (error) {
       console.error('Erreur lors du chargement des services:', error);
@@ -398,20 +443,20 @@ function DossierPatient() {
         response: error.response?.data,
         status: error.response?.status
       });
-      setServices([]);
+      updateDataState({ services: [] });
     } finally {
-      setServicesLoading(false);
+      updateLoadingState({ services: false });
       console.log('Chargement des services terminé');
     }
   }, []);
 
   // Function to get service name by ID
   const getServiceNameById = (serviceId) => {
-    if (!Array.isArray(services) || services.length === 0) {
+    if (!Array.isArray(dataState.services) || dataState.services.length === 0) {
       return `Service ID: ${serviceId}`;
     }
     
-    const service = services.find(s => {
+    const service = dataState.services.find(s => {
       const id = s.id || s.id_service || s.service_id;
       return id === serviceId;
     });
@@ -425,52 +470,52 @@ function DossierPatient() {
 
   const handleCreatePatientFile = async (e) => {
     e.preventDefault();
-    console.log('Submitting patient file form:', patientFileForm);
+    console.log('Submitting patient file form:', patientFileFormRef.current);
     
     // Validation côté client
-    if (!patientFileForm.patient_id) {
+    if (!patientFileFormRef.current.patient_id) {
       alert('Veuillez sélectionner un patient');
       return;
     }
     
-    if (!patientFileForm.service_id) {
+    if (!patientFileFormRef.current.service_id) {
       alert('Veuillez sélectionner un service');
       return;
     }
     
-    if (!patientFileForm.dateOuverture) {
+    if (!patientFileFormRef.current.dateOuverture) {
       alert('Veuillez saisir une date d\'ouverture');
       return;
     }
     
     // Validation de la date de fermeture si elle est fournie
-    if (patientFileForm.dateFermeture && patientFileForm.dateFermeture < patientFileForm.dateOuverture) {
+    if (patientFileFormRef.current.dateFermeture && patientFileFormRef.current.dateFermeture < patientFileFormRef.current.dateOuverture) {
       alert('La date de fermeture ne peut pas être antérieure à la date d\'ouverture');
       return;
     }
     
-    setLoading(true);
+    updateUIState({ loading: true });
     try {
       // Convert dates to ISO format
       const formData = {
-        ...patientFileForm,
-        dateOuverture: patientFileForm.dateOuverture ? new Date(patientFileForm.dateOuverture).toISOString() : null,
-        dateFermeture: patientFileForm.dateFermeture ? new Date(patientFileForm.dateFermeture).toISOString() : null
+        ...patientFileFormRef.current,
+        dateOuverture: patientFileFormRef.current.dateOuverture ? new Date(patientFileFormRef.current.dateOuverture).toISOString() : null,
+        dateFermeture: patientFileFormRef.current.dateFermeture ? new Date(patientFileFormRef.current.dateFermeture).toISOString() : null
       };
       
       console.log('Formatted form data:', formData);
       const response = await createDossierMedical(formData);
       console.log('Dossier créé avec succès:', response);
       alert('Dossier patient créé avec succès!');
-      setShowPatientFileModal(false);
+      updateModalState({ showPatientFile: false });
       
-      // Reload dossiers patients if we're on the shared-folder tab
-      if (activeTab === "shared-folder") {
+      // Reload dossiers dataState.patients if we're on the shared-folder tab
+      if (uiState.activeTab === "shared-folder") {
         await loadDossiersPatients();
       }
       
       // Reset form
-      setPatientFileForm({
+      patientFileFormRef.current = Object.assign(patientFileFormRef.current, {
         patient_id: '',
         service_id: '',
         statut: 'actif',
@@ -505,24 +550,24 @@ function DossierPatient() {
       
       alert(errorMessage);
     } finally {
-      setLoading(false);
+      updateUIState({ loading: false });
     }
   };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setPatientFileForm((prev) => ({ ...prev, [name]: value }));
+    patientFileFormRef.current = { ...patientFileFormRef.current, [name]: value };
   };
 
   const loadPatientsForSelect = async () => {
     try {
-      console.log('Début du chargement des patients pour sélection...');
+      console.log('Début du chargement des dataState.patients pour sélection...');
       const patientsData = await getPatients();
       console.log('Patients loaded for select:', patientsData);
       
       if (!Array.isArray(patientsData)) {
-        console.error('Expected an array of patients but received:', patientsData);
-        setPatientsForSelect([]);
+        console.error('Expected an array of dataState.patients but received:', dataState.patientsData);
+        updateDataState({ patientsForSelect: [] });
         return;
       }
       
@@ -533,44 +578,44 @@ function DossierPatient() {
         numero_dossier: patient.numero_dossier || 'N/A'
       }));
       
-      console.log('Formatted patients for select:', formattedPatientsForSelect);
-      setPatientsForSelect(formattedPatientsForSelect);
-      console.log(`${formattedPatientsForSelect.length} patients formatés pour la sélection`);
+      console.log('Formatted dataState.patients for select:', formattedPatientsForSelect);
+      updateDataState({ patientsForSelect: formattedPatientsForSelect });
+      console.log(`${formattedPatientsForSelect.length} dataState.patients formatés pour la sélection`);
     } catch (error) {
-      console.error('Erreur lors du chargement des patients pour sélection:', error);
+      console.error('Erreur lors du chargement des dataState.patients pour sélection:', error);
       console.error('Error details:', {
         message: error.message,
         stack: error.stack,
         response: error.response?.data,
         status: error.response?.status
       });
-      setPatientsForSelect([]);
+      updateDataState({ patientsForSelect: [] });
     }
   };
 
   const loadDossiersPatients = async () => {
-    setDossiersLoading(true);
+    updateLoadingState({ dossiers: true });
     try {
-      console.log('Chargement des dossiers patients...');
+      console.log('Chargement des dossiers dataState.patients...');
       const dossiersData = await getAllDossiersMedical();
-      console.log('Dossiers patients reçus:', dossiersData);
+      console.log('Dossiers dataState.patients reçus:', dossiersData);
       
       let dossiers = [];
       if (dossiersData && dossiersData.status === 'success' && dossiersData.data && Array.isArray(dossiersData.data)) {
         dossiers = dossiersData.data;
         console.log('Setting dossiers from dossiersData.data:', dossiers);
         console.log('First dossier structure:', dossiers[0]);
-        console.log(`${dossiers.length} dossiers patients chargés avec succès`);
+        console.log(`${dossiers.length} dossiers dataState.patients chargés avec succès`);
       } else if (Array.isArray(dossiersData)) {
         dossiers = dossiersData;
         console.log('Setting dossiers from direct array:', dossiers);
         console.log('First dossier structure:', dossiers[0]);
-        console.log(`${dossiers.length} dossiers patients chargés`);
+        console.log(`${dossiers.length} dossiers dataState.patients chargés`);
       } else {
         console.error('Format de données inattendu:', dossiersData);
         console.error('Type of dossiersData:', typeof dossiersData);
         console.error('Keys in dossiersData:', dossiersData ? Object.keys(dossiersData) : 'null');
-        setDossiersPatients([]);
+        updateDataState({ dossiersPatients: [] });
         return;
       }
 
@@ -602,41 +647,49 @@ function DossierPatient() {
         console.log('=====================================');
       });
 
-      setDossiersPatients(dossiers);
+      updateDataState({ dossiersPatients: dossiers });
     } catch (error) {
-      console.error('Erreur lors du chargement des dossiers patients:', error);
-      setDossiersPatients([]);
+      console.error('Erreur lors du chargement des dossiers dataState.patients:', error);
+      updateDataState({ dossiersPatients: [] });
     } finally {
-      setDossiersLoading(false);
+      updateLoadingState({ dossiers: false });
     }
   };
 
-  // Fonction pour charger les patients
+  // Fonction pour charger les dataState.patients
   const loadPatients = useCallback(async () => {
     // Vérifier l'authentification avant de faire l'appel API
-    if (!isUserAuthenticated) {
-      console.log('Utilisateur non authentifié, impossible de charger les patients');
-      setPatients([]);
-      setLoading(false);
+    if (!authState.isAuthenticated) {
+      console.log('Utilisateur non authentifié, impossible de charger les dataState.patients');
+      updateDataState({ patients: [] });
+      updateUIState({ loading: false });
       return [];
     }
 
-    setLoading(true);
+    updateUIState({ loading: true });
     try {
-      console.log('Loading patients...');
+      console.log('🔄 DEBUG - Début de loadPatients...');
+      console.log('🔐 DEBUG - État authentification:', authState.isAuthenticated);
+      console.log('🌐 DEBUG - Appel API getPatients()...');
+      
       const patientsData = await getPatients();
-      console.log('API response raw:', patientsData);
-      console.log('Type of response:', typeof patientsData);
+      
+      console.log('📡 DEBUG - Réponse API getPatients:', {
+        data: patientsData,
+        type: typeof patientsData,
+        isArray: Array.isArray(patientsData),
+        length: Array.isArray(patientsData) ? patientsData.length : 'N/A'
+      });
 
       if (!patientsData) {
         console.error('No patient data received:', patientsData);
-        setPatients([]);
+        updateDataState({ patients: [] });
         return [];
       }
 
       if (!Array.isArray(patientsData)) {
         console.error('Expected an array of patients but received:', patientsData);
-        setPatients([]);
+        updateDataState({ patients: [] });
         return [];
       }
 
@@ -666,18 +719,19 @@ function DossierPatient() {
       }));
 
       console.log('Formatted patients:', formattedPatients);
-      setPatients(formattedPatients);
+      console.log('Updating dataState with patients:', formattedPatients);
+      updateDataState({ patients: formattedPatients });
       
       // Initialiser automatiquement le premier patient comme sélection par défaut
       // seulement si aucun patient n'est déjà sélectionné
-      if (formattedPatients.length > 0 && !selectedPatientForPrescription) {
+      if (formattedPatients.length > 0 && !selectedPatientForPrescriptionRef.current) {
         console.log('Initialisation automatique du premier patient:', formattedPatients[0]);
-        setSelectedPatientForPrescription(formattedPatients[0]);
+        selectedPatientForPrescriptionRef.current = formattedPatients[0];
       }
       
       return formattedPatients;
     } catch (error) {
-      console.error('Erreur lors du chargement des patients:', error);
+      console.error('Erreur lors du chargement des dataState.patients:', error);
       console.error('Détails de l\'erreur:', {
         message: error.message,
         stack: error.stack,
@@ -689,7 +743,7 @@ function DossierPatient() {
       // Gérer spécifiquement les erreurs d'authentification
       if (error.response?.status === 401) {
         console.error('Erreur d\'authentification: Utilisateur non connecté ou token expiré');
-        setIsUserAuthenticated(false);
+        updateAuthState({ isAuthenticated: false });
         // Rediriger vers la page de connexion
         navigate("/connexion", { 
           state: { 
@@ -699,16 +753,16 @@ function DossierPatient() {
         });
       }
       
-      setPatients([]);
+      updateDataState({ patients: [] });
       return [];
     } finally {
-      setLoading(false);
+      updateUIState({ loading: false });
     }
-  }, [isUserAuthenticated, navigate]);
+  }, [authState.isAuthenticated, navigate]);
 
   // Vérification de l'authentification
   useEffect(() => {
-    const checkAuthentication = () => {
+    const checkAuthentication = async () => {
       console.log('🔍 Vérification de l\'authentification...');
       const isAuth = isAuthenticated();
       const isMedecin = isMedecinAuthenticated();
@@ -722,16 +776,16 @@ function DossierPatient() {
       
       if (isAuth) {
         console.log('✅ Utilisateur authentifié, chargement des données...');
-        setIsUserAuthenticated(true);
+        updateAuthState({ isAuthenticated: true });
         
         // Charger les données seulement si l'utilisateur est authentifié
         console.log('🔄 Appel de loadPatients...');
-        loadPatients();
+        await loadPatients();
         console.log('🔄 Appel de loadServices...');
-        loadServices();
+        await loadServices();
       } else {
         console.log('❌ Utilisateur non authentifié, redirection...');
-        setIsUserAuthenticated(false);
+        updateAuthState({ isAuthenticated: false });
         // Rediriger vers la page de connexion
         navigate("/connexion", { 
           state: { 
@@ -740,32 +794,32 @@ function DossierPatient() {
           } 
         });
       }
-      setAuthLoading(false);
+      updateUIState({ loading: false });
     };
 
     checkAuthentication();
-  }, [navigate, loadPatients, loadServices]);
+  }, [navigate]); // Suppression des dépendances loadPatients et loadServices
 
-  // Reload services when modal opens
+  // Reload dataState.services when modal opens
   useEffect(() => {
-    if (showPatientFileModal) {
-      console.log('Modal opened, ensuring services are loaded...');
+    if (modalState.showPatientFile) {
+      console.log('Modal opened, ensuring dataState.services are loaded...');
       loadServices();
     }
-  }, [showPatientFileModal, loadServices]);
+  }, [modalState.showPatientFile, loadServices]);
 
   // Fonctions pour l'onglet prescription
   const loadPrescriptions = useCallback(async () => {
-    setPrescriptionsLoading(true);
+    updateLoadingState({ prescriptions: true });
     try {
-      // Récupérer toutes les prescriptions depuis l'API
+      // Récupérer toutes les dataState.prescriptions depuis l'API
       const prescriptionsData = await getAllPrescriptions();
       console.log('Prescriptions récupérées depuis l\'API:', prescriptionsData);
       
       // Filtrer par patient si un patient est sélectionné
       let prescriptionsToShow = prescriptionsData;
-      if (selectedPatientForPrescription) {
-        const patientId = selectedPatientForPrescription?.id || selectedPatientForPrescription?.rawData?.id_patient || selectedPatientForPrescription?.id_patient;
+      if (selectedPatientForPrescriptionRef.current) {
+        const patientId = selectedPatientForPrescriptionRef.current?.id || selectedPatientForPrescriptionRef.current?.rawData?.id_patient || selectedPatientForPrescriptionRef.current?.id_patient;
         if (patientId) {
           prescriptionsToShow = prescriptionsData.filter(prescription => 
             prescription.patient_id === patientId || 
@@ -775,91 +829,79 @@ function DossierPatient() {
         }
       }
       
-      setPrescriptions(prescriptionsToShow || []);
+      updateDataState({ prescriptions: prescriptionsToShow || [] });
     } catch (error) {
-      console.error('Erreur lors du chargement des prescriptions:', error);
-      setPrescriptions([]);
+      console.error('Erreur lors du chargement des dataState.prescriptions:', error);
+      updateDataState({ prescriptions: [] });
     } finally {
-      setPrescriptionsLoading(false);
+      updateLoadingState({ prescriptions: false });
     }
-  }, [selectedPatientForPrescription]);
+  }, [selectedPatientForPrescriptionRef.current]);
 
 
 
 
   // Gestion des modals
   const openPatientModal = async (patient) => {
-    setModalPatient(patient);
-    setShowPatientModal(true);
-  };
-
-  // Fonction pour sélectionner un patient pour les prescriptions
-  const selectPatientForPrescription = (patient) => {
-    setSelectedPatientForPrescription(patient);
-    console.log('Patient sélectionné pour prescriptions:', patient);
-    // Basculer vers l'onglet prescriptions et recharger les prescriptions
-    setActiveTab("prescriptions");
-    // Recharger les prescriptions après un court délai pour s'assurer que l'onglet est activé
-    setTimeout(() => {
-      loadPrescriptions();
-    }, 100);
+    modalPatientRef.current = patient;
+    updateModalState({ showPatientModal: true });
   };
 
   const closePatientModal = () => {
-    setShowPatientModal(false);
-    setModalPatient(null);
+    updateModalState({ showPatientModal: false });
+    modalPatientRef.current = null;
   };
 
   const openEditModal = (patient) => {
-    setEditPatient(patient);
-    setShowEditModal(true);
+    editPatientRef.current = patient;
+    updateModalState({ showEditModal: true });
   };
 
   const closeEditModal = () => {
-    setShowEditModal(false);
-    setEditPatient(null);
+    updateModalState({ showEditModal: false });
+    editPatientRef.current = null;
   };
 
   const openShareModal = (patient) => {
-    setSharePatient(patient);
-    setShowShareModal(true);
+    sharePatientRef.current = patient;
+    updateModalState({ showShareModal: true });
   };
 
   const closeShareModal = () => {
-    setShowShareModal(false);
-    setSharePatient(null);
+    updateModalState({ showShareModal: false });
+    sharePatientRef.current = null;
   };
 
   const openAddModal = () => {
-    setShowAddModal(true);
+    updateModalState({ showAddModal: true });
   };
 
   const closeAddModal = () => {
-    setShowAddModal(false);
+    updateModalState({ showAddModal: false });
   };
 
   const openPrescriptionModal = (patient = null) => {
     if (patient) {
-      setSelectedPatientForPrescription(patient);
+      selectedPatientForPrescriptionRef.current = patient;
       // Utiliser l'ID du patient formaté ou de la raw data
       const patientId = patient.id || patient.rawData?.id_patient || patient.id_patient;
-      setPrescriptionForm(prev => ({ ...prev, patient_id: patientId }));
+      prescriptionFormRef.current = { ...prescriptionFormRef.current, patient_id: patientId };
     } else {
       // Si aucun patient n'est fourni, on peut utiliser le patient sélectionné dans le dossier
-      const currentPatient = selectedPatientForPrescription;
+      const currentPatient = selectedPatientForPrescriptionRef.current;
       if (currentPatient) {
         const patientId = currentPatient.id || currentPatient.rawData?.id_patient || currentPatient.id_patient;
-        setPrescriptionForm(prev => ({ ...prev, patient_id: patientId }));
+        prescriptionFormRef.current = { ...prescriptionFormRef.current, patient_id: patientId };
       }
     }
-    setShowPrescriptionModal(true);
+    updateModalState({ showPrescriptionModal: true });
   };
 
   const closePrescriptionModal = () => {
-    setShowPrescriptionModal(false);
-    // Ne pas réinitialiser selectedPatientForPrescription pour garder le patient sélectionné
-    const patientId = selectedPatientForPrescription?.id || selectedPatientForPrescription?.rawData?.id_patient || selectedPatientForPrescription?.id_patient || '';
-    setPrescriptionForm({
+    updateModalState({ showPrescriptionModal: false });
+    // Ne pas réinitialiser selectedPatientForPrescriptionRef.current pour garder le patient sélectionné
+    const patientId = selectedPatientForPrescriptionRef.current?.id || selectedPatientForPrescriptionRef.current?.rawData?.id_patient || selectedPatientForPrescriptionRef.current?.id_patient || '';
+    prescriptionFormRef.current = {
       patient_id: patientId,
       principe_actif: '',
       nom_commercial: '',
@@ -875,31 +917,36 @@ function DossierPatient() {
       medecin_prenom: '',
       medecin_specialite: '',
       medecin_numero_ordre: ''
-    });
+    };
+  };
+
+  const selectPatientForPrescription = (patient) => {
+    selectedPatientForPrescriptionRef.current = patient;
+    console.log('Patient sélectionné pour prescriptions:', patient);
   };
 
   const openExamenModal = (patient = null) => {
     if (patient) {
-      setSelectedPatientForPrescription(patient);
+      selectedPatientForPrescriptionRef.current = patient;
       // Utiliser l'ID du patient formaté ou de la raw data
       const patientId = patient.id || patient.rawData?.id_patient || patient.id_patient;
-      setExamenForm(prev => ({ ...prev, patient_id: patientId }));
+      examenFormRef.current = { ...examenFormRef.current, patient_id: patientId };
     } else {
       // Si aucun patient n'est fourni, on peut utiliser le patient sélectionné dans le dossier
-      const currentPatient = selectedPatientForPrescription;
+      const currentPatient = selectedPatientForPrescriptionRef.current;
       if (currentPatient) {
         const patientId = currentPatient.id || currentPatient.rawData?.id_patient || currentPatient.id_patient;
-        setExamenForm(prev => ({ ...prev, patient_id: patientId }));
+        examenFormRef.current = { ...examenFormRef.current, patient_id: patientId };
       }
     }
-    setShowExamenModal(true);
+    updateModalState({ showExamenModal: true });
   };
 
   const closeExamenModal = () => {
-    setShowExamenModal(false);
-    // Ne pas réinitialiser selectedPatientForPrescription pour garder le patient sélectionné
-    const patientId = selectedPatientForPrescription?.id || selectedPatientForPrescription?.rawData?.id_patient || selectedPatientForPrescription?.id_patient || '';
-    setExamenForm({
+    updateModalState({ showExamenModal: false });
+    // Ne pas réinitialiser selectedPatientForPrescriptionRef.current pour garder le patient sélectionné
+    const patientId = selectedPatientForPrescriptionRef.current?.id || selectedPatientForPrescriptionRef.current?.rawData?.id_patient || selectedPatientForPrescriptionRef.current?.id_patient || '';
+    examenFormRef.current = {
       patient_id: patientId,
       type_examen: '',
       parametres: '',
@@ -910,71 +957,71 @@ function DossierPatient() {
       medecin_prenom: '',
       medecin_specialite: '',
       medecin_numero_ordre: ''
-    });
+    };
   };
 
   const handlePrescriptionInputChange = (e) => {
     const { name, value, type, checked } = e.target;
-    setPrescriptionForm(prev => ({
+    prescriptionFormRef.current = (prev) => ({
       ...prev,
       [name]: type === 'checkbox' ? checked : value
-    }));
+    });
   };
 
   const handleExamenInputChange = (e) => {
     const { name, value } = e.target;
-    setExamenForm(prev => ({
+    examenFormRef.current = (prev) => ({
       ...prev,
       [name]: value
-    }));
+    });
   };
 
   const handleCreatePrescription = async (e) => {
     e.preventDefault();
     
-    if (!prescriptionForm.patient_id) {
+    if (!prescriptionFormRef.current.patient_id) {
       alert('Veuillez sélectionner un patient');
       return;
     }
     
-    if (!prescriptionForm.principe_actif) {
+    if (!prescriptionFormRef.current.principe_actif) {
       alert('Veuillez saisir le principe actif');
       return;
     }
     
-    if (!prescriptionForm.dosage) {
+    if (!prescriptionFormRef.current.dosage) {
       alert('Veuillez saisir le dosage');
       return;
     }
     
-    if (!prescriptionForm.frequence) {
+    if (!prescriptionFormRef.current.frequence) {
       alert('Veuillez saisir la fréquence');
       return;
     }
 
     // Validation des informations du médecin traitant
-    if (!prescriptionForm.medecin_nom) {
+    if (!prescriptionFormRef.current.medecin_nom) {
       alert('Veuillez saisir le nom du médecin traitant');
       return;
     }
     
-    if (!prescriptionForm.medecin_prenom) {
+    if (!prescriptionFormRef.current.medecin_prenom) {
       alert('Veuillez saisir le prénom du médecin traitant');
       return;
     }
     
-    if (!prescriptionForm.medecin_specialite) {
+    if (!prescriptionFormRef.current.medecin_specialite) {
       alert('Veuillez saisir la spécialité du médecin traitant');
       return;
     }
     
-    if (!prescriptionForm.medecin_numero_ordre) {
+    if (!prescriptionFormRef.current.medecin_numero_ordre) {
       alert('Veuillez saisir le numéro d\'ordre du médecin traitant');
       return;
     }
 
     // Validation et formatage de la durée du traitement
-    let duree_traitement = prescriptionForm.duree_traitement;
+    let duree_traitement = prescriptionFormRef.current.duree_traitement;
     if (duree_traitement && duree_traitement.trim() !== '') {
       // Normaliser la durée (enlever les espaces multiples)
       duree_traitement = duree_traitement.trim().replace(/\s+/g, ' ');
@@ -991,14 +1038,14 @@ function DossierPatient() {
       duree_traitement = null; // Si vide, mettre null
     }
 
-    setLoading(true);
+    updateUIState({ loading: true });
     try {
       // Préparer les données avec validation
       const ordonnanceData = {
-        ...prescriptionForm,
+        ...prescriptionFormRef.current,
         // S'assurer que les champs numériques sont bien des nombres
-        patient_id: parseInt(prescriptionForm.patient_id),
-        nb_renouvellements: parseInt(prescriptionForm.nb_renouvellements) || 0,
+        patient_id: parseInt(prescriptionFormRef.current.patient_id),
+        nb_renouvellements: parseInt(prescriptionFormRef.current.nb_renouvellements) || 0,
         // Formater la durée si elle existe
         duree_traitement: duree_traitement
       };
@@ -1041,51 +1088,51 @@ function DossierPatient() {
       
       alert(errorMessage);
     } finally {
-      setLoading(false);
+      updateUIState({ loading: false });
     }
   };
 
   const handleCreateExamen = async (e) => {
     e.preventDefault();
     
-    if (!examenForm.patient_id) {
+    if (!examenFormRef.current.patient_id) {
       alert('Veuillez sélectionner un patient');
       return;
     }
     
-    if (!examenForm.type_examen) {
+    if (!examenFormRef.current.type_examen) {
       alert('Veuillez saisir le type d\'examen');
       return;
     }
 
     // Validation des informations du médecin traitant
-    if (!examenForm.medecin_nom) {
+    if (!examenFormRef.current.medecin_nom) {
       alert('Veuillez saisir le nom du médecin traitant');
       return;
     }
     
-    if (!examenForm.medecin_prenom) {
+    if (!examenFormRef.current.medecin_prenom) {
       alert('Veuillez saisir le prénom du médecin traitant');
       return;
     }
     
-    if (!examenForm.medecin_specialite) {
+    if (!examenFormRef.current.medecin_specialite) {
       alert('Veuillez saisir la spécialité du médecin traitant');
       return;
     }
     
-    if (!examenForm.medecin_numero_ordre) {
+    if (!examenFormRef.current.medecin_numero_ordre) {
       alert('Veuillez saisir le numéro d\'ordre du médecin traitant');
       return;
     }
 
-    setLoading(true);
+    updateUIState({ loading: true });
     try {
       // Préparer les données avec validation
       const examenData = {
-        ...examenForm,
+        ...examenFormRef.current,
         // S'assurer que les champs numériques sont bien des nombres
-        patient_id: parseInt(examenForm.patient_id)
+        patient_id: parseInt(examenFormRef.current.patient_id)
       };
 
       console.log('Envoi des données d\'examen:', examenData);
@@ -1118,7 +1165,7 @@ function DossierPatient() {
       
       alert(errorMessage);
     } finally {
-      setLoading(false);
+      updateUIState({ loading: false });
     }
   };
 
@@ -1136,9 +1183,9 @@ function DossierPatient() {
         hash: generateHash(`${prescriptionData.id_prescription || prescriptionData.id}-${prescriptionData.prescriptionNumber || prescriptionData.numero_prescription}`)
       };
       
-      setQrCodeData(qrData);
-      setCreatedPrescription(prescriptionData);
-      setShowQRModal(true);
+      qrCodeDataRef.current = qrData;
+      createdPrescriptionRef.current = prescriptionData;
+      updateModalState({ showQRModal: true });
       
       // Fermer les modales de création
       closePrescriptionModal();
@@ -1164,43 +1211,43 @@ function DossierPatient() {
   };
 
   const closeQRModal = () => {
-    setShowQRModal(false);
-    setQrCodeData(null);
-    setCreatedPrescription(null);
+    updateModalState({ showQRModal: false });
+    qrCodeDataRef.current = null;
+    createdPrescriptionRef.current = null;
     loadPrescriptions(); // Recharger la liste après fermeture
   };
 
   // Fonctions pour les notifications et ordonnances récentes
   const loadNotifications = async (patientId = null) => {
-    setNotificationsLoading(true);
+    updateLoadingState({ notifications: true });
     try {
       // Récupérer les notifications depuis l'API
       if (patientId) {
         const notificationsData = await getNotificationsPatient(patientId);
-        setPrescriptionNotifications(notificationsData || []);
+        updateDataState({ prescriptionNotifications: notificationsData || [] });
       } else {
         // Si aucun patient spécifique, récupérer toutes les notifications
         const notificationsData = await getNotificationsPatient();
-        setPrescriptionNotifications(notificationsData || []);
+        updateDataState({ prescriptionNotifications: notificationsData || [] });
       }
     } catch (error) {
       console.error('Erreur lors du chargement des notifications:', error);
-      setPrescriptionNotifications([]);
+      updateDataState({ prescriptionNotifications: [] });
     } finally {
-      setNotificationsLoading(false);
+      updateLoadingState({ notifications: false });
     }
   };
 // affichage des ordonnances récentes
 const loadOrdonnancesRecentes = useCallback(async () => {
-  setOrdonnancesRecentesLoading(true);
+  updateLoadingState({ ordonnances: true });
   try {
     // On récupère l'id du patient affiché
-    const patientId = selectedPatientForPrescription?.id_patient || selectedPatientForPrescription?.rawData?.id_patient || selectedPatientForPrescription?.id;
+    const patientId = selectedPatientForPrescriptionRef.current?.id_patient || selectedPatientForPrescriptionRef.current?.rawData?.id_patient || selectedPatientForPrescriptionRef.current?.id;
     
     if (!patientId) {
       console.warn("Aucun patient sélectionné, impossible de charger les ordonnances récentes.");
-      setOrdonnancesRecentes([]);
-      setOrdonnancesRecentesLoading(false);
+      updateDataState({ ordonnancesRecentes: [] });
+      updateLoadingState({ ordonnances: false });
       return;
     }
     
@@ -1212,7 +1259,7 @@ const loadOrdonnancesRecentes = useCallback(async () => {
     });
     
     // Mise à jour avec la nouvelle structure de réponse
-    setOrdonnancesRecentes(ordonnancesData?.data?.prescriptions || []);
+    updateDataState({ ordonnancesRecentes: ordonnancesData?.data?.prescriptions || [] });
     console.log("Ordonnances récentes chargées avec succès:", ordonnancesData?.data?.prescriptions || []);
     
     // Log des informations supplémentaires disponibles
@@ -1224,39 +1271,39 @@ const loadOrdonnancesRecentes = useCallback(async () => {
     
   } catch (error) {
     console.error("Erreur lors du chargement des ordonnances récentes:", error);
-    setOrdonnancesRecentes([]);
+    updateDataState({ ordonnancesRecentes: [] });
   } finally {
-    setOrdonnancesRecentesLoading(false);
+    updateLoadingState({ ordonnances: false });
   }
-}, [selectedPatientForPrescription]);
+}, [selectedPatientForPrescriptionRef.current]);
 
   const loadResumeAujourdhui = async () => {
-    setResumeLoading(true);
+    updateLoadingState({ resume: true });
     try {
       // Récupérer le résumé depuis l'API
       const resumeData = await getResumeAujourdhui();
       console.log('Résumé récupéré depuis l\'API:', resumeData);
-      setResumeAujourdhui(resumeData);
+      updateDataState({ resumeAujourdhui: resumeData });
     } catch (error) {
       console.error('Erreur lors du chargement du résumé:', error);
-      setResumeAujourdhui(null);
+      updateDataState({ resumeAujourdhui: null });
     } finally {
-      setResumeLoading(false);
+      updateLoadingState({ resume: false });
     }
   };
 
   const openOrdonnanceCompleteModal = (patient = null) => {
     if (patient) {
-      setSelectedPatientForPrescription(patient);
+      selectedPatientForPrescriptionRef.current = patient;
       const patientId = patient.id || patient.rawData?.id_patient || patient.id_patient;
-      setOrdonnanceCompleteForm(prev => ({ ...prev, patient_id: patientId }));
+      ordonnanceCompleteFormRef.current = { ...ordonnanceCompleteFormRef.current, patient_id: patientId };
     }
-    setShowOrdonnanceCompleteModal(true);
+    updateModalState({ showOrdonnanceCompleteModal: true });
   };
 
   const closeOrdonnanceCompleteModal = () => {
-    setShowOrdonnanceCompleteModal(false);
-    setOrdonnanceCompleteForm({
+    updateModalState({ showOrdonnanceCompleteModal: false });
+    ordonnanceCompleteFormRef.current = {
       patient_id: '',
       dossier_id: '',
       principe_actif: '',
@@ -1270,67 +1317,67 @@ const loadOrdonnancesRecentes = useCallback(async () => {
       observations: '',
       priorite: 'normale',
       canal: 'application'
-    });
+    };
   };
 
   const handleOrdonnanceCompleteInputChange = (e) => {
     const { name, value, type, checked } = e.target;
-    setOrdonnanceCompleteForm(prev => ({
+    ordonnanceCompleteFormRef.current = (prev) => ({
       ...prev,
       [name]: type === 'checkbox' ? checked : value
-    }));
+    });
   };
 
   const handleCreateOrdonnanceComplete = async (e) => {
     e.preventDefault();
     
-    if (!ordonnanceCompleteForm.patient_id) {
+    if (!ordonnanceCompleteFormRef.current.patient_id) {
       alert('Veuillez sélectionner un patient');
       return;
     }
     
-    if (!ordonnanceCompleteForm.principe_actif) {
+    if (!ordonnanceCompleteFormRef.current.principe_actif) {
       alert('Veuillez saisir le principe actif');
       return;
     }
     
-    if (!ordonnanceCompleteForm.dosage) {
+    if (!ordonnanceCompleteFormRef.current.dosage) {
       alert('Veuillez saisir le dosage');
       return;
     }
     
-    if (!ordonnanceCompleteForm.frequence) {
+    if (!ordonnanceCompleteFormRef.current.frequence) {
       alert('Veuillez saisir la fréquence');
       return;
     }
 
     // Validation des informations du médecin traitant
-    if (!ordonnanceCompleteForm.medecin_nom) {
+    if (!ordonnanceCompleteFormRef.current.medecin_nom) {
       alert('Veuillez saisir le nom du médecin traitant');
       return;
     }
     
-    if (!ordonnanceCompleteForm.medecin_prenom) {
+    if (!ordonnanceCompleteFormRef.current.medecin_prenom) {
       alert('Veuillez saisir le prénom du médecin traitant');
       return;
     }
     
-    if (!ordonnanceCompleteForm.medecin_specialite) {
+    if (!ordonnanceCompleteFormRef.current.medecin_specialite) {
       alert('Veuillez saisir la spécialité du médecin traitant');
       return;
     }
     
-    if (!ordonnanceCompleteForm.medecin_numero_ordre) {
+    if (!ordonnanceCompleteFormRef.current.medecin_numero_ordre) {
       alert('Veuillez saisir le numéro d\'ordre du médecin traitant');
       return;
     }
 
-    setLoading(true);
+    updateUIState({ loading: true });
     try {
       // Créer l'ordonnance complète via l'API
-      console.log('Ordonnance complète à créer:', ordonnanceCompleteForm);
+      console.log('Ordonnance complète à créer:', ordonnanceCompleteFormRef.current);
       
-      const result = await createOrdonnanceComplete(ordonnanceCompleteForm);
+      const result = await createOrdonnanceComplete(ordonnanceCompleteFormRef.current);
       console.log('Ordonnance complète créée:', result);
       
       alert('Ordonnance créée avec succès !');
@@ -1341,7 +1388,7 @@ const loadOrdonnancesRecentes = useCallback(async () => {
       console.error('Erreur lors de la création de l\'ordonnance complète:', error);
       alert('Erreur lors de la création de l\'ordonnance: ' + (error.message || error));
     } finally {
-      setLoading(false);
+      updateUIState({ loading: false });
     }
   };
 
@@ -1351,13 +1398,13 @@ const loadOrdonnancesRecentes = useCallback(async () => {
       await marquerNotificationLue(notificationId);
       
       // Mettre à jour localement les notifications
-      setPrescriptionNotifications(prev => 
+      updateDataState((prev) => ({ prescriptionNotifications: 
         prev.map(notif => 
           notif.id === notificationId 
             ? { ...notif, lue: true }
             : notif
         )
-      );
+      }));
       
       console.log('Notification marquée comme lue avec succès');
     } catch (error) {
@@ -1366,36 +1413,39 @@ const loadOrdonnancesRecentes = useCallback(async () => {
     }
   };
 
-  // Fonction pour filtrer les patients selon la recherche (commentée car non utilisée pour l'instant)
-  // const filteredPatients = patients.filter(patient => {
-  //   const searchLower = search.toLowerCase();
-  //   const patientName = `${patient.nom || ''} ${patient.prenom || ''}`.toLowerCase();
-  //   return patientName.includes(searchLower);
-  // });
-
   // Formatage des données patient pour l'affichage
 
-  // Load dossiers patients when switching to shared-folder tab
+  // 🔍 DEBUG : Log de débogage pour l'affichage des patients (exécuté une seule fois)
   useEffect(() => {
-    console.log('Active tab changed to:', activeTab);
-    if (activeTab === "shared-folder") {
-      console.log('Switching to shared-folder tab, loading dossiers patients...');
+    console.log('🔍 DEBUG - État initial de l\'affichage:', {
+      activeTab: uiState.activeTab,
+      patientsCount: dataState.patients?.length || 0,
+      patients: dataState.patients,
+      isArray: Array.isArray(dataState.patients)
+    });
+  }, []); // Exécuté une seule fois au montage
+
+  // Load dossiers dataState.patients when switching to shared-folder tab
+  useEffect(() => {
+    console.log('Active tab changed to:', uiState.activeTab);
+    if (uiState.activeTab === "shared-folder") {
+      console.log('Switching to shared-folder tab, loading dossiers dataState.patients...');
       loadDossiersPatients();
     }
-    if (activeTab === "prescriptions") {
+    if (uiState.activeTab === "prescriptions") {
       console.log('Switching to prescriptions tab, loading prescriptions...');
       loadPrescriptions();
     }
-    if (activeTab === "notifications") {
+    if (uiState.activeTab === "notifications") {
       console.log('Switching to notifications tab, loading notifications...');
       loadOrdonnancesRecentes();
       loadResumeAujourdhui();
       loadNotifications();
     }
-  }, [activeTab, loadPrescriptions, loadDossiersPatients, loadOrdonnancesRecentes, loadResumeAujourdhui, loadNotifications]);
+  }, [uiState.activeTab, loadPrescriptions, loadDossiersPatients, loadOrdonnancesRecentes, loadResumeAujourdhui, loadNotifications]);
 
   // Afficher un écran de chargement pendant la vérification d'authentification
-  if (authLoading) {
+  if (authState.loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -1407,7 +1457,7 @@ const loadOrdonnancesRecentes = useCallback(async () => {
   }
 
   // Si l'utilisateur n'est pas authentifié, ne rien afficher (redirection en cours)
-  if (!isUserAuthenticated) {
+  if (!authState.isAuthenticated) {
     return null;
   }
 
@@ -1431,31 +1481,31 @@ const loadOrdonnancesRecentes = useCallback(async () => {
             <ul className="space-y-2">
               <li>
                 <button
-                  onClick={() => setActiveTab("patients-list")}
-                  className={`w-full text-left px-3 py-2 rounded-md flex items-center space-x-2 ${activeTab === "patients-list" ? "bg-blue-100 font-bold" : "hover:bg-blue-50"}`}>
+                  onClick={() => updateUIState({ activeTab: "patients-list"})}
+                  className={`w-full text-left px-3 py-2 rounded-md flex items-center space-x-2 ${uiState.activeTab === "patients-list" ? "bg-blue-100 font-bold" : "hover:bg-blue-50"}`}>
                   <span>📁</span> <span>Liste des Patients</span>
                 </button>
               </li>
               <li>
                 <button
-                  onClick={() => setActiveTab("shared-folder")}
-                  className={`w-full text-left px-3 py-2 rounded-md flex items-center space-x-2 ${activeTab === "shared-folder" ? "bg-blue-100 font-bold" : "hover:bg-blue-50"}`}>
+                  onClick={() => updateUIState({ activeTab: "shared-folder"})}
+                  className={`w-full text-left px-3 py-2 rounded-md flex items-center space-x-2 ${uiState.activeTab === "shared-folder" ? "bg-blue-100 font-bold" : "hover:bg-blue-50"}`}>
                   <span>📁</span> <span>Dossiers Patients</span>
                 </button>
               </li>
 
               <li>
                 <button
-                  onClick={() => setActiveTab("notifications")}
-                  className={`w-full text-left px-3 py-2 rounded-md flex items-center space-x-2 relative ${activeTab === "notifications" ? "bg-blue-100 font-bold" : "hover:bg-blue-50"}`}>
+                  onClick={() => updateUIState({ activeTab: "notifications"})}
+                  className={`w-full text-left px-3 py-2 rounded-md flex items-center space-x-2 relative ${uiState.activeTab === "notifications" ? "bg-blue-100 font-bold" : "hover:bg-blue-50"}`}>
                   <span>🔔</span> <span>Notifications</span>
                   <span className="notification-badge absolute top-0 right-0 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center" style={{display:"inline"}}>3</span>
                 </button>
               </li>
               <li>
                 <button
-                  onClick={() => setActiveTab("prescriptions")}
-                  className={`w-full text-left px-3 py-2 rounded-md flex items-center space-x-2 ${activeTab === "prescriptions" ? "bg-blue-100 font-bold" : "hover:bg-blue-50"}`}>
+                  onClick={() => updateUIState({ activeTab: "prescriptions"})}
+                  className={`w-full text-left px-3 py-2 rounded-md flex items-center space-x-2 ${uiState.activeTab === "prescriptions" ? "bg-blue-100 font-bold" : "hover:bg-blue-50"}`}>
                   <span>💊</span> <span>Prescriptions</span>
                 </button>
               </li>
@@ -1469,8 +1519,8 @@ const loadOrdonnancesRecentes = useCallback(async () => {
                 type="text"
                 placeholder="Rechercher un patient..."
                 className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={search}
-                onChange={e => setSearch(e.target.value)}
+                value={uiState.search}
+                onChange={(e) => updateUIState({ search: e.target.value })}
               />
               <button className="absolute right-2 top-2 text-gray-400">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1484,11 +1534,11 @@ const loadOrdonnancesRecentes = useCallback(async () => {
             <h2 className="text-lg font-semibold mb-2">Filtres</h2>
             <div className="space-y-2">
               <label className="flex items-center space-x-2">
-                <input type="checkbox" className="rounded text-blue-500" checked={filterRecent} onChange={() => setFilterRecent(v=>!v)} />
+                <input type="checkbox" className="rounded text-blue-500" checked={uiState.filterRecent} onChange={() => updateUIState({ filterRecent: (v) => !v })} />
                 <span>Consultation récente</span>
               </label>
               <label className="flex items-center space-x-2">
-                <input type="checkbox" className="rounded text-blue-500" checked={filterShared} onChange={() => setFilterShared(v=>!v)} />
+                <input type="checkbox" className="rounded text-blue-500" checked={uiState.filterShared} onChange={() => updateUIState({ filterShared: (v) => !v })} />
                 <span>Dossiers mutualisés</span>
               </label>
             </div>
@@ -1497,8 +1547,13 @@ const loadOrdonnancesRecentes = useCallback(async () => {
 
         {/* Main Content */}
         <div className="content-area flex-1 p-6">
+          {/* 🔍 DEBUG TEMPORAIRE - Vérificateur de Tokens */}
+          <div className="mb-6">
+            <TokenChecker />
+          </div>
+          
           {/* Patients List */}
-          {activeTab === "patients-list" && (
+          {uiState.activeTab === "patients-list" && (
             <div>
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-bold">Liste des Patients</h2>
@@ -1512,8 +1567,8 @@ const loadOrdonnancesRecentes = useCallback(async () => {
                 </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {Array.isArray(patients) && patients.length > 0 ? (
-                  patients.map((p, idx) => (
+                {Array.isArray(dataState.patients) && dataState.patients.length > 0 ? (
+                  dataState.patients.map((p, idx) => (
                     <div key={idx} className="patient-card bg-white rounded-lg shadow-md p-4 relative transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
                       <div className="flex justify-between items-start mb-3">
                         <div>
@@ -1582,7 +1637,7 @@ const loadOrdonnancesRecentes = useCallback(async () => {
             </div>
           )}
           {/* Shared Folders */}
-          {activeTab === "shared-folder" && (
+          {uiState.activeTab === "shared-folder" && (
             <div>
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-bold">Dossiers Patients</h2>
@@ -1602,17 +1657,17 @@ const loadOrdonnancesRecentes = useCallback(async () => {
                       loadDossiersPatients();
                     }}
                     className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 flex items-center"
-                    disabled={dossiersLoading}
+                    disabled={loadingState.dossiers}
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                     </svg>
-                    {dossiersLoading ? 'Chargement...' : 'Actualiser'}
+                    {loadingState.dossiers ? 'Chargement...' : 'Actualiser'}
                   </button>
                 </div>
               </div>
               
-              {dossiersLoading ? (
+              {loadingState.dossiers ? (
                 <div className="bg-white rounded-lg shadow-md p-6">
                   <div className="flex items-center justify-center py-8">
                     <svg className="animate-spin h-8 w-8 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -1624,7 +1679,7 @@ const loadOrdonnancesRecentes = useCallback(async () => {
                 </div>
               ) : (
                 <div className="bg-white rounded-lg shadow-md p-6">
-                  {dossiersPatients && dossiersPatients.length > 0 ? (
+                  {dataState.dossiersPatients && dataState.dossiersPatients.length > 0 ? (
                     <table className="min-w-full divide-y divide-gray-200">
                       <thead className="bg-gray-50">
                         <tr>
@@ -1636,7 +1691,7 @@ const loadOrdonnancesRecentes = useCallback(async () => {
                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
-                        {dossiersPatients.map((dossier, idx) => (
+                        {dataState.dossiersPatients.map((dossier, idx) => (
                           <tr key={dossier.id || idx} className="hover:bg-gray-50">
                             <td className="px-6 py-4 whitespace-nowrap">
                               <div className="flex items-center">
@@ -1763,7 +1818,7 @@ const loadOrdonnancesRecentes = useCallback(async () => {
           )}
 
           {/* Notifications */}
-          {activeTab === "notifications" && (
+          {uiState.activeTab === "notifications" && (
             <div>
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-bold">Centre de Notifications</h2>
@@ -1783,7 +1838,7 @@ const loadOrdonnancesRecentes = useCallback(async () => {
                       loadResumeAujourdhui();
                     }}
                     className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 flex items-center"
-                    disabled={ordonnancesRecentesLoading || resumeLoading}
+                    disabled={dataState.loadingState.ordonnances || loadingState.resume}
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -1794,24 +1849,24 @@ const loadOrdonnancesRecentes = useCallback(async () => {
               </div>
 
               {/* Résumé d'aujourd'hui */}
-              {resumeAujourdhui && (
+              {dataState.resumeAujourdhui && (
                 <div className="bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg shadow-md p-6 mb-6 text-white">
                   <h3 className="text-lg font-semibold mb-4">📊 Résumé d'Aujourd'hui</h3>
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <div className="text-center">
-                      <div className="text-2xl font-bold">{resumeAujourdhui.total_ordonnances || 0}</div>
+                      <div className="text-2xl font-bold">{dataState.resumeAujourdhui.total_ordonnances || 0}</div>
                       <div className="text-sm opacity-90">Ordonnances</div>
                     </div>
                     <div className="text-center">
-                      <div className="text-2xl font-bold">{resumeAujourdhui.total_examens || 0}</div>
+                      <div className="text-2xl font-bold">{dataState.resumeAujourdhui.total_examens || 0}</div>
                       <div className="text-sm opacity-90">Examens</div>
                     </div>
                     <div className="text-center">
-                      <div className="text-2xl font-bold">{resumeAujourdhui.notifications_envoyees || 0}</div>
+                      <div className="text-2xl font-bold">{dataState.resumeAujourdhui.notifications_envoyees || 0}</div>
                       <div className="text-sm opacity-90">Notifications</div>
                     </div>
                     <div className="text-center">
-                      <div className="text-2xl font-bold">{resumeAujourdhui.derniere_creation || 'Aucune'}</div>
+                      <div className="text-2xl font-bold">{dataState.resumeAujourdhui.derniere_creation || 'Aucune'}</div>
                       <div className="text-sm opacity-90">Dernière création</div>
                     </div>
                   </div>
@@ -1821,7 +1876,7 @@ const loadOrdonnancesRecentes = useCallback(async () => {
               {/* Ordonnances récentes */}
               <div className="bg-white rounded-lg shadow-md p-6 mb-6">
                 <h3 className="text-lg font-semibold mb-4">📋 Ordonnances Récentes</h3>
-                {ordonnancesRecentesLoading ? (
+                {dataState.loadingState.ordonnances ? (
                   <div className="flex items-center justify-center py-8">
                     <svg className="animate-spin h-8 w-8 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
@@ -1829,9 +1884,9 @@ const loadOrdonnancesRecentes = useCallback(async () => {
                     </svg>
                     <span className="ml-3 text-gray-600">Chargement des ordonnances récentes...</span>
                   </div>
-                ) : ordonnancesRecentes && ordonnancesRecentes.length > 0 ? (
+                ) : dataState.ordonnancesRecentes && dataState.ordonnancesRecentes.length > 0 ? (
                   <div className="space-y-4">
-                    {ordonnancesRecentes.map((ordonnance, idx) => (
+                    {dataState.ordonnancesRecentes.map((ordonnance, idx) => (
                       <div key={ordonnance.id || idx} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50">
                         <div className="flex justify-between items-start">
                           <div>
@@ -1852,8 +1907,8 @@ const loadOrdonnancesRecentes = useCallback(async () => {
                             <button
                               onClick={() => {
                                 // Ajouter au dossier patient
-                                if (ordonnance.id && selectedPatientForPrescription?.dossier_id) {
-                                  ajouterPrescriptionAuDossier(ordonnance.id, selectedPatientForPrescription.dossier_id);
+                                if (ordonnance.id && selectedPatientForPrescriptionRef.current?.dossier_id) {
+                                  ajouterPrescriptionAuDossier(ordonnance.id, selectedPatientForPrescriptionRef.current.dossier_id);
                                 }
                               }}
                               className="text-blue-600 hover:text-blue-800 text-sm"
@@ -1866,8 +1921,8 @@ const loadOrdonnancesRecentes = useCallback(async () => {
                             <button
                               onClick={() => {
                                 // Voir les détails
-                                setSelectedNotification(ordonnance);
-                                setShowNotificationModal(true);
+                                selectedNotificationRef.current = ordonnance;
+                                updateModalState({ showNotificationModal: true });
                               }}
                               className="text-green-600 hover:text-green-800 text-sm"
                               title="Voir détails"
@@ -1898,7 +1953,7 @@ const loadOrdonnancesRecentes = useCallback(async () => {
               {/* Notifications de prescription */}
               <div className="bg-white rounded-lg shadow-md p-6">
                 <h3 className="text-lg font-semibold mb-4">🔔 Notifications de Prescription</h3>
-                {notificationsLoading ? (
+                {loadingState.notifications ? (
                   <div className="flex items-center justify-center py-8">
                     <svg className="animate-spin h-8 w-8 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
@@ -1906,9 +1961,9 @@ const loadOrdonnancesRecentes = useCallback(async () => {
                     </svg>
                     <span className="ml-3 text-gray-600">Chargement des notifications...</span>
                   </div>
-                ) : prescriptionNotifications && prescriptionNotifications.length > 0 ? (
+                ) : dataState.prescriptionNotifications && dataState.prescriptionNotifications.length > 0 ? (
                   <div className="space-y-4">
-                    {prescriptionNotifications.map((notif, idx) => (
+                    {dataState.prescriptionNotifications.map((notif, idx) => (
                       <div key={notif.id || idx} className="flex items-start p-4 border border-gray-200 rounded-lg hover:bg-gray-50">
                         <div className="flex-shrink-0 mt-1">
                           <div className={`w-8 h-8 rounded-full ${
@@ -1970,19 +2025,19 @@ const loadOrdonnancesRecentes = useCallback(async () => {
             </div>
           )}
           {/* Prescriptions */}
-          {activeTab === "prescriptions" && (
+          {uiState.activeTab === "dataState.prescriptions" && (
             <div>
               <div className="flex justify-between items-center mb-6">
                 <div>
                   <h2 className="text-2xl font-bold">Prescriptions</h2>
-                  {selectedPatientForPrescription && (
+                  {selectedPatientForPrescriptionRef.current && (
                     <div className="flex items-center mt-2">
                       <span className="text-sm text-gray-600 mr-2">Patient sélectionné:</span>
                       <span className="text-sm font-medium text-blue-600 bg-blue-100 px-2 py-1 rounded">
-                        {selectedPatientForPrescription.name || `${selectedPatientForPrescription.prenom || ''} ${selectedPatientForPrescription.nom || ''}`.trim() || 'Patient inconnu'}
+                        {selectedPatientForPrescriptionRef.current.name || `${selectedPatientForPrescriptionRef.current.prenom || ''} ${selectedPatientForPrescriptionRef.current.nom || ''}`.trim() || 'Patient inconnu'}
                       </span>
                       <button
-                        onClick={() => setSelectedPatientForPrescription(null)}
+                        onClick={() => selectedPatientForPrescriptionRef.current = null}
                         className="ml-2 text-red-600 hover:text-red-800"
                         title="Désélectionner le patient"
                       >
@@ -1997,7 +2052,7 @@ const loadOrdonnancesRecentes = useCallback(async () => {
                   <button 
                     onClick={() => openPrescriptionModal()}
                     className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 flex items-center"
-                    disabled={!selectedPatientForPrescription}
+                    disabled={!selectedPatientForPrescriptionRef.current}
                   >
                     <svg className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
@@ -2007,7 +2062,7 @@ const loadOrdonnancesRecentes = useCallback(async () => {
                   <button 
                     onClick={() => openExamenModal()}
                     className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 flex items-center"
-                    disabled={!selectedPatientForPrescription}
+                    disabled={!selectedPatientForPrescriptionRef.current}
                   >
                     <svg className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -2017,27 +2072,27 @@ const loadOrdonnancesRecentes = useCallback(async () => {
                   <button
                     onClick={loadPrescriptions}
                     className="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 flex items-center"
-                    disabled={prescriptionsLoading || !selectedPatientForPrescription}
+                    disabled={dataState.loadingState.prescriptions || !selectedPatientForPrescriptionRef.current}
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                     </svg>
-                    {prescriptionsLoading ? 'Chargement...' : 'Actualiser'}
+                    {dataState.loadingState.prescriptions ? 'Chargement...' : 'Actualiser'}
                   </button>
                 </div>
               </div>
               
-              {prescriptionsLoading ? (
+              {dataState.loadingState.prescriptions ? (
                 <div className="bg-white rounded-lg shadow-md p-6">
                   <div className="flex items-center justify-center py-8">
                     <svg className="animate-spin h-8 w-8 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
-                    <span className="ml-3 text-gray-600">Chargement des prescriptions...</span>
+                    <span className="ml-3 text-gray-600">Chargement des dataState.prescriptions...</span>
                   </div>
                 </div>
-              ) : !selectedPatientForPrescription ? (
+              ) : !selectedPatientForPrescriptionRef.current ? (
                 <div className="bg-white rounded-lg shadow-md p-6">
                   <div className="flex items-center justify-center py-8">
                     <div className="text-center">
@@ -2046,17 +2101,17 @@ const loadOrdonnancesRecentes = useCallback(async () => {
                       </svg>
                       <h3 className="mt-2 text-sm font-medium text-gray-900">Aucun patient sélectionné</h3>
                       <p className="mt-1 text-sm text-gray-500">
-                        Veuillez sélectionner un patient depuis la liste des patients pour voir ses prescriptions.
+                        Veuillez sélectionner un patient depuis la liste des dataState.patients pour voir ses dataState.prescriptions.
                       </p>
                       <div className="mt-6">
                         <button
-                          onClick={() => setActiveTab("patients-list")}
+                          onClick={() => updateUIState({ activeTab: "patients-list" })}
                           className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
                         >
                           <svg className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
                           </svg>
-                          Voir les patients
+                          Voir les dataState.patients
                         </button>
                       </div>
                     </div>
@@ -2064,7 +2119,7 @@ const loadOrdonnancesRecentes = useCallback(async () => {
                 </div>
               ) : (
                 <div className="bg-white rounded-lg shadow-md p-6">
-                  {prescriptions && prescriptions.length > 0 ? (
+                  {dataState.prescriptions && dataState.prescriptions.length > 0 ? (
                     <div className="overflow-x-auto">
                       <table className="min-w-full divide-y divide-gray-200">
                         <thead className="bg-gray-50">
@@ -2080,7 +2135,7 @@ const loadOrdonnancesRecentes = useCallback(async () => {
                           </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
-                          {prescriptions.map((prescription, idx) => (
+                          {dataState.prescriptions.map((prescription, idx) => (
                             <tr key={prescription.id_prescription || idx} className="hover:bg-gray-50">
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <div className="text-sm font-medium text-gray-900">
@@ -2155,9 +2210,9 @@ const loadOrdonnancesRecentes = useCallback(async () => {
                                       type: prescription.type_prescription || 'ordonnance',
                                       hash: generateHash(`${prescription.id_prescription || prescription.id}-${prescription.prescriptionNumber || prescription.numero_prescription}`)
                                     };
-                                    setQrCodeData(qrData);
-                                    setCreatedPrescription(prescription);
-                                    setShowQRModal(true);
+                                    qrCodeDataRef.current = qrData;
+                                    createdPrescriptionRef.current = prescription;
+                                    updateModalState({ showQRModal: true });
                                   }}
                                   className="text-green-600 hover:text-green-900 mr-3"
                                   title="Voir QR Code"
@@ -2206,11 +2261,11 @@ const loadOrdonnancesRecentes = useCallback(async () => {
         </div>
       </div>
       {/* Patient Details Modal */}
-      {showPatientModal && modalPatient && (
+      {modalState.showPatientModal && modalPatientRef.current && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-start md:justify-center z-50 p-2 sm:p-4 overflow-y-auto">
           <div className="bg-white rounded-lg shadow-xl w-full max-w-full md:max-w-4xl max-h-[95vh] overflow-y-auto mx-auto">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold">Dossier de {modalPatient.name}</h2>
+              <h2 className="text-xl font-bold">Dossier de {modalPatientRef.current.name}</h2>
               <button onClick={closePatientModal} className="text-gray-500 hover:text-gray-700">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
@@ -2220,24 +2275,24 @@ const loadOrdonnancesRecentes = useCallback(async () => {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
               <div className="md:col-span-1">
                 <div className="bg-blue-50 rounded-lg p-4 text-center">
-                  <img src={modalPatient.image || "https://placehold.co/150"} alt="" className="rounded-full mx-auto mb-4"/>
-                  <h3 className="text-xl font-bold">{modalPatient.name}</h3>
-                  <p className="text-gray-600 mb-2">Né le {modalPatient.birth} {modalPatient.age && `(${modalPatient.age} ans)`}</p>
-                  <p className="text-gray-600 mb-4">Groupe sanguin: {modalPatient.blood || "?"}</p>
+                  <img src={modalPatientRef.current.image || "https://placehold.co/150"} alt="" className="rounded-full mx-auto mb-4"/>
+                  <h3 className="text-xl font-bold">{modalPatientRef.current.name}</h3>
+                  <p className="text-gray-600 mb-2">Né le {modalPatientRef.current.birth} {modalPatientRef.current.age && `(${modalPatientRef.current.age} ans)`}</p>
+                  <p className="text-gray-600 mb-4">Groupe sanguin: {modalPatientRef.current.blood || "?"}</p>
                   <div className="flex justify-center space-x-2">
-                    <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-md">{modalPatient.gender}</span>
-                    <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-md">{modalPatient.status}</span>
+                    <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-md">{modalPatientRef.current.gender}</span>
+                    <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-md">{modalPatientRef.current.status}</span>
                   </div>
                 </div>
                 <div className="mt-4 bg-white rounded-lg shadow-sm p-4">
                   <h4 className="font-semibold mb-2">Coordonnées</h4>
-                  <p className="text-gray-700 mb-1">{modalPatient.address}</p>
-                  <p className="text-gray-700 mb-1">{modalPatient.phone}</p>
-                  <p className="text-gray-700">{modalPatient.email}</p>
+                  <p className="text-gray-700 mb-1">{modalPatientRef.current.address}</p>
+                  <p className="text-gray-700 mb-1">{modalPatientRef.current.phone}</p>
+                  <p className="text-gray-700">{modalPatientRef.current.email}</p>
                 </div>
                 <div className="mt-4 bg-white rounded-lg shadow-sm p-4">
                   <h4 className="font-semibold mb-2">Contacts d'urgence</h4>
-                  {modalPatient.emergencyContacts?.map((c, i) => (
+                  {modalPatientRef.current.emergencyContacts?.map((c, i) => (
                     <div className="mb-2" key={i}>
                       <p className="font-medium">{c.name}</p>
                       <p className="text-gray-700 mb-1">{c.type} - {c.phone}</p>
@@ -2252,13 +2307,13 @@ const loadOrdonnancesRecentes = useCallback(async () => {
                     <div>
                       <h5 className="font-medium mb-1">Pathologies</h5>
                       <ul className="text-gray-700 space-y-1">
-                        {modalPatient.pathologies?.map((p, i) => <li key={i} className="flex items-center"><span className="mr-1">•</span> {p}</li>)}
+                        {modalPatientRef.current.pathologies?.map((p, i) => <li key={i} className="flex items-center"><span className="mr-1">•</span> {p}</li>)}
                       </ul>
                     </div>
                     <div>
                       <h5 className="font-medium mb-1">Allergies</h5>
                       <ul className="text-gray-700 space-y-1">
-                        {modalPatient.allergies?.map((a, i) => <li key={i} className="flex items-center"><span className="mr-1">•</span> {a}</li>)}
+                        {modalPatientRef.current.allergies?.map((a, i) => <li key={i} className="flex items-center"><span className="mr-1">•</span> {a}</li>)}
                       </ul>
                     </div>
                   </div>
@@ -2279,7 +2334,7 @@ const loadOrdonnancesRecentes = useCallback(async () => {
                         </tr>
                       </thead>
                       <tbody>
-                        {modalPatient.consultations?.map((c, i) => (
+                        {modalPatientRef.current.consultations?.map((c, i) => (
                           <tr key={i} className="border-b text-sm">
                             <td className="py-3">{c.date}</td>
                             <td>{c.reason}</td>
@@ -2297,7 +2352,7 @@ const loadOrdonnancesRecentes = useCallback(async () => {
                     <button className="text-blue-600 text-sm hover:text-blue-800">+ Ajouter</button>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {modalPatient.treatments?.map((t, i) => (
+                    {modalPatientRef.current.treatments?.map((t, i) => (
                       <div key={i}>
                         <div className="flex justify-between">
                           <span className="font-medium">{t.name}</span>
@@ -2321,11 +2376,11 @@ const loadOrdonnancesRecentes = useCallback(async () => {
       )}
 
       {/* Edit Modal */}
-      {showEditModal && editPatient && (
+      {modalState.showEditModal && editPatientRef.current && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-start md:items-center justify-center z-50 p-2 sm:p-4 overflow-y-auto">
           <div className="bg-white rounded-lg shadow-xl p-4 sm:p-6 w-full max-w-full md:max-w-xl relative my-4">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold">Modifier {editPatient.name}</h2>
+              <h2 className="text-xl font-bold">Modifier {editPatientRef.current.name}</h2>
               <button onClick={closeEditModal} className="text-gray-500 hover:text-gray-700">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
@@ -2335,11 +2390,11 @@ const loadOrdonnancesRecentes = useCallback(async () => {
             <form className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 mb-4 sm:mb-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Nom</label>
-                <input type="text" className="w-full px-3 py-2 border rounded-md" defaultValue={editPatient.name.split(" ")[0]} />
+                <input type="text" className="w-full px-3 py-2 border rounded-md" defaultValue={editPatientRef.current.name.split(" ")[0]} />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Prénom</label>
-                <input type="text" className="w-full px-3 py-2 border rounded-md" defaultValue={editPatient.name.split(" ")[1]} />
+                <input type="text" className="w-full px-3 py-2 border rounded-md" defaultValue={editPatientRef.current.name.split(" ")[1]} />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Date de naissance</label>
@@ -2355,26 +2410,26 @@ const loadOrdonnancesRecentes = useCallback(async () => {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Adresse</label>
-                <input type="text" className="w-full px-3 py-2 border rounded-md" defaultValue={editPatient.address} />
+                <input type="text" className="w-full px-3 py-2 border rounded-md" defaultValue={editPatientRef.current.address} />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Téléphone</label>
-                <input type="tel" className="w-full px-3 py-2 border rounded-md" defaultValue={editPatient.phone} />
+                <input type="tel" className="w-full px-3 py-2 border rounded-md" defaultValue={editPatientRef.current.phone} />
               </div>
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                <input type="email" className="w-full px-3 py-2 border rounded-md" defaultValue={editPatient.email} />
+                <input type="email" className="w-full px-3 py-2 border rounded-md" defaultValue={editPatientRef.current.email} />
               </div>
               <div className="md:col-span-2">
                 <h3 className="font-semibold mb-2">Antécédents médicaux</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Pathologies</label>
-                    <textarea className="w-full px-3 py-2 border rounded-md" rows={2}>{editPatient.pathologies?.join("\n")}</textarea>
+                    <textarea className="w-full px-3 py-2 border rounded-md" rows={2}>{editPatientRef.current.pathologies?.join("\n")}</textarea>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Allergies</label>
-                    <textarea className="w-full px-3 py-2 border rounded-md" rows={2}>{editPatient.allergies?.join("\n")}</textarea>
+                    <textarea className="w-full px-3 py-2 border rounded-md" rows={2}>{editPatientRef.current.allergies?.join("\n")}</textarea>
                   </div>
                 </div>
               </div>
@@ -2388,11 +2443,11 @@ const loadOrdonnancesRecentes = useCallback(async () => {
       )}
 
       {/* Share Modal */}
-      {showShareModal && sharePatient && (
+      {modalState.showShareModal && sharePatientRef.current && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-start md:items-center justify-center z-50 p-2 sm:p-4 overflow-y-auto">
           <div className="bg-white rounded-lg shadow-xl p-4 sm:p-6 w-full max-w-full md:max-w-2xl relative my-4">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold">Mutualiser {sharePatient.name}</h2>
+              <h2 className="text-xl font-bold">Mutualiser {sharePatientRef.current.name}</h2>
               <button onClick={closeShareModal} className="text-gray-500 hover:text-gray-700">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
@@ -2401,7 +2456,7 @@ const loadOrdonnancesRecentes = useCallback(async () => {
             </div>
             <form>
               <div className="mb-6">
-                <h3 className="font-semibold mb-2">Patient : {sharePatient.name}</h3>
+                <h3 className="font-semibold mb-2">Patient : {sharePatientRef.current.name}</h3>
                 <p className="text-gray-700 mb-4">Vous êtes sur le point de partager ce dossier médical avec un autre professionnel de santé.</p>
                 <div className="mb-4">
                   <label className="block text-sm font-medium text-gray-700 mb-1">Service destinataire</label>
@@ -2443,7 +2498,7 @@ const loadOrdonnancesRecentes = useCallback(async () => {
                   <textarea className="w-full px-3 py-2 border rounded-md" rows={4} defaultValue={
 `Cher confrère/consoeur,
 
-Je vous transmets le dossier de M. ${sharePatient.name} pour prise en charge conjointe. Ce patient présente les antécédents médicaux suivants : hypertension artérielle, hypercholestérolémie et diabète type II.
+Je vous transmets le dossier de M. ${sharePatientRef.current.name} pour prise en charge conjointe. Ce patient présente les antécédents médicaux suivants : hypertension artérielle, hypercholestérolémie et diabète type II.
 
 N'hésitez pas à me contacter pour toute information complémentaire.
 
@@ -2466,7 +2521,7 @@ Dr. Dupont`
       )}
 
       {/* Add Modal */}
-      {showAddModal && (
+      {modalState.showAddModal && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-start md:items-center justify-center z-50 p-2 sm:p-4 overflow-y-auto">
           <div className="bg-white rounded-lg shadow-xl p-4 sm:p-6 w-full max-w-full md:max-w-xl relative my-4">
             <div className="flex justify-between items-center mb-4">
@@ -2533,22 +2588,22 @@ Dr. Dupont`
       )}
 
       {/* Create Patient File Modal */}
-      {showPatientFileModal && (
+      {modalState.showPatientFile && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-start md:items-center justify-center z-50 p-2 sm:p-4 overflow-y-auto">
           <div className="bg-white w-full max-w-full md:max-w-4xl mx-auto rounded-lg shadow-lg max-h-[95vh] overflow-y-auto my-2 md:my-4">
             <div className="flex justify-between items-center border-b px-4 py-3 sticky top-0 bg-white z-10">
               <h3 className="text-lg font-medium">Créer un Dossier Patient</h3>
               <div className="flex items-center space-x-2">
-                {(servicesLoading || loading) && (
+                {(dataState.loadingState.services || uiState.loading) && (
                   <div className="flex items-center text-sm text-blue-600">
                     <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
-                    {servicesLoading ? 'Chargement...' : 'Création...'}
+                    {dataState.loadingState.services ? 'Chargement...' : 'Création...'}
                   </div>
                 )}
-                <button onClick={closePatientFileModal} className="text-gray-500 hover:text-gray-700" disabled={loading}>
+                <button onClick={closePatientFileModal} className="text-gray-500 hover:text-gray-700" disabled={uiState.loading}>
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
                   </svg>
@@ -2579,20 +2634,20 @@ Dr. Dupont`
                     </label>
                     <select 
                       name="patient_id" 
-                      value={patientFileForm.patient_id} 
+                      value={patientFileFormRef.current.patient_id} 
                       onChange={handleInputChange} 
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
                       required
-                      disabled={loading}
+                      disabled={uiState.loading}
                     >
                       <option value="">Sélectionnez un patient</option>
-                      {Array.isArray(patientsForSelect) && patientsForSelect.map(patient => (
+                      {Array.isArray(dataState.dataState.patientsForSelect) && dataState.dataState.patientsForSelect.map(patient => (
                         <option key={patient.id} value={patient.id}>
                           {patient.name} {patient.numero_dossier !== 'N/A' ? `(${patient.numero_dossier})` : ''}
                         </option>
                       ))}
                     </select>
-                    {patientsForSelect.length === 0 && !loading && (
+                    {dataState.dataState.patientsForSelect.length === 0 && !uiState.loading && (
                       <div className="mt-1 text-sm text-red-600">
                         Aucun patient disponible
                       </div>
@@ -2604,16 +2659,16 @@ Dr. Dupont`
                     </label>
                     <select 
                       name="service_id" 
-                      value={patientFileForm.service_id} 
+                      value={patientFileFormRef.current.service_id} 
                       onChange={handleInputChange} 
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
                       required
-                      disabled={servicesLoading || loading}
+                      disabled={dataState.loadingState.services || uiState.loading}
                     >
                       <option value="">
-                        {servicesLoading ? "Chargement des services..." : "Sélectionnez un service"}
+                        {dataState.loadingState.services ? "Chargement des dataState.services..." : "Sélectionnez un service"}
                       </option>
-                      {Array.isArray(services) && services.length > 0 && services.map(service => {
+                      {Array.isArray(dataState.services) && dataState.services.length > 0 && dataState.services.map(service => {
                         const serviceId = service.id || service.id_service || service.service_id;
                         const serviceName = service.name || service.nom || service.libelle || service.service_name || 'Service sans nom';
                         return (
@@ -2623,19 +2678,19 @@ Dr. Dupont`
                         );
                       })}
                     </select>
-                    {servicesLoading && (
+                    {dataState.loadingState.services && (
                       <div className="mt-1 text-sm text-blue-600">
-                        Chargement des services...
+                        Chargement des dataState.services...
                       </div>
                     )}
-                    {!servicesLoading && services.length === 0 && (
+                    {!dataState.loadingState.services && dataState.services.length === 0 && (
                       <div className="mt-1 text-sm text-red-600">
                         Aucun service disponible
                       </div>
                     )}
-                    {!servicesLoading && services.length > 0 && (
+                    {!dataState.loadingState.services && dataState.services.length > 0 && (
                       <div className="mt-1 text-sm text-green-600">
-                        {services.length} service(s) chargé(s)
+                        {dataState.services.length} service(s) chargé(s)
                       </div>
                     )}
                   </div>
@@ -2645,11 +2700,11 @@ Dr. Dupont`
                     </label>
                     <select 
                       name="statut" 
-                      value={patientFileForm.statut} 
+                      value={patientFileFormRef.current.statut} 
                       onChange={handleInputChange} 
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
                       required
-                      disabled={loading}
+                      disabled={uiState.loading}
                     >
                       <option value="actif">Actif</option>
                       <option value="inactif">Inactif</option>
@@ -2663,11 +2718,11 @@ Dr. Dupont`
                     <input 
                       type="date" 
                       name="dateOuverture" 
-                      value={patientFileForm.dateOuverture} 
+                      value={patientFileFormRef.current.dateOuverture} 
                       onChange={handleInputChange} 
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
                       required 
-                      disabled={loading}
+                      disabled={uiState.loading}
                       max={new Date().toISOString().split('T')[0]}
                     />
                   </div>
@@ -2676,11 +2731,11 @@ Dr. Dupont`
                     <input 
                       type="date" 
                       name="dateFermeture" 
-                      value={patientFileForm.dateFermeture} 
+                      value={patientFileFormRef.current.dateFermeture} 
                       onChange={handleInputChange} 
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
-                      disabled={loading}
-                      min={patientFileForm.dateOuverture || new Date().toISOString().split('T')[0]}
+                      disabled={uiState.loading}
+                      min={patientFileFormRef.current.dateOuverture || new Date().toISOString().split('T')[0]}
                     />
                   </div>
                 </div>
@@ -2692,45 +2747,45 @@ Dr. Dupont`
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Résumé Médical</label>
-                    <input type="text" name="resume_medical" value={patientFileForm.resume_medical} onChange={handleInputChange} className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="Bref résumé de l'état médical du patient" />
+                    <input type="text" name="resume_medical" value={patientFileFormRef.current.resume_medical} onChange={handleInputChange} className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="Bref résumé de l'état médical du patient" />
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Antécédents Médicaux</label>
-                      <textarea name="antecedents_medicaux" value={patientFileForm.antecedents_medicaux} onChange={handleInputChange} className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" rows={3} placeholder="Historique médical du patient"></textarea>
+                      <textarea name="antecedents_medicaux" value={patientFileFormRef.current.antecedents_medicaux} onChange={handleInputChange} className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" rows={3} placeholder="Historique médical du patient"></textarea>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Allergies</label>
-                      <textarea name="allergies" value={patientFileForm.allergies} onChange={handleInputChange} className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" rows={3} placeholder="Allergies connues"></textarea>
+                      <textarea name="allergies" value={patientFileFormRef.current.allergies} onChange={handleInputChange} className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" rows={3} placeholder="Allergies connues"></textarea>
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Traitement</label>
-                      <textarea name="traitement" value={patientFileForm.traitement} onChange={handleInputChange} className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" rows={3} placeholder="Traitements actuels"></textarea>
+                      <textarea name="traitement" value={patientFileFormRef.current.traitement} onChange={handleInputChange} className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" rows={3} placeholder="Traitements actuels"></textarea>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Signes Vitaux</label>
-                      <textarea name="signes_vitaux" value={patientFileForm.signes_vitaux} onChange={handleInputChange} className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" rows={3} placeholder="Tension, poids, température, etc."></textarea>
+                      <textarea name="signes_vitaux" value={patientFileFormRef.current.signes_vitaux} onChange={handleInputChange} className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" rows={3} placeholder="Tension, poids, température, etc."></textarea>
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Histoire Familiale</label>
-                      <textarea name="histoire_familiale" value={patientFileForm.histoire_familiale} onChange={handleInputChange} className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" rows={3} placeholder="Antécédents familiaux"></textarea>
+                      <textarea name="histoire_familiale" value={patientFileFormRef.current.histoire_familiale} onChange={handleInputChange} className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" rows={3} placeholder="Antécédents familiaux"></textarea>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Observations</label>
-                      <textarea name="observations" value={patientFileForm.observations} onChange={handleInputChange} className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" rows={3} placeholder="Observations cliniques"></textarea>
+                      <textarea name="observations" value={patientFileFormRef.current.observations} onChange={handleInputChange} className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" rows={3} placeholder="Observations cliniques"></textarea>
                     </div>
                   </div>
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Directives Anticipées</label>
-                    <textarea name="directives_anticipees" value={patientFileForm.directives_anticipees} onChange={handleInputChange} className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" rows={2} placeholder="Directives pour les soins futurs"></textarea>
+                    <textarea name="directives_anticipees" value={patientFileFormRef.current.directives_anticipees} onChange={handleInputChange} className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" rows={2} placeholder="Directives pour les soins futurs"></textarea>
                   </div>
                 </div>
               </div>
@@ -2739,16 +2794,16 @@ Dr. Dupont`
                   type="button" 
                   onClick={closePatientFileModal} 
                   className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
-                  disabled={loading}
+                  disabled={uiState.loading}
                 >
                   Annuler
                 </button>
                 <button 
                   type="submit" 
                   className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                  disabled={loading}
+                  disabled={uiState.loading}
                 >
-                  {loading ? 'Création en cours...' : 'Créer'}
+                  {uiState.loading ? 'Création en cours...' : 'Créer'}
                 </button>
               </div>
             </form>
@@ -2757,24 +2812,24 @@ Dr. Dupont`
       )}
 
       {/* Dossier Details Modal */}
-      {showDossierModal && selectedDossier && (
+      {modalState.showDossierModal && selectedDossierRef.current && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-start md:items-center justify-center z-50 p-2 sm:p-4 overflow-y-auto">
           <div className="bg-white w-full max-w-full md:max-w-4xl mx-auto rounded-lg shadow-lg max-h-[95vh] overflow-y-auto my-2 md:my-4">
             <div className="flex justify-between items-center border-b px-4 py-3 sticky top-0 bg-white z-10">
               <h3 className="text-lg font-medium">
-                Dossier #{selectedDossier.numeroDossier || selectedDossier.numero_dossier || (dossierDetails?.numeroDossier) || 'N/A'} - {
-                  // Priority: Use enriched patient info from dossierDetails if available
-                  dossierDetails?.patient ?
-                    `${dossierDetails.patient.prenom || ''} ${dossierDetails.patient.nom || ''}`.trim() || 'Patient inconnu' :
-                    // Fallback: Use selectedDossier patient info
-                    selectedDossier.patient ?
-                      `${selectedDossier.patient.prenom || ''} ${selectedDossier.patient.nom || ''}`.trim() || 'Patient inconnu' :
+                Dossier #{selectedDossierRef.current.numeroDossier || selectedDossierRef.current.numero_dossier || (dossierDetailsRef.current?.numeroDossier) || 'N/A'} - {
+                  // Priority: Use enriched patient info from dossierDetailsRef.current if available
+                  dossierDetailsRef.current?.patient ?
+                    `${dossierDetailsRef.current.patient.prenom || ''} ${dossierDetailsRef.current.patient.nom || ''}`.trim() || 'Patient inconnu' :
+                    // Fallback: Use selectedDossierRef.current patient info
+                    selectedDossierRef.current.patient ?
+                      `${selectedDossierRef.current.patient.prenom || ''} ${selectedDossierRef.current.patient.nom || ''}`.trim() || 'Patient inconnu' :
                       // Last resort: Use any available patient name fields
-                      selectedDossier.patient_name || selectedDossier.patient_nom || dossierDetails?.patient_name || 'Patient inconnu'
+                      selectedDossierRef.current.patient_name || selectedDossierRef.current.patient_nom || dossierDetailsRef.current?.patient_name || 'Patient inconnu'
                 }
               </h3>
               <div className="flex items-center space-x-2">
-                {dossierDetailsLoading && (
+                {dossierDetailsRef.currentLoading && (
                   <div className="flex items-center text-sm text-blue-600">
                     <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
@@ -2792,7 +2847,7 @@ Dr. Dupont`
             </div>
             
             <div className="p-4 sm:p-6">
-              {dossierDetailsLoading ? (
+              {dossierDetailsRef.currentLoading ? (
                 <div className="flex items-center justify-center py-8">
                   <svg className="animate-spin h-8 w-8 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
@@ -2800,7 +2855,7 @@ Dr. Dupont`
                   </svg>
                   <span className="ml-3 text-gray-600">Chargement des détails...</span>
                 </div>
-              ) : dossierDetails ? (
+              ) : dossierDetailsRef.current ? (
                 <div className="space-y-6">
                   {/* Basic Information */}
                   <div className="bg-gray-50 rounded-lg p-4">
@@ -2810,24 +2865,24 @@ Dr. Dupont`
                       <div>
                         <label className="block text-sm font-medium text-gray-700">Patient</label>
                         <p className="text-sm text-gray-900 font-medium">
-                          {dossierDetails.patient ?
-                            `${dossierDetails.patient.prenom || ''} ${dossierDetails.patient.nom || ''}`.trim() || 'Nom inconnu' :
-                            `Patient ID: ${dossierDetails.patient_id || 'N/A'}`
+                          {dossierDetailsRef.current.patient ?
+                            `${dossierDetailsRef.current.patient.prenom || ''} ${dossierDetailsRef.current.patient.nom || ''}`.trim() || 'Nom inconnu' :
+                            `Patient ID: ${dossierDetailsRef.current.patient_id || 'N/A'}`
                           }
                         </p>
-                        {dossierDetails.patient?.numero_dossier && (
-                          <p className="text-xs text-gray-500">{dossierDetails.patient.numero_dossier}</p>
+                        {dossierDetailsRef.current.patient?.numero_dossier && (
+                          <p className="text-xs text-gray-500">{dossierDetailsRef.current.patient.numero_dossier}</p>
                         )}
                       </div>
                       
                       {/* Patient Gender */}
-                      {dossierDetails.patient?.sexe && (
+                      {dossierDetailsRef.current.patient?.sexe && (
                         <div>
                           <label className="block text-sm font-medium text-gray-700">Sexe</label>
                           <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
-                            {dossierDetails.patient.sexe === 'M' ? 'Homme' :
-                             dossierDetails.patient.sexe === 'F' ? 'Femme' :
-                             dossierDetails.patient.sexe}
+                            {dossierDetailsRef.current.patient.sexe === 'M' ? 'Homme' :
+                             dossierDetailsRef.current.patient.sexe === 'F' ? 'Femme' :
+                             dossierDetailsRef.current.patient.sexe}
                           </span>
                         </div>
                       )}
@@ -2836,27 +2891,27 @@ Dr. Dupont`
                       <div>
                         <label className="block text-sm font-medium text-gray-700">Groupe sanguin</label>
                         <p className="text-sm text-gray-500 italic">
-                          {dossierDetails.patient?.groupe_sanguin || 'Non renseigné'}
+                          {dossierDetailsRef.current.patient?.groupe_sanguin || 'Non renseigné'}
                         </p>
                       </div>
                       
                       {/* Service */}
                       <div>
                         <label className="block text-sm font-medium text-gray-700">Service</label>
-                        <p className="text-sm text-gray-900">{getServiceNameById(dossierDetails.service_id)}</p>
+                        <p className="text-sm text-gray-900">{getServiceNameById(dossierDetailsRef.current.service_id)}</p>
                       </div>
                       
                       {/* Status */}
                       <div>
                         <label className="block text-sm font-medium text-gray-700">Statut</label>
                         <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                          dossierDetails.statut === 'actif'
+                          dossierDetailsRef.current.statut === 'actif'
                             ? 'bg-green-100 text-green-800'
-                            : dossierDetails.statut === 'ferme'
+                            : dossierDetailsRef.current.statut === 'ferme'
                               ? 'bg-red-100 text-red-800'
                               : 'bg-yellow-100 text-yellow-800'
                         }`}>
-                          {dossierDetails.statut || 'Inconnu'}
+                          {dossierDetailsRef.current.statut || 'Inconnu'}
                         </span>
                       </div>
                       
@@ -2864,34 +2919,34 @@ Dr. Dupont`
                       <div>
                         <label className="block text-sm font-medium text-gray-700">Date d'ouverture</label>
                         <p className="text-sm text-gray-900">
-                          {dossierDetails.dateCreation ? new Date(dossierDetails.dateCreation).toLocaleDateString('fr-FR') :
-                           dossierDetails.dateOuverture ? new Date(dossierDetails.dateOuverture).toLocaleDateString('fr-FR') :
+                          {dossierDetailsRef.current.dateCreation ? new Date(dossierDetailsRef.current.dateCreation).toLocaleDateString('fr-FR') :
+                           dossierDetailsRef.current.dateOuverture ? new Date(dossierDetailsRef.current.dateOuverture).toLocaleDateString('fr-FR') :
                            'Non définie'}
                         </p>
                       </div>
                       
                       {/* Closing Date */}
-                      {dossierDetails.dateFermeture && (
+                      {dossierDetailsRef.current.dateFermeture && (
                         <div>
                           <label className="block text-sm font-medium text-gray-700">Date de fermeture</label>
                           <p className="text-sm text-gray-900">
-                            {new Date(dossierDetails.dateFermeture).toLocaleDateString('fr-FR')}
+                            {new Date(dossierDetailsRef.current.dateFermeture).toLocaleDateString('fr-FR')}
                           </p>
                         </div>
                       )}
                       
                       {/* Patient Contact Info */}
-                      {dossierDetails.patient?.telephone && (
+                      {dossierDetailsRef.current.patient?.telephone && (
                         <div>
                           <label className="block text-sm font-medium text-gray-700">Téléphone</label>
-                          <p className="text-sm text-gray-900">{dossierDetails.patient.telephone}</p>
+                          <p className="text-sm text-gray-900">{dossierDetailsRef.current.patient.telephone}</p>
                         </div>
                       )}
                       
-                      {dossierDetails.patient?.email && (
+                      {dossierDetailsRef.current.patient?.email && (
                         <div>
                           <label className="block text-sm font-medium text-gray-700">Email</label>
-                          <p className="text-sm text-gray-900">{dossierDetails.patient.email}</p>
+                          <p className="text-sm text-gray-900">{dossierDetailsRef.current.patient.email}</p>
                         </div>
                       )}
                     </div>
@@ -2901,65 +2956,65 @@ Dr. Dupont`
                   <div className="bg-gray-50 rounded-lg p-4">
                     <h4 className="text-md font-semibold text-gray-800 mb-4">Informations Médicales</h4>
                     <div className="space-y-4">
-                      {dossierDetails.resume_medical && (
+                      {dossierDetailsRef.current.resume_medical && (
                         <div>
                           <label className="block text-sm font-medium text-gray-700">Résumé Médical</label>
-                          <p className="text-sm text-gray-900 mt-1">{dossierDetails.resume_medical}</p>
+                          <p className="text-sm text-gray-900 mt-1">{dossierDetailsRef.current.resume_medical}</p>
                         </div>
                       )}
                       
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {dossierDetails.antecedents_medicaux && (
+                        {dossierDetailsRef.current.antecedents_medicaux && (
                           <div>
                             <label className="block text-sm font-medium text-gray-700">Antécédents Médicaux</label>
-                            <p className="text-sm text-gray-900 mt-1 whitespace-pre-wrap">{dossierDetails.antecedents_medicaux}</p>
+                            <p className="text-sm text-gray-900 mt-1 whitespace-pre-wrap">{dossierDetailsRef.current.antecedents_medicaux}</p>
                           </div>
                         )}
                         
-                        {dossierDetails.allergies && (
+                        {dossierDetailsRef.current.allergies && (
                           <div>
                             <label className="block text-sm font-medium text-gray-700">Allergies</label>
-                            <p className="text-sm text-gray-900 mt-1 whitespace-pre-wrap">{dossierDetails.allergies}</p>
+                            <p className="text-sm text-gray-900 mt-1 whitespace-pre-wrap">{dossierDetailsRef.current.allergies}</p>
                           </div>
                         )}
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {dossierDetails.traitement && (
+                        {dossierDetailsRef.current.traitement && (
                           <div>
                             <label className="block text-sm font-medium text-gray-700">Traitement</label>
-                            <p className="text-sm text-gray-900 mt-1 whitespace-pre-wrap">{dossierDetails.traitement}</p>
+                            <p className="text-sm text-gray-900 mt-1 whitespace-pre-wrap">{dossierDetailsRef.current.traitement}</p>
                           </div>
                         )}
                         
-                        {dossierDetails.signes_vitaux && (
+                        {dossierDetailsRef.current.signes_vitaux && (
                           <div>
                             <label className="block text-sm font-medium text-gray-700">Signes Vitaux</label>
-                            <p className="text-sm text-gray-900 mt-1 whitespace-pre-wrap">{dossierDetails.signes_vitaux}</p>
+                            <p className="text-sm text-gray-900 mt-1 whitespace-pre-wrap">{dossierDetailsRef.current.signes_vitaux}</p>
                           </div>
                         )}
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {dossierDetails.histoire_familiale && (
+                        {dossierDetailsRef.current.histoire_familiale && (
                           <div>
                             <label className="block text-sm font-medium text-gray-700">Histoire Familiale</label>
-                            <p className="text-sm text-gray-900 mt-1 whitespace-pre-wrap">{dossierDetails.histoire_familiale}</p>
+                            <p className="text-sm text-gray-900 mt-1 whitespace-pre-wrap">{dossierDetailsRef.current.histoire_familiale}</p>
                           </div>
                         )}
                         
-                        {dossierDetails.observations && (
+                        {dossierDetailsRef.current.observations && (
                           <div>
                             <label className="block text-sm font-medium text-gray-700">Observations</label>
-                            <p className="text-sm text-gray-900 mt-1 whitespace-pre-wrap">{dossierDetails.observations}</p>
+                            <p className="text-sm text-gray-900 mt-1 whitespace-pre-wrap">{dossierDetailsRef.current.observations}</p>
                           </div>
                         )}
                       </div>
 
-                      {dossierDetails.directives_anticipees && (
+                      {dossierDetailsRef.current.directives_anticipees && (
                         <div>
                           <label className="block text-sm font-medium text-gray-700">Directives Anticipées</label>
-                          <p className="text-sm text-gray-900 mt-1 whitespace-pre-wrap">{dossierDetails.directives_anticipees}</p>
+                          <p className="text-sm text-gray-900 mt-1 whitespace-pre-wrap">{dossierDetailsRef.current.directives_anticipees}</p>
                         </div>
                       )}
                     </div>
@@ -2969,7 +3024,7 @@ Dr. Dupont`
                   <div className="bg-gray-50 rounded-lg p-4">
                     <h4 className="text-md font-semibold text-gray-800 mb-4">Données Brutes (Debug)</h4>
                     <pre className="text-xs text-gray-600 bg-white p-2 rounded border overflow-auto max-h-40">
-                      {JSON.stringify(dossierDetails, null, 2)}
+                      {JSON.stringify(dossierDetailsRef.current, null, 2)}
                     </pre>
                   </div>
                 </div>
@@ -2990,15 +3045,15 @@ Dr. Dupont`
       )}
 
       {/* Edit Dossier Modal */}
-      {showEditDossierModal && selectedDossier && (
+      {modalState.showEditDossierModal && selectedDossierRef.current && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-start md:items-center justify-center z-50 p-2 sm:p-4 overflow-y-auto">
           <div className="bg-white w-full max-w-full md:max-w-6xl mx-auto rounded-lg shadow-lg max-h-[95vh] overflow-y-auto my-2 md:my-4">
             <div className="flex justify-between items-center border-b px-4 py-3 sticky top-0 bg-white z-10">
               <h3 className="text-lg font-medium">
-                Modifier le Dossier {selectedDossier.numeroDossier || selectedDossier.numero_dossier || 'N/A'}
+                Modifier le Dossier {selectedDossierRef.current.numeroDossier || selectedDossierRef.current.numero_dossier || 'N/A'}
               </h3>
               <div className="flex items-center space-x-2">
-                {loading && (
+                {uiState.loading && (
                   <div className="flex items-center text-sm text-blue-600">
                     <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
@@ -3007,7 +3062,7 @@ Dr. Dupont`
                     Mise à jour...
                   </div>
                 )}
-                <button onClick={closeEditDossierModal} className="text-gray-500 hover:text-gray-700" disabled={loading}>
+                <button onClick={closeEditDossierModal} className="text-gray-500 hover:text-gray-700" disabled={uiState.loading}>
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
                   </svg>
@@ -3024,7 +3079,7 @@ Dr. Dupont`
                   </svg>
                   <div className="text-sm text-yellow-800">
                     <p className="font-medium">Modification du dossier médical</p>
-                    <p className="mt-1">Vous modifiez le dossier de {selectedDossier.patient ? `${selectedDossier.patient.prenom} ${selectedDossier.patient.nom}` : 'Patient inconnu'}. Vérifiez attentivement les informations avant de sauvegarder.</p>
+                    <p className="mt-1">Vous modifiez le dossier de {selectedDossierRef.current.patient ? `${selectedDossierRef.current.patient.prenom} ${selectedDossierRef.current.patient.nom}` : 'Patient inconnu'}. Vérifiez attentivement les informations avant de sauvegarder.</p>
                   </div>
                 </div>
               </div>
@@ -3037,10 +3092,10 @@ Dr. Dupont`
                     <label className="block text-sm font-medium text-gray-700 mb-1">Statut</label>
                     <select
                       name="statut"
-                      value={editDossierForm.statut}
+                      value={editDossierFormRef.current.statut}
                       onChange={handleEditDossierInputChange}
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      disabled={loading}
+                      disabled={uiState.loading}
                     >
                       <option value="actif">Actif</option>
                       <option value="ferme">Fermé</option>
@@ -3053,10 +3108,10 @@ Dr. Dupont`
                     <label className="block text-sm font-medium text-gray-700 mb-1">Type de dossier</label>
                     <select
                       name="type_dossier"
-                      value={editDossierForm.type_dossier}
+                      value={editDossierFormRef.current.type_dossier}
                       onChange={handleEditDossierInputChange}
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      disabled={loading}
+                      disabled={uiState.loading}
                     >
                       <option value="principal">Principal</option>
                       <option value="specialiste">Spécialiste</option>
@@ -3071,13 +3126,13 @@ Dr. Dupont`
                     <label className="block text-sm font-medium text-gray-700 mb-1">Service</label>
                     <select
                       name="service_id"
-                      value={editDossierForm.service_id}
+                      value={editDossierFormRef.current.service_id}
                       onChange={handleEditDossierInputChange}
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      disabled={loading}
+                      disabled={uiState.loading}
                     >
                       <option value="">Sélectionnez un service</option>
-                      {Array.isArray(services) && services.map(service => {
+                      {Array.isArray(dataState.services) && dataState.services.map(service => {
                         const serviceId = service.id || service.id_service || service.service_id;
                         const serviceName = service.name || service.nom || service.libelle || service.service_name || 'Service sans nom';
                         return (
@@ -3098,12 +3153,12 @@ Dr. Dupont`
                   <label className="block text-sm font-medium text-gray-700 mb-1">Résumé clinique</label>
                   <textarea
                     name="resume"
-                    value={editDossierForm.resume}
+                    value={editDossierFormRef.current.resume}
                     onChange={handleEditDossierInputChange}
                     className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     rows={4}
                     placeholder="Résumé clinique du patient et de sa situation médicale"
-                    disabled={loading}
+                    disabled={uiState.loading}
                   />
                 </div>
               </div>
@@ -3116,12 +3171,12 @@ Dr. Dupont`
                     <label className="block text-sm font-medium text-gray-700 mb-1">Antécédents médicaux</label>
                     <textarea
                       name="antecedent_medicaux"
-                      value={editDossierForm.antecedent_medicaux}
+                      value={editDossierFormRef.current.antecedent_medicaux}
                       onChange={handleEditDossierInputChange}
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       rows={4}
                       placeholder="Antécédents médicaux structurés (pathologies, chirurgies, etc.)"
-                      disabled={loading}
+                      disabled={uiState.loading}
                     />
                   </div>
                   
@@ -3129,12 +3184,12 @@ Dr. Dupont`
                     <label className="block text-sm font-medium text-gray-700 mb-1">Allergies</label>
                     <textarea
                       name="allergies"
-                      value={editDossierForm.allergies}
+                      value={editDossierFormRef.current.allergies}
                       onChange={handleEditDossierInputChange}
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       rows={4}
                       placeholder="Allergies et intolérances médicamenteuses ou autres"
-                      disabled={loading}
+                      disabled={uiState.loading}
                     />
                   </div>
                 </div>
@@ -3147,12 +3202,12 @@ Dr. Dupont`
                   <label className="block text-sm font-medium text-gray-700 mb-1">Traitements chroniques</label>
                   <textarea
                     name="traitements_chroniques"
-                    value={editDossierForm.traitements_chroniques}
+                    value={editDossierFormRef.current.traitements_chroniques}
                     onChange={handleEditDossierInputChange}
                     className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     rows={4}
                     placeholder="Traitements au long cours avec posologie et indications"
-                    disabled={loading}
+                    disabled={uiState.loading}
                   />
                 </div>
               </div>
@@ -3166,11 +3221,11 @@ Dr. Dupont`
                     <input
                       type="text"
                       name="heart_rate"
-                      value={editDossierForm.heart_rate}
+                      value={editDossierFormRef.current.heart_rate}
                       onChange={handleEditDossierInputChange}
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="ex: 72 bpm"
-                      disabled={loading}
+                      disabled={uiState.loading}
                     />
                   </div>
                   
@@ -3179,11 +3234,11 @@ Dr. Dupont`
                     <input
                       type="text"
                       name="blood_pressure"
-                      value={editDossierForm.blood_pressure}
+                      value={editDossierFormRef.current.blood_pressure}
                       onChange={handleEditDossierInputChange}
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="ex: 120/80 mmHg"
-                      disabled={loading}
+                      disabled={uiState.loading}
                     />
                   </div>
                   
@@ -3192,11 +3247,11 @@ Dr. Dupont`
                     <input
                       type="text"
                       name="temperature"
-                      value={editDossierForm.temperature}
+                      value={editDossierFormRef.current.temperature}
                       onChange={handleEditDossierInputChange}
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="ex: 37.2°C"
-                      disabled={loading}
+                      disabled={uiState.loading}
                     />
                   </div>
                   
@@ -3205,11 +3260,11 @@ Dr. Dupont`
                     <input
                       type="text"
                       name="respiratory_rate"
-                      value={editDossierForm.respiratory_rate}
+                      value={editDossierFormRef.current.respiratory_rate}
                       onChange={handleEditDossierInputChange}
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="ex: 16/min"
-                      disabled={loading}
+                      disabled={uiState.loading}
                     />
                   </div>
                   
@@ -3218,11 +3273,11 @@ Dr. Dupont`
                     <input
                       type="text"
                       name="oxygen_saturation"
-                      value={editDossierForm.oxygen_saturation}
+                      value={editDossierFormRef.current.oxygen_saturation}
                       onChange={handleEditDossierInputChange}
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="ex: 98%"
-                      disabled={loading}
+                      disabled={uiState.loading}
                     />
                   </div>
                 </div>
@@ -3236,12 +3291,12 @@ Dr. Dupont`
                     <label className="block text-sm font-medium text-gray-700 mb-1">Habitudes de vie</label>
                     <textarea
                       name="habitudes_vie"
-                      value={editDossierForm.habitudes_vie}
+                      value={editDossierFormRef.current.habitudes_vie}
                       onChange={handleEditDossierInputChange}
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       rows={4}
                       placeholder="Informations sur le mode de vie (tabac, alcool, activité physique, etc.)"
-                      disabled={loading}
+                      disabled={uiState.loading}
                     />
                   </div>
                   
@@ -3249,12 +3304,12 @@ Dr. Dupont`
                     <label className="block text-sm font-medium text-gray-700 mb-1">Historique familial</label>
                     <textarea
                       name="historique_familial"
-                      value={editDossierForm.historique_familial}
+                      value={editDossierFormRef.current.historique_familial}
                       onChange={handleEditDossierInputChange}
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       rows={4}
                       placeholder="Antécédents familiaux notables"
-                      disabled={loading}
+                      disabled={uiState.loading}
                     />
                   </div>
                 </div>
@@ -3268,12 +3323,12 @@ Dr. Dupont`
                     <label className="block text-sm font-medium text-gray-700 mb-1">Directives anticipées</label>
                     <textarea
                       name="directives_anticipées"
-                      value={editDossierForm.directives_anticipées}
+                      value={editDossierFormRef.current.directives_anticipées}
                       onChange={handleEditDossierInputChange}
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       rows={4}
                       placeholder="Directives anticipées et personnes de confiance"
-                      disabled={loading}
+                      disabled={uiState.loading}
                     />
                   </div>
                   
@@ -3281,12 +3336,12 @@ Dr. Dupont`
                     <label className="block text-sm font-medium text-gray-700 mb-1">Observations</label>
                     <textarea
                       name="observations"
-                      value={editDossierForm.observations}
+                      value={editDossierFormRef.current.observations}
                       onChange={handleEditDossierInputChange}
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       rows={4}
                       placeholder="Notes et observations diverses"
-                      disabled={loading}
+                      disabled={uiState.loading}
                     />
                   </div>
                 </div>
@@ -3301,10 +3356,10 @@ Dr. Dupont`
                     <input
                       type="date"
                       name="date_fermeture"
-                      value={editDossierForm.date_fermeture}
+                      value={editDossierFormRef.current.date_fermeture}
                       onChange={handleEditDossierInputChange}
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      disabled={loading}
+                      disabled={uiState.loading}
                     />
                   </div>
                   
@@ -3313,11 +3368,11 @@ Dr. Dupont`
                     <input
                       type="text"
                       name="motif_fermeture"
-                      value={editDossierForm.motif_fermeture}
+                      value={editDossierFormRef.current.motif_fermeture}
                       onChange={handleEditDossierInputChange}
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="Raison de la fermeture du dossier"
-                      disabled={loading}
+                      disabled={uiState.loading}
                     />
                   </div>
                 </div>
@@ -3329,16 +3384,16 @@ Dr. Dupont`
                   type="button"
                   onClick={closeEditDossierModal}
                   className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
-                  disabled={loading}
+                  disabled={uiState.loading}
                 >
                   Annuler
                 </button>
                 <button
                   type="submit"
                   className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                  disabled={loading}
+                  disabled={uiState.loading}
                 >
-                  {loading ? 'Mise à jour...' : 'Mettre à jour'}
+                  {uiState.loading ? 'Mise à jour...' : 'Mettre à jour'}
                 </button>
               </div>
             </form>
@@ -3347,7 +3402,7 @@ Dr. Dupont`
       )}
 
       {/* Modal pour créer une ordonnance */}
-      {showPrescriptionModal && (
+      {modalState.showPrescriptionModal && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[95vh] overflow-y-auto">
             <div className="flex justify-between items-center p-6 border-b">
@@ -3371,13 +3426,13 @@ Dr. Dupont`
                     <label className="block text-sm font-medium text-gray-700 mb-1">Patient *</label>
                     <select
                       name="patient_id"
-                      value={prescriptionForm.patient_id}
+                      value={prescriptionFormRef.current.patient_id}
                       onChange={handlePrescriptionInputChange}
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       required
                     >
                       <option value="">Sélectionner un patient</option>
-                      {patients.map((patient) => (
+                      {dataState.patients.map((patient) => (
                         <option key={patient.id} value={patient.id}>
                           {patient.name} - {patient.numero_dossier}
                         </option>
@@ -3396,7 +3451,7 @@ Dr. Dupont`
                     <input
                       type="text"
                       name="principe_actif"
-                      value={prescriptionForm.principe_actif}
+                      value={prescriptionFormRef.current.principe_actif}
                       onChange={handlePrescriptionInputChange}
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="ex: Paracétamol"
@@ -3409,7 +3464,7 @@ Dr. Dupont`
                     <input
                       type="text"
                       name="nom_commercial"
-                      value={prescriptionForm.nom_commercial}
+                      value={prescriptionFormRef.current.nom_commercial}
                       onChange={handlePrescriptionInputChange}
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="ex: Doliprane"
@@ -3421,7 +3476,7 @@ Dr. Dupont`
                     <input
                       type="text"
                       name="dosage"
-                      value={prescriptionForm.dosage}
+                      value={prescriptionFormRef.current.dosage}
                       onChange={handlePrescriptionInputChange}
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="ex: 500mg"
@@ -3434,7 +3489,7 @@ Dr. Dupont`
                     <input
                       type="text"
                       name="frequence"
-                      value={prescriptionForm.frequence}
+                      value={prescriptionFormRef.current.frequence}
                       onChange={handlePrescriptionInputChange}
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="ex: 3 fois par jour"
@@ -3446,7 +3501,7 @@ Dr. Dupont`
                     <label className="block text-sm font-medium text-gray-700 mb-1">Voie d'administration</label>
                     <select
                       name="voie_administration"
-                      value={prescriptionForm.voie_administration}
+                      value={prescriptionFormRef.current.voie_administration}
                       onChange={handlePrescriptionInputChange}
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     >
@@ -3468,7 +3523,7 @@ Dr. Dupont`
                     <input
                       type="text"
                       name="duree_traitement"
-                      value={prescriptionForm.duree_traitement}
+                      value={prescriptionFormRef.current.duree_traitement}
                       onChange={handlePrescriptionInputChange}
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="ex: 7 jours, 2 semaines, 1 mois"
@@ -3489,7 +3544,7 @@ Dr. Dupont`
                     <input
                       type="text"
                       name="medecin_nom"
-                      value={prescriptionForm.medecin_nom}
+                      value={prescriptionFormRef.current.medecin_nom}
                       onChange={handlePrescriptionInputChange}
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="ex: Martin"
@@ -3502,7 +3557,7 @@ Dr. Dupont`
                     <input
                       type="text"
                       name="medecin_prenom"
-                      value={prescriptionForm.medecin_prenom}
+                      value={prescriptionFormRef.current.medecin_prenom}
                       onChange={handlePrescriptionInputChange}
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="ex: Jean"
@@ -3515,7 +3570,7 @@ Dr. Dupont`
                     <input
                       type="text"
                       name="medecin_specialite"
-                      value={prescriptionForm.medecin_specialite}
+                      value={prescriptionFormRef.current.medecin_specialite}
                       onChange={handlePrescriptionInputChange}
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="ex: Cardiologie, Médecine générale"
@@ -3528,7 +3583,7 @@ Dr. Dupont`
                     <input
                       type="text"
                       name="medecin_numero_ordre"
-                      value={prescriptionForm.medecin_numero_ordre}
+                      value={prescriptionFormRef.current.medecin_numero_ordre}
                       onChange={handlePrescriptionInputChange}
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="ex: 12345"
@@ -3546,7 +3601,7 @@ Dr. Dupont`
                     <input
                       type="checkbox"
                       name="renouvelable"
-                      checked={prescriptionForm.renouvelable}
+                      checked={prescriptionFormRef.current.renouvelable}
                       onChange={handlePrescriptionInputChange}
                       className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                     />
@@ -3555,13 +3610,13 @@ Dr. Dupont`
                     </label>
                   </div>
                   
-                  {prescriptionForm.renouvelable && (
+                  {prescriptionFormRef.current.renouvelable && (
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Nombre de renouvellements</label>
                       <input
                         type="number"
                         name="nb_renouvellements"
-                        value={prescriptionForm.nb_renouvellements}
+                        value={prescriptionFormRef.current.nb_renouvellements}
                         onChange={handlePrescriptionInputChange}
                         className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         min="0"
@@ -3580,7 +3635,7 @@ Dr. Dupont`
                   <label className="block text-sm font-medium text-gray-700 mb-1">Notes et observations</label>
                   <textarea
                     name="observations"
-                    value={prescriptionForm.observations}
+                    value={prescriptionFormRef.current.observations}
                     onChange={handlePrescriptionInputChange}
                     className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     rows={4}
@@ -3595,16 +3650,16 @@ Dr. Dupont`
                   type="button"
                   onClick={closePrescriptionModal}
                   className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
-                  disabled={loading}
+                  disabled={uiState.loading}
                 >
                   Annuler
                 </button>
                 <button
                   type="submit"
                   className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                  disabled={loading}
+                  disabled={uiState.loading}
                 >
-                  {loading ? 'Création...' : 'Créer l\'ordonnance'}
+                  {uiState.loading ? 'Création...' : 'Créer l\'ordonnance'}
                 </button>
               </div>
             </form>
@@ -3613,7 +3668,7 @@ Dr. Dupont`
       )}
 
       {/* Modal pour créer une demande d'examen */}
-      {showExamenModal && (
+      {modalState.showExamenModal && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[95vh] overflow-y-auto">
             <div className="flex justify-between items-center p-6 border-b">
@@ -3637,13 +3692,13 @@ Dr. Dupont`
                     <label className="block text-sm font-medium text-gray-700 mb-1">Patient *</label>
                     <select
                       name="patient_id"
-                      value={examenForm.patient_id}
+                      value={examenFormRef.current.patient_id}
                       onChange={handleExamenInputChange}
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       required
                     >
                       <option value="">Sélectionner un patient</option>
-                      {patients.map((patient) => (
+                      {dataState.patients.map((patient) => (
                         <option key={patient.id} value={patient.id}>
                           {patient.name} - {patient.numero_dossier}
                         </option>
@@ -3662,7 +3717,7 @@ Dr. Dupont`
                     <input
                       type="text"
                       name="type_examen"
-                      value={examenForm.type_examen}
+                      value={examenFormRef.current.type_examen}
                       onChange={handleExamenInputChange}
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="ex: Bilan sanguin complet"
@@ -3674,7 +3729,7 @@ Dr. Dupont`
                     <label className="block text-sm font-medium text-gray-700 mb-1">Niveau d'urgence</label>
                     <select
                       name="urgence"
-                      value={examenForm.urgence}
+                      value={examenFormRef.current.urgence}
                       onChange={handleExamenInputChange}
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     >
@@ -3688,7 +3743,7 @@ Dr. Dupont`
                     <label className="block text-sm font-medium text-gray-700 mb-1">Paramètres spécifiques</label>
                     <textarea
                       name="parametres"
-                      value={examenForm.parametres}
+                      value={examenFormRef.current.parametres}
                       onChange={handleExamenInputChange}
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       rows={3}
@@ -3707,7 +3762,7 @@ Dr. Dupont`
                     <input
                       type="text"
                       name="medecin_nom"
-                      value={examenForm.medecin_nom}
+                      value={examenFormRef.current.medecin_nom}
                       onChange={handleExamenInputChange}
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="ex: Martin"
@@ -3720,7 +3775,7 @@ Dr. Dupont`
                     <input
                       type="text"
                       name="medecin_prenom"
-                      value={examenForm.medecin_prenom}
+                      value={examenFormRef.current.medecin_prenom}
                       onChange={handleExamenInputChange}
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="ex: Jean"
@@ -3733,7 +3788,7 @@ Dr. Dupont`
                     <input
                       type="text"
                       name="medecin_specialite"
-                      value={examenForm.medecin_specialite}
+                      value={examenFormRef.current.medecin_specialite}
                       onChange={handleExamenInputChange}
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="ex: Cardiologie, Médecine générale"
@@ -3746,7 +3801,7 @@ Dr. Dupont`
                     <input
                       type="text"
                       name="medecin_numero_ordre"
-                      value={examenForm.medecin_numero_ordre}
+                      value={examenFormRef.current.medecin_numero_ordre}
                       onChange={handleExamenInputChange}
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="ex: 12345"
@@ -3763,7 +3818,7 @@ Dr. Dupont`
                   <label className="block text-sm font-medium text-gray-700 mb-1">Notes et observations</label>
                   <textarea
                     name="observations"
-                    value={examenForm.observations}
+                    value={examenFormRef.current.observations}
                     onChange={handleExamenInputChange}
                     className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     rows={4}
@@ -3778,16 +3833,16 @@ Dr. Dupont`
                   type="button"
                   onClick={closeExamenModal}
                   className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
-                  disabled={loading}
+                  disabled={uiState.loading}
                 >
                   Annuler
                 </button>
                 <button
                   type="submit"
                   className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                  disabled={loading}
+                  disabled={uiState.loading}
                 >
-                  {loading ? 'Création...' : 'Créer la demande d\'examen'}
+                  {uiState.loading ? 'Création...' : 'Créer la demande d\'examen'}
                 </button>
               </div>
             </form>
@@ -3796,12 +3851,12 @@ Dr. Dupont`
       )}
 
       {/* Modal pour afficher le QR Code de la prescription */}
-      {showQRModal && qrCodeData && createdPrescription && (
+      {modalState.showQRModal && qrCodeDataRef.current && createdPrescriptionRef.current && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[95vh] overflow-y-auto">
             <div className="flex justify-between items-center p-6 border-b">
               <h2 className="text-xl font-bold">
-                {qrCodeData.type === 'ordonnance' ? 'Ordonnance créée' : 'Demande d\'examen créée'}
+                {qrCodeDataRef.current.type === 'ordonnance' ? 'Ordonnance créée' : 'Demande d\'examen créée'}
               </h2>
               <button
                 onClick={closeQRModal}
@@ -3818,7 +3873,7 @@ Dr. Dupont`
               <div className="flex justify-center mb-6">
                 <div className="bg-white p-4 rounded-lg border-2 border-gray-200">
                   <QRCodeCanvas 
-                    value={JSON.stringify(qrCodeData)}
+                    value={JSON.stringify(qrCodeDataRef.current)}
                     size={200}
                     level="H"
                     includeMargin={true}
@@ -3829,86 +3884,86 @@ Dr. Dupont`
               {/* Informations de la prescription */}
               <div className="bg-gray-50 rounded-lg p-4 mb-6">
                 <h3 className="text-lg font-semibold mb-4 text-gray-800">
-                  Détails de la {qrCodeData.type === 'ordonnance' ? 'prescription' : 'demande d\'examen'}
+                  Détails de la {qrCodeDataRef.current.type === 'ordonnance' ? 'prescription' : 'demande d\'examen'}
                 </h3>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Numéro</label>
                     <p className="text-sm text-gray-900 font-mono bg-white px-2 py-1 rounded border">
-                      {qrCodeData.number || 'En cours de génération...'}
+                      {qrCodeDataRef.current.number || 'En cours de génération...'}
                     </p>
                   </div>
                   
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
                     <p className="text-sm text-gray-900">
-                      {qrCodeData.type === 'ordonnance' ? 'Ordonnance' : 'Demande d\'examen'}
+                      {qrCodeDataRef.current.type === 'ordonnance' ? 'Ordonnance' : 'Demande d\'examen'}
                     </p>
                   </div>
                   
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Date de création</label>
                     <p className="text-sm text-gray-900">
-                      {qrCodeData.date ? new Date(qrCodeData.date).toLocaleString('fr-FR') : 'Maintenant'}
+                      {qrCodeDataRef.current.date ? new Date(qrCodeDataRef.current.date).toLocaleString('fr-FR') : 'Maintenant'}
                     </p>
                   </div>
                   
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Hash de sécurité</label>
                     <p className="text-sm text-gray-900 font-mono bg-white px-2 py-1 rounded border">
-                      {qrCodeData.hash}
+                      {qrCodeDataRef.current.hash}
                     </p>
                   </div>
                 </div>
 
                 {/* Détails spécifiques selon le type */}
-                {qrCodeData.type === 'ordonnance' && (
+                {qrCodeDataRef.current.type === 'ordonnance' && (
                   <div className="mt-4 pt-4 border-t border-gray-200">
                     <h4 className="text-md font-semibold mb-2 text-gray-800">Détails du médicament</h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Principe actif</label>
                         <p className="text-sm text-gray-900">
-                          {createdPrescription.principe_actif || 'Non spécifié'}
+                          {createdPrescriptionRef.current.principe_actif || 'Non spécifié'}
                         </p>
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Dosage</label>
                         <p className="text-sm text-gray-900">
-                          {createdPrescription.dosage || 'Non spécifié'}
+                          {createdPrescriptionRef.current.dosage || 'Non spécifié'}
                         </p>
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Fréquence</label>
                         <p className="text-sm text-gray-900">
-                          {createdPrescription.frequence || 'Non spécifié'}
+                          {createdPrescriptionRef.current.frequence || 'Non spécifié'}
                         </p>
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Voie d'administration</label>
                         <p className="text-sm text-gray-900">
-                          {createdPrescription.voie_administration || 'Non spécifié'}
+                          {createdPrescriptionRef.current.voie_administration || 'Non spécifié'}
                         </p>
                       </div>
                     </div>
                   </div>
                 )}
 
-                {qrCodeData.type === 'examen' && (
+                {qrCodeDataRef.current.type === 'examen' && (
                   <div className="mt-4 pt-4 border-t border-gray-200">
                     <h4 className="text-md font-semibold mb-2 text-gray-800">Détails de l'examen</h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Type d'examen</label>
                         <p className="text-sm text-gray-900">
-                          {createdPrescription.type_examen || createdPrescription.principe_actif || 'Non spécifié'}
+                          {createdPrescriptionRef.current.type_examen || createdPrescriptionRef.current.principe_actif || 'Non spécifié'}
                         </p>
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Urgence</label>
                         <p className="text-sm text-gray-900">
-                          {createdPrescription.urgence || createdPrescription.frequence || 'Normal'}
+                          {createdPrescriptionRef.current.urgence || createdPrescriptionRef.current.frequence || 'Normal'}
                         </p>
                       </div>
                     </div>
@@ -3936,7 +3991,7 @@ Dr. Dupont`
                       const canvas = document.querySelector('canvas');
                       if (canvas) {
                         const link = document.createElement('a');
-                        link.download = `prescription-${qrCodeData.number || 'qr'}.png`;
+                        link.download = `prescription-${qrCodeDataRef.current.number || 'qr'}.png`;
                         link.href = canvas.toDataURL();
                         link.click();
                       }
@@ -3976,7 +4031,7 @@ Dr. Dupont`
       )}
 
       {/* Modal pour l'ordonnance complète */}
-      {showOrdonnanceCompleteModal && (
+      {modalState.showOrdonnanceCompleteModal && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[95vh] overflow-y-auto">
             <div className="flex justify-between items-center p-6 border-b">
@@ -4000,13 +4055,13 @@ Dr. Dupont`
                     <label className="block text-sm font-medium text-gray-700 mb-1">Patient *</label>
                     <select
                       name="patient_id"
-                      value={ordonnanceCompleteForm.patient_id}
+                      value={ordonnanceCompleteFormRef.current.patient_id}
                       onChange={handleOrdonnanceCompleteInputChange}
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       required
                     >
                       <option value="">Sélectionner un patient</option>
-                      {patients.map((patient) => (
+                      {dataState.patients.map((patient) => (
                         <option key={patient.id} value={patient.id}>
                           {patient.name} - {patient.numero_dossier}
                         </option>
@@ -4018,12 +4073,12 @@ Dr. Dupont`
                     <label className="block text-sm font-medium text-gray-700 mb-1">Dossier médical (optionnel)</label>
                     <select
                       name="dossier_id"
-                      value={ordonnanceCompleteForm.dossier_id}
+                      value={ordonnanceCompleteFormRef.current.dossier_id}
                       onChange={handleOrdonnanceCompleteInputChange}
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     >
                       <option value="">Aucun dossier</option>
-                      {dossiersPatients.map((dossier) => (
+                      {dataState.dossiersPatients.map((dossier) => (
                         <option key={dossier.id} value={dossier.id}>
                           Dossier #{dossier.numero} - {dossier.patient?.nom || 'Patient inconnu'}
                         </option>
@@ -4042,7 +4097,7 @@ Dr. Dupont`
                     <input
                       type="text"
                       name="principe_actif"
-                      value={ordonnanceCompleteForm.principe_actif}
+                      value={ordonnanceCompleteFormRef.current.principe_actif}
                       onChange={handleOrdonnanceCompleteInputChange}
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="ex: Paracétamol"
@@ -4055,7 +4110,7 @@ Dr. Dupont`
                     <input
                       type="text"
                       name="nom_commercial"
-                      value={ordonnanceCompleteForm.nom_commercial}
+                      value={ordonnanceCompleteFormRef.current.nom_commercial}
                       onChange={handleOrdonnanceCompleteInputChange}
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="ex: Doliprane"
@@ -4067,7 +4122,7 @@ Dr. Dupont`
                     <input
                       type="text"
                       name="dosage"
-                      value={ordonnanceCompleteForm.dosage}
+                      value={ordonnanceCompleteFormRef.current.dosage}
                       onChange={handleOrdonnanceCompleteInputChange}
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="ex: 500mg"
@@ -4080,7 +4135,7 @@ Dr. Dupont`
                     <input
                       type="text"
                       name="frequence"
-                      value={ordonnanceCompleteForm.frequence}
+                      value={ordonnanceCompleteFormRef.current.frequence}
                       onChange={handleOrdonnanceCompleteInputChange}
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="ex: 3 fois par jour"
@@ -4092,7 +4147,7 @@ Dr. Dupont`
                     <label className="block text-sm font-medium text-gray-700 mb-1">Voie d'administration</label>
                     <select
                       name="voie_administration"
-                      value={ordonnanceCompleteForm.voie_administration}
+                      value={ordonnanceCompleteFormRef.current.voie_administration}
                       onChange={handleOrdonnanceCompleteInputChange}
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     >
@@ -4110,7 +4165,7 @@ Dr. Dupont`
                     <input
                       type="text"
                       name="duree_traitement"
-                      value={ordonnanceCompleteForm.duree_traitement}
+                      value={ordonnanceCompleteFormRef.current.duree_traitement}
                       onChange={handleOrdonnanceCompleteInputChange}
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="ex: 7 jours"
@@ -4123,7 +4178,7 @@ Dr. Dupont`
                       <input
                         type="checkbox"
                         name="renouvelable"
-                        checked={ordonnanceCompleteForm.renouvelable}
+                        checked={ordonnanceCompleteFormRef.current.renouvelable}
                         onChange={handleOrdonnanceCompleteInputChange}
                         className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                       />
@@ -4136,7 +4191,7 @@ Dr. Dupont`
                     <input
                       type="number"
                       name="nb_renouvellements"
-                      value={ordonnanceCompleteForm.nb_renouvellements}
+                      value={ordonnanceCompleteFormRef.current.nb_renouvellements}
                       onChange={handleOrdonnanceCompleteInputChange}
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       min="0"
@@ -4149,7 +4204,7 @@ Dr. Dupont`
                   <label className="block text-sm font-medium text-gray-700 mb-1">Observations</label>
                   <textarea
                     name="observations"
-                    value={ordonnanceCompleteForm.observations}
+                    value={ordonnanceCompleteFormRef.current.observations}
                     onChange={handleOrdonnanceCompleteInputChange}
                     rows="3"
                     className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -4167,7 +4222,7 @@ Dr. Dupont`
                     <input
                       type="text"
                       name="medecin_nom"
-                      value={ordonnanceCompleteForm.medecin_nom}
+                      value={ordonnanceCompleteFormRef.current.medecin_nom}
                       onChange={handleOrdonnanceCompleteInputChange}
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="ex: Martin"
@@ -4180,7 +4235,7 @@ Dr. Dupont`
                     <input
                       type="text"
                       name="medecin_prenom"
-                      value={ordonnanceCompleteForm.medecin_prenom}
+                      value={ordonnanceCompleteFormRef.current.medecin_prenom}
                       onChange={handleOrdonnanceCompleteInputChange}
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="ex: Jean"
@@ -4193,7 +4248,7 @@ Dr. Dupont`
                     <input
                       type="text"
                       name="medecin_specialite"
-                      value={ordonnanceCompleteForm.medecin_specialite}
+                      value={ordonnanceCompleteFormRef.current.medecin_specialite}
                       onChange={handleOrdonnanceCompleteInputChange}
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="ex: Cardiologie, Médecine générale"
@@ -4206,7 +4261,7 @@ Dr. Dupont`
                     <input
                       type="text"
                       name="medecin_numero_ordre"
-                      value={ordonnanceCompleteForm.medecin_numero_ordre}
+                      value={ordonnanceCompleteFormRef.current.medecin_numero_ordre}
                       onChange={handleOrdonnanceCompleteInputChange}
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="ex: 12345"
@@ -4224,7 +4279,7 @@ Dr. Dupont`
                     <label className="block text-sm font-medium text-gray-700 mb-1">Priorité</label>
                     <select
                       name="priorite"
-                      value={ordonnanceCompleteForm.priorite}
+                      value={ordonnanceCompleteFormRef.current.priorite}
                       onChange={handleOrdonnanceCompleteInputChange}
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     >
@@ -4239,7 +4294,7 @@ Dr. Dupont`
                     <label className="block text-sm font-medium text-gray-700 mb-1">Canal de notification</label>
                     <select
                       name="canal"
-                      value={ordonnanceCompleteForm.canal}
+                      value={ordonnanceCompleteFormRef.current.canal}
                       onChange={handleOrdonnanceCompleteInputChange}
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     >
@@ -4258,16 +4313,16 @@ Dr. Dupont`
                   type="button"
                   onClick={closeOrdonnanceCompleteModal}
                   className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
-                  disabled={loading}
+                  disabled={uiState.loading}
                 >
                   Annuler
                 </button>
                 <button
                   type="submit"
                   className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                  disabled={loading}
+                  disabled={uiState.loading}
                 >
-                  {loading ? 'Création...' : 'Créer l\'ordonnance complète'}
+                  {uiState.loading ? 'Création...' : 'Créer l\'ordonnance complète'}
                 </button>
               </div>
             </form>
@@ -4276,15 +4331,15 @@ Dr. Dupont`
       )}
 
       {/* Modal pour les détails de notification */}
-      {showNotificationModal && selectedNotification && (
+      {modalState.showNotificationModal && selectedNotificationRef.current && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[95vh] overflow-y-auto">
             <div className="flex justify-between items-center p-6 border-b">
               <h2 className="text-xl font-bold">Détails de l'Ordonnance</h2>
               <button
                 onClick={() => {
-                  setShowNotificationModal(false);
-                  setSelectedNotification(null);
+                  updateModalState({ showNotificationModal: false });
+                  selectedNotificationRef.current = null;
                 }}
                 className="text-gray-400 hover:text-gray-600"
               >
@@ -4299,51 +4354,51 @@ Dr. Dupont`
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Numéro d'ordonnance</label>
                   <p className="text-sm text-gray-900 font-mono bg-gray-50 px-2 py-1 rounded">
-                    {selectedNotification.numero_prescription || selectedNotification.id}
+                    {selectedNotificationRef.current.numero_prescription || selectedNotificationRef.current.id}
                   </p>
                 </div>
                 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Patient</label>
                   <p className="text-sm text-gray-900">
-                    {selectedNotification.patient?.nom || 'Patient inconnu'}
+                    {selectedNotificationRef.current.patient?.nom || 'Patient inconnu'}
                   </p>
                 </div>
                 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Médicament</label>
                   <p className="text-sm text-gray-900">
-                    {selectedNotification.principe_actif || 'Non spécifié'}
+                    {selectedNotificationRef.current.principe_actif || 'Non spécifié'}
                   </p>
                 </div>
                 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Dosage</label>
                   <p className="text-sm text-gray-900">
-                    {selectedNotification.dosage || 'Non spécifié'}
+                    {selectedNotificationRef.current.dosage || 'Non spécifié'}
                   </p>
                 </div>
                 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Fréquence</label>
                   <p className="text-sm text-gray-900">
-                    {selectedNotification.frequence || 'Non spécifiée'}
+                    {selectedNotificationRef.current.frequence || 'Non spécifiée'}
                   </p>
                 </div>
                 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Date de création</label>
                   <p className="text-sm text-gray-900">
-                    {selectedNotification.date_creation ? new Date(selectedNotification.date_creation).toLocaleString('fr-FR') : 'Date inconnue'}
+                    {selectedNotificationRef.current.date_creation ? new Date(selectedNotificationRef.current.date_creation).toLocaleString('fr-FR') : 'Date inconnue'}
                   </p>
                 </div>
               </div>
 
-              {selectedNotification.observations && (
+              {selectedNotificationRef.current.observations && (
                 <div className="mb-6">
                   <label className="block text-sm font-medium text-gray-700 mb-1">Observations</label>
                   <p className="text-sm text-gray-900 bg-gray-50 px-3 py-2 rounded">
-                    {selectedNotification.observations}
+                    {selectedNotificationRef.current.observations}
                   </p>
                 </div>
               )}
@@ -4351,8 +4406,8 @@ Dr. Dupont`
               <div className="flex justify-end space-x-3 pt-4 border-t">
                 <button
                   onClick={() => {
-                    setShowNotificationModal(false);
-                    setSelectedNotification(null);
+                    updateModalState({ showNotificationModal: false });
+                    selectedNotificationRef.current = null;
                   }}
                   className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
                 >

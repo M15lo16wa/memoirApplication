@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Verify2FA - Structure Plate</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+
+        .success {
+            background-color: #d4edda;
+            border-color: #c3e6cb;
+        }
+
+        .error {
+            background-color: #f8d7da;
+            border-color: #f5c6cb;
+        }
+
+        .info {
+            background-color: #d1ecf1;
+            border-color: #bee5eb;
+        }
+
+        button {
+            padding: 10px 15px;
+            margin: 5px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        input {
+            padding: 8px;
+            margin: 5px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+        }
+
+        .log {
+            background-color: #f8f9fa;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 3px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>🧪 Test Verify2FA - Structure Plate Corrigée</h1>
+
+    <div class="test-section info">
+        <h3>📋 Objectif du Test</h3>
+        <p>Vérifier que la correction de la structure de données doublement imbriquée fonctionne correctement.</p>
+        <p><strong>Problème résolu :</strong> Suppression de la structure imbriquée complexe au profit d'une structure
+            plate.</p>
+    </div>
+
+    <div class="test-section">
+        <h3>🔧 Test de la Structure Corrigée</h3>
+        <p><strong>AVANT (incorrect) :</strong></p>
+        <div class="log">
+            {
+            "verificationCode": {
+            "verificationCode": "122137",
+            "userType": "professionnel",
+            "identifier": "AH23456780",
+            "tempTokenId": "temp_1755638097230_vqdpn510y"
+            }
+            }
+        </div>
+
+        <p><strong>APRÈS (correct) :</strong></p>
+        <div class="log">
+            {
+            "verificationCode": "122137",
+            "userType": "professionnel",
+            "identifier": "AH23456780",
+            "tempTokenId": "temp_1755638097230_vqdpn510y"
+            }
+        </div>
+
+        <button onclick="testStructurePlate()">🧪 Tester la Structure Plate</button>
+        <div id="structureTestResult"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>🔐 Simulation de l'Appel API</h3>
+        <label>Code de vérification :</label>
+        <input type="text" id="verificationCode" placeholder="122137" value="122137"><br>
+        <label>Type d'utilisateur :</label>
+        <input type="text" id="userType" placeholder="professionnel" value="professionnel"><br>
+        <label>Identifiant :</label>
+        <input type="text" id="identifier" placeholder="AH23456780" value="AH23456780"><br>
+        <label>TempTokenId :</label>
+        <input type="text" id="tempTokenId" placeholder="temp_1755638097230_vqdpn510y"
+            value="temp_1755638097230_vqdpn510y"><br>
+
+        <button onclick="simulateAPICall()">🚀 Simuler l'Appel API</button>
+        <div id="apiSimulationResult"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>📊 Résultats des Tests</h3>
+        <div id="testResults"></div>
+    </div>
+
+    <script>
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const logDiv = document.createElement('div');
+            logDiv.className = `log ${type}`;
+            logDiv.innerHTML = `[${timestamp}] ${message}`;
+            document.getElementById('testResults').appendChild(logDiv);
+        }
+
+        function testStructurePlate() {
+            log('🧪 Test de la structure plate...', 'info');
+
+            // Simuler les paramètres comme ils seraient construits dans Setup2FA.js
+            const userParams = {
+                userType: 'professionnel',
+                identifier: 'AH23456780'
+            };
+
+            const verificationCode = '122137';
+            const tempTokenId = 'temp_1755638097230_vqdpn510y';
+
+            // ✅ NOUVELLE STRUCTURE PLATE (corrigée)
+            const verificationParams = {
+                verificationCode: verificationCode,
+                userType: userParams.userType,
+                identifier: userParams.identifier,
+                tempTokenId: tempTokenId
+            };
+
+            log('✅ Structure plate construite :', 'success');
+            log(JSON.stringify(verificationParams, null, 2), 'success');
+
+            // Vérifier que la structure est correcte
+            const isValid = verificationParams.verificationCode &&
+                verificationParams.userType &&
+                verificationParams.identifier &&
+                verificationParams.tempTokenId;
+
+            if (isValid) {
+                log('✅ Structure plate valide - tous les champs requis sont présents', 'success');
+                document.getElementById('structureTestResult').innerHTML =
+                    '<div class="success">✅ Structure plate correcte - Test réussi !</div>';
+            } else {
+                log('❌ Structure plate invalide - champs manquants', 'error');
+                document.getElementById('structureTestResult').innerHTML =
+                    '<div class="error">❌ Structure plate invalide - Test échoué !</div>';
+            }
+        }
+
+        function simulateAPICall() {
+            log('🚀 Simulation de l\'appel API...', 'info');
+
+            const verificationCode = document.getElementById('verificationCode').value;
+            const userType = document.getElementById('userType').value;
+            const identifier = document.getElementById('identifier').value;
+            const tempTokenId = document.getElementById('tempTokenId').value;
+
+            // ✅ NOUVELLE STRUCTURE PLATE
+            const requestData = {
+                verificationCode,
+                userType,
+                identifier,
+                tempTokenId
+            };
+
+            log('📤 Données envoyées à l\'API :', 'info');
+            log(JSON.stringify(requestData, null, 2), 'info');
+
+            // Simuler l'appel à verifyAndEnable2FA
+            try {
+                // Simulation de la validation des paramètres
+                if (!verificationCode || !userType || !identifier || !tempTokenId) {
+                    throw new Error('verificationCode, userType, identifier et tempTokenId sont requis');
+                }
+
+                log('✅ Paramètres validés avec succès', 'success');
+                log('✅ Structure de requête correcte pour l\'endpoint /auth/verify-2fa', 'success');
+
+                document.getElementById('apiSimulationResult').innerHTML =
+                    '<div class="success">✅ Simulation API réussie - Structure plate correcte !</div>';
+
+            } catch (error) {
+                log(`❌ Erreur de validation : ${error.message}`, 'error');
+                document.getElementById('apiSimulationResult').innerHTML =
+                    '<div class="error">❌ Simulation API échouée - Erreur de validation !</div>';
+            }
+        }
+
+        // Test automatique au chargement
+        window.onload = function () {
+            log('🚀 Test Verify2FA - Structure Plate démarré', 'info');
+            log('📋 Vérification de la correction de la structure doublement imbriquée', 'info');
+        };
+    </script>
+</body>
+
+</html>

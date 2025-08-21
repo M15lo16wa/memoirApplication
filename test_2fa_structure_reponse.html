@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Structure Réponse 2FA</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+
+        .success {
+            color: #28a745;
+        }
+
+        .error {
+            color: #dc3545;
+        }
+
+        .warning {
+            color: #ffc107;
+        }
+
+        .info {
+            color: #17a2b8;
+        }
+
+        .code {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            border: 1px solid #dee2e6;
+        }
+
+        .debug {
+            background: #e3f2fd;
+            border: 1px solid #2196f3;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+
+        .problem {
+            background: #ffebee;
+            border: 1px solid #f44336;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+
+        .solution {
+            background: #e8f5e8;
+            border: 1px solid #4caf50;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>🔐 Test Structure Réponse API 2FA</h1>
+
+    <div class="container">
+        <h2>📋 Problème Identifié</h2>
+        <div class="problem">
+            <p><strong>Erreur :</strong> "Données de configuration 2FA incomplètes dans la réponse"</p>
+            <p><strong>Cause :</strong> Le composant Setup2FA cherche des données dans la mauvaise structure de réponse
+            </p>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>🔍 Structure de Réponse Réelle du Serveur</h2>
+        <p>D'après les logs, le serveur retourne :</p>
+        <div class="code">{
+            "status": "success",
+            "message": "Configuration 2FA initialisée - Code envoyé par email",
+            "data": { ... }
+            }</div>
+
+        <div class="debug">
+            <p><strong>Logs du serveur :</strong></p>
+            <ul>
+                <li>📧 Email envoyé vers: saza@hopital.sn</li>
+                <li>🔐 Secret 2FA: 0d258c49...</li>
+                <li>✅ Statut: 200 (succès)</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>🐛 Ce que le Composant Cherchait (INCORRECT)</h2>
+        <div class="code">// ❌ RECHERCHE INCORRECTE
+            const userEmail = response.data?.user?.email || response.data?.email || response.email;
+            const secretKey = response.data?.secret || response.data?.two_factor_secret || response.secret;
+
+            // Problème : response.data.user.email n'existe pas !
+            // Problème : response.data.secret n'existe pas !</div>
+
+        <div class="error">
+            <p><strong>Résultat :</strong> userEmail et secretKey sont undefined → Erreur "Données incomplètes"</p>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>✅ Correction Appliquée</h2>
+        <div class="solution">
+            <p><strong>Solution :</strong> Utiliser userData pour l'email et chercher le secret dans la réponse</p>
+        </div>
+
+        <div class="code">// ✅ CORRECTION APPLIQUÉE
+            // L'email vient de userData, pas de la réponse
+            const userEmail = userData?.email || userData?.professionnel?.email || userData?.user?.email;
+
+            // Le secret peut être dans différentes propriétés de la réponse
+            const secretKey = response.data?.secret ||
+            response.data?.two_factor_secret ||
+            response.data?.setupSecret ||
+            response.data?.totpSecret ||
+            response.secret;
+
+            // Validation : on a besoin de l'email (depuis userData)
+            if (userEmail) {
+            // Configuration réussie
+            } else {
+            throw new Error('Email utilisateur non trouvé dans les données utilisateur');
+            }</div>
+    </div>
+
+    <div class="container">
+        <h2>🔍 Logs de Débogage Ajoutés</h2>
+        <p>Des logs détaillés ont été ajoutés pour identifier la structure exacte :</p>
+        <div class="code">console.log('🔐 DEBUG - Structure détaillée de la réponse:', {
+            responseKeys: Object.keys(response),
+            dataKeys: response.data ? Object.keys(response.data) : 'N/A',
+            dataDataKeys: response.data?.data ? Object.keys(response.data.data) : 'N/A',
+            userDataEmail: userData?.email,
+            userDataProfessionnelEmail: userData?.professionnel?.email
+            });
+
+            console.log('🔐 DEBUG - Données extraites:', {
+            userEmail: userEmail || 'NON TROUVÉ',
+            secretKey: secretKey ? 'TROUVÉ' : 'NON TROUVÉ',
+            recoveryCodesCount: recoveryCodes.length
+            });</div>
+    </div>
+
+    <div class="container">
+        <h2>📊 Données Utilisateur Disponibles</h2>
+        <p>D'après les logs, userData contient :</p>
+        <div class="code">{
+            "id_professionnel": 79,
+            "nom": "Sakura",
+            "prenom": "Saza",
+            "numero_adeli": "AH23456780",
+            "role": "medecin",
+            "email": "saza@hopital.sn", // ← EMAIL DISPONIBLE ICI
+            ...
+            }</div>
+
+        <div class="info">
+            <p><strong>Note :</strong> L'email est disponible dans userData.email, pas dans la réponse de l'API</p>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>🧪 Test de la Correction</h2>
+        <p>Pour vérifier que la correction fonctionne :</p>
+        <ol>
+            <li><strong>Ouvrir la console du navigateur</strong></li>
+            <li><strong>Tenter la configuration 2FA</strong> pour le compte médecin</li>
+            <li><strong>Vérifier les nouveaux logs de débogage</strong> dans la console</li>
+            <li><strong>Confirmer que la deuxième étape s'affiche</strong> correctement</li>
+        </ol>
+
+        <div class="debug">
+            <p><strong>Logs attendus après correction :</strong></p>
+            <ul>
+                <li>🔐 DEBUG - Structure détaillée de la réponse: {...}</li>
+                <li>🔐 DEBUG - Données extraites: {userEmail: "saza@hopital.sn", secretKey: "TROUVÉ", ...}</li>
+                <li>✅ Email de configuration envoyé avec succès</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>🔮 Améliorations Futures</h2>
+        <ul>
+            <li><strong>Standardisation des réponses API</strong> - Définir une structure de réponse cohérente</li>
+            <li><strong>Documentation API</strong> - Documenter exactement ce que chaque endpoint retourne</li>
+            <li><strong>Tests automatisés</strong> - Valider les structures de réponse</li>
+            <li><strong>Gestion d'erreur centralisée</strong> - Traiter les erreurs de manière uniforme</li>
+        </ul>
+    </div>
+
+    <script>
+        console.log('🔐 Test Structure Réponse 2FA - Page chargée');
+
+        // Simulation de la structure de réponse réelle
+        const mockResponse = {
+            status: 'success',
+            message: 'Configuration 2FA initialisée - Code envoyé par email',
+            data: {
+                // Le secret pourrait être ici, mais pas forcément
+                // secret: '0d258c49...',
+                // two_factor_secret: '0d258c49...'
+            }
+        };
+
+        // Simulation des données utilisateur
+        const mockUserData = {
+            id_professionnel: 79,
+            nom: 'Sakura',
+            prenom: 'Saza',
+            numero_adeli: 'AH23456780',
+            role: 'medecin',
+            email: 'saza@hopital.sn'
+        };
+
+        console.log('🧪 Structure de réponse simulée:', mockResponse);
+        console.log('👤 Données utilisateur simulées:', mockUserData);
+        console.log('📧 Email disponible dans userData:', mockUserData.email);
+
+        // Test de la logique de correction
+        const userEmail = mockUserData?.email || mockUserData?.professionnel?.email || mockUserData?.user?.email;
+        const secretKey = mockResponse.data?.secret || mockResponse.data?.two_factor_secret || mockResponse.data?.setupSecret || mockResponse.data?.totpSecret || mockResponse.secret;
+
+        console.log('🔐 Test extraction des données:', {
+            userEmail: userEmail || 'NON TROUVÉ',
+            secretKey: secretKey ? 'TROUVÉ' : 'NON TROUVÉ'
+        });
+
+        if (userEmail) {
+            console.log('✅ Email trouvé:', userEmail);
+        } else {
+            console.log('❌ Email non trouvé');
+        }
+    </script>
+</body>
+
+</html>

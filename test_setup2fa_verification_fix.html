@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Setup2FA - Correction Verification</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+
+        .test-case {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+
+        .success {
+            background-color: #d4edda;
+            border-color: #c3e6cb;
+        }
+
+        .error {
+            background-color: #f8d7da;
+            border-color: #f5c6cb;
+        }
+
+        .info {
+            background-color: #d1ecf1;
+            border-color: #bee5eb;
+        }
+
+        .warning {
+            background-color: #fff3cd;
+            border-color: #ffeaa7;
+        }
+
+        pre {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 3px;
+            overflow-x: auto;
+        }
+
+        .button {
+            padding: 10px 20px;
+            margin: 5px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .button-primary {
+            background-color: #007bff;
+            color: white;
+        }
+
+        .button-secondary {
+            background-color: #6c757d;
+            color: white;
+        }
+
+        input {
+            padding: 8px;
+            margin: 5px;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>🔐 Test Setup2FA - Correction Verification</h1>
+
+    <div class="test-case info">
+        <h3>📋 Test de la correction de l'appel à verifyAndEnable2FA dans Setup2FA</h3>
+        <p>Ce test vérifie que Setup2FA appelle maintenant verifyAndEnable2FA avec le format complet attendu par le
+            serveur</p>
+    </div>
+
+    <div class="test-case">
+        <h3>🧪 Test 1: Simulation de buildUserParams</h3>
+        <div>
+            <label>Type d'utilisateur :</label>
+            <select id="user-type">
+                <option value="professionnel">Professionnel (médecin)</option>
+                <option value="patient">Patient</option>
+            </select>
+            <button onclick="testBuildUserParams()" class="button button-primary">Tester buildUserParams</button>
+        </div>
+        <div id="result-buildparams"></div>
+    </div>
+
+    <div class="test-case">
+        <h3>🧪 Test 2: Simulation de l'appel verifyAndEnable2FA</h3>
+        <div>
+            <label>Code de vérification :</label>
+            <input type="text" id="verification-code" value="277315" placeholder="123456" maxlength="6">
+            <button onclick="testVerifyAndEnable2FA()" class="button button-secondary">Tester Appel</button>
+        </div>
+        <div id="result-verify"></div>
+    </div>
+
+    <div class="test-case">
+        <h3>🧪 Test 3: Flux complet Setup2FA</h3>
+        <div>
+            <button onclick="testCompleteSetup2FAFlow()" class="button button-primary">Tester Flux Complet</button>
+        </div>
+        <div id="result-complete"></div>
+    </div>
+
+    <script>
+        // Simulation de la fonction buildUserParams de Setup2FA
+        function buildUserParams(userData) {
+            console.log('🔐 DEBUG - buildUserParams - Structure userData:', {
+                keys: Object.keys(userData || {}),
+                numero_assure: userData?.numero_assure,
+                numero_adeli: userData?.numero_adeli,
+                email: userData?.email,
+                email_professionnel: userData?.email_professionnel,
+                email_medecin: userData?.email_medecin,
+                professionnel: userData?.professionnel ? Object.keys(userData.professionnel) : 'N/A',
+                type: userData?.type,
+                id: userData?.id,
+                id_professionnel: userData?.id_professionnel,
+                userId: userData?.userId
+            });
+
+            if (userData.numero_assure) {
+                return {
+                    userType: 'patient',
+                    identifier: userData.numero_assure,
+                    userId: userData.id_patient || userData.id || userData.userId ? String(userData.id_patient || userData.id || userData.userId) : undefined
+                };
+            }
+            if (userData.numero_adeli) {
+                return {
+                    userType: 'professionnel',
+                    identifier: userData.numero_adeli,
+                    userId: userData.id || userData.id_professionnel || userData.userId ? String(userData.id || userData.id_professionnel || userData.userId) : undefined
+                };
+            }
+
+            // Recherche d'email dans différentes propriétés
+            const email = userData.email ||
+                userData.email_professionnel ||
+                userData.email_medecin ||
+                userData.professionnel?.email ||
+                userData.user?.email;
+
+            if (email) {
+                console.log('🔐 DEBUG - Email trouvé pour buildUserParams:', email);
+                return {
+                    userType: 'professionnel',
+                    identifier: email,
+                    userId: userData.id || userData.id_professionnel || userData.userId ? String(userData.id || userData.id_professionnel || userData.userId) : undefined
+                };
+            }
+
+            if (userData.id || userData.userId) {
+                return {
+                    userType: userData.type === 'patient' ? 'patient' : 'professionnel',
+                    identifier: String(userData.id || userData.userId),
+                    userId: String(userData.id || userData.userId)
+                };
+            }
+
+            console.error('❌ DEBUG - Impossible de déterminer userType et identifier:', userData);
+            throw new Error("Impossible de déterminer 'userType' et 'identifier' pour setup2FA");
+        }
+
+        // Simulation de la fonction verifyAndEnable2FA corrigée
+        async function verifyAndEnable2FA(params) {
+            try {
+                // Extraire les paramètres
+                const { verificationCode, userType, identifier } = params;
+
+                console.log('🔐 VerifyAndEnable2FA - Paramètres reçus:', { verificationCode, userType, identifier });
+
+                // Vérifier que tous les paramètres requis sont présents
+                if (!verificationCode || !userType || !identifier) {
+                    throw new Error('verificationCode, userType et identifier sont requis pour verifyAndEnable2FA');
+                }
+
+                // 🔍 DÉBOGAGE - Vérifier la structure de la requête
+                const requestData = {
+                    verificationCode,
+                    userType,
+                    identifier
+                };
+
+                console.log('🔐 DEBUG - Données de requête envoyées:', requestData);
+
+                // Simulation de l'appel API
+                const response = await simulateApiCall('/auth/verify-2fa', requestData);
+
+                console.log('✅ VerifyAndEnable2FA - Réponse reçue:', response.data);
+
+                return response.data;
+            } catch (error) {
+                console.error('❌ VerifyAndEnable2FA - Erreur:', error);
+                throw error;
+            }
+        }
+
+        // Simulation d'un appel API
+        async function simulateApiCall(endpoint, data) {
+            console.log(`🌐 Simulation API call: ${endpoint}`, data);
+
+            // Simuler un délai réseau
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+            // Simuler une réponse réussie
+            return {
+                data: {
+                    success: true,
+                    message: '2FA vérifié et activé avec succès',
+                    status: 'success'
+                }
+            };
+        }
+
+        // Test 1: Simulation de buildUserParams
+        function testBuildUserParams() {
+            const result = document.getElementById('result-buildparams');
+            const userType = document.getElementById('user-type').value;
+
+            let userData;
+            if (userType === 'professionnel') {
+                userData = {
+                    numero_adeli: 'AH23456780',
+                    email: 'medecin@hopital.sn',
+                    type: 'professionnel',
+                    id: 79
+                };
+            } else {
+                userData = {
+                    numero_assure: '1234567890123',
+                    type: 'patient',
+                    id: 123
+                };
+            }
+
+            try {
+                const params = buildUserParams(userData);
+
+                result.innerHTML = `
+                    <div class="success">
+                        <h4>✅ buildUserParams réussi:</h4>
+                        <pre>Données utilisateur: ${JSON.stringify(userData, null, 2)}</pre>
+                        <pre>Paramètres générés: ${JSON.stringify(params, null, 2)}</pre>
+                        <p><strong>userType:</strong> ${params.userType}</p>
+                        <p><strong>identifier:</strong> ${params.identifier}</p>
+                    </div>
+                `;
+            } catch (error) {
+                result.innerHTML = `
+                    <div class="error">
+                        <h4>❌ buildUserParams échoué:</h4>
+                        <pre>Erreur: ${error.message}</pre>
+                    </div>
+                `;
+            }
+        }
+
+        // Test 2: Simulation de l'appel verifyAndEnable2FA
+        async function testVerifyAndEnable2FA() {
+            const result = document.getElementById('result-verify');
+            const code = document.getElementById('verification-code').value;
+            const userType = document.getElementById('user-type').value;
+
+            // Simuler les données utilisateur
+            const userData = userType === 'professionnel' ? {
+                numero_adeli: 'AH23456780',
+                email: 'medecin@hopital.sn',
+                type: 'professionnel'
+            } : {
+                numero_assure: '1234567890123',
+                type: 'patient'
+            };
+
+            try {
+                // CORRECTION : Construire les paramètres complets comme dans Setup2FA
+                const userParams = buildUserParams(userData);
+                const verificationParams = {
+                    verificationCode: code,
+                    userType: userParams.userType,
+                    identifier: userParams.identifier
+                };
+
+                console.log('🔐 DEBUG - Paramètres de vérification envoyés:', verificationParams);
+
+                const response = await verifyAndEnable2FA(verificationParams);
+
+                result.innerHTML = `
+                    <div class="success">
+                        <h4>✅ verifyAndEnable2FA réussi:</h4>
+                        <pre>Paramètres envoyés: ${JSON.stringify(verificationParams, null, 2)}</pre>
+                        <pre>Réponse reçue: ${JSON.stringify(response, null, 2)}</pre>
+                        <p><strong>Statut :</strong> ${response.status}</p>
+                        <p><strong>Message :</strong> ${response.message}</p>
+                    </div>
+                `;
+            } catch (error) {
+                result.innerHTML = `
+                    <div class="error">
+                        <h4>❌ verifyAndEnable2FA échoué:</h4>
+                        <pre>Erreur: ${error.message}</pre>
+                    </div>
+                `;
+            }
+        }
+
+        // Test 3: Flux complet Setup2FA
+        async function testCompleteSetup2FAFlow() {
+            const result = document.getElementById('result-complete');
+            const code = document.getElementById('verification-code').value;
+            const userType = document.getElementById('user-type').value;
+
+            result.innerHTML = `
+                <div class="info">
+                    <h4>🔄 Test du flux complet Setup2FA...</h4>
+                    <p>Type utilisateur: <strong>${userType}</strong></p>
+                    <p>Code de vérification: <strong>${code}</strong></p>
+                    <div class="animate-spin">⏳</div>
+                </div>
+            `;
+
+            try {
+                // Simuler le flux complet de Setup2FA
+                const userData = userType === 'professionnel' ? {
+                    numero_adeli: 'AH23456780',
+                    email: 'medecin@hopital.sn',
+                    type: 'professionnel'
+                } : {
+                    numero_assure: '1234567890123',
+                    type: 'patient'
+                };
+
+                // Étape 1: Construire les paramètres utilisateur
+                const userParams = buildUserParams(userData);
+                console.log('🔐 DEBUG - Paramètres utilisateur générés:', userParams);
+
+                // Étape 2: Construire les paramètres de vérification
+                const verificationParams = {
+                    verificationCode: code,
+                    userType: userParams.userType,
+                    identifier: userParams.identifier
+                };
+                console.log('🔐 DEBUG - Paramètres de vérification:', verificationParams);
+
+                // Étape 3: Appeler verifyAndEnable2FA
+                const response = await verifyAndEnable2FA(verificationParams);
+
+                result.innerHTML = `
+                    <div class="success">
+                        <h4>✅ Flux complet Setup2FA réussi:</h4>
+                        <pre>Données utilisateur: ${JSON.stringify(userData, null, 2)}</pre>
+                        <pre>Paramètres utilisateur: ${JSON.stringify(userParams, null, 2)}</pre>
+                        <pre>Paramètres de vérification: ${JSON.stringify(verificationParams, null, 2)}</pre>
+                        <pre>Réponse finale: ${JSON.stringify(response, null, 2)}</pre>
+                        <p><strong>Statut :</strong> ${response.status}</p>
+                        <p><strong>Message :</strong> ${response.message}</p>
+                    </div>
+                `;
+            } catch (error) {
+                result.innerHTML = `
+                    <div class="error">
+                        <h4>❌ Flux complet Setup2FA échoué:</h4>
+                        <pre>Erreur: ${error.message}</pre>
+                    </div>
+                `;
+            }
+        }
+
+        // Initialisation
+        window.onload = function () {
+            console.log('🔐 Test Setup2FA - Corrections de vérification chargées');
+            console.log('📊 Fonctions disponibles:', {
+                buildUserParams: typeof buildUserParams,
+                verifyAndEnable2FA: typeof verifyAndEnable2FA,
+                simulateApiCall: typeof simulateApiCall
+            });
+        };
+    </script>
+</body>
+
+</html>

@@ -3,11 +3,12 @@ import {
   FaWeight, FaUser, FaHeartbeat, FaTint, 
   FaThermometerHalf, FaPlus, FaChartLine 
 } from 'react-icons/fa';
+import { useDMP } from '../../context/DMPContext';
 import * as dmpApi from '../../services/api/dmpApi';
 
 const AutoMesuresWidget = () => {
-  const [autoMesures, setAutoMesures] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { state, actions } = useDMP();
+  const { autoMesures, loading, patientId } = state;
   const [showAddModal, setShowAddModal] = useState(false);
   const [newMesure, setNewMesure] = useState({
     type_mesure: 'poids',
@@ -17,59 +18,29 @@ const AutoMesuresWidget = () => {
   });
 
   useEffect(() => {
-    loadAutoMesures();
-  }, []);
-
-  const loadAutoMesures = async () => {
-    try {
-      setLoading(true);
-      // Ici vous pouvez appeler l'API pour récupérer les auto-mesures
-      // const response = await dmpApi.getAutoMesures();
-      // setAutoMesures(response.data || []);
-      
-      // Pour l'instant, on utilise des données mockées
-      setAutoMesures([
-        {
-          id: 1,
-          type_mesure: 'poids',
-          valeur: 75,
-          unite: 'kg',
-          date_mesure: '2025-01-25',
-          commentaire: 'Matin avant petit déjeuner'
-        },
-        {
-          id: 2,
-          type_mesure: 'glycemie',
-          valeur: 120,
-          unite: 'mg/dL',
-          date_mesure: '2025-01-25',
-          commentaire: 'Avant repas'
-        },
-        {
-          id: 3,
-          type_mesure: 'tension_arterielle',
-          valeur: '120/80',
-          unite: 'mmHg',
-          date_mesure: '2025-01-24',
-          commentaire: 'Matin'
-        }
-      ]);
-    } catch (error) {
-      console.error('Erreur lors du chargement des auto-mesures:', error);
-    } finally {
-      setLoading(false);
+    // ✅ Utiliser le contexte DMP au lieu des données mockées
+    if (patientId && (!autoMesures || autoMesures.length === 0)) {
+      console.log('📊 AutoMesuresWidget - Chargement des auto-mesures via contexte DMP');
+      actions.loadAutoMesures();
     }
-  };
+  }, [patientId, autoMesures, actions]);
+
+  // ✅ Supprimer la fonction loadAutoMesures locale - utiliser le contexte DMP
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await dmpApi.ajouterAutoMesure(newMesure);
+      // ✅ Utiliser le contexte DMP pour créer l'auto-mesure
+      console.log('📊 AutoMesuresWidget - Création auto-mesure via contexte DMP:', newMesure);
+      await actions.createAutoMesure(newMesure);
+      
       setShowAddModal(false);
       setNewMesure({ type_mesure: 'poids', valeur: '', unite: '', commentaire: '' });
-      loadAutoMesures(); // Recharger les données
+      
+      // ✅ Plus besoin de recharger - le contexte DMP met à jour automatiquement
+      console.log('✅ Auto-mesure créée avec succès via contexte DMP');
     } catch (error) {
-      console.error('Erreur lors de l\'ajout de l\'auto-mesure:', error);
+      console.error('❌ Erreur lors de l\'ajout de l\'auto-mesure:', error);
     }
   };
 

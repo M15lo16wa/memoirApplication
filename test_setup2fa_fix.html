@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Setup2FA - Corrections Compte à Rebours</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+
+        .test-case {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+
+        .success {
+            background-color: #d4edda;
+            border-color: #c3e6cb;
+        }
+
+        .error {
+            background-color: #f8d7da;
+            border-color: #f5c6cb;
+        }
+
+        .info {
+            background-color: #d1ecf1;
+            border-color: #bee5eb;
+        }
+
+        .warning {
+            background-color: #fff3cd;
+            border-color: #ffeaa7;
+        }
+
+        pre {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 3px;
+            overflow-x: auto;
+        }
+
+        .button {
+            padding: 10px 20px;
+            margin: 5px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .button-primary {
+            background-color: #007bff;
+            color: white;
+        }
+
+        .button-primary:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+
+        .button-secondary {
+            background-color: #6c757d;
+            color: white;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>🔐 Test Setup2FA - Corrections Compte à Rebours et Email</h1>
+
+    <div class="test-case info">
+        <h3>📋 Test des corrections apportées</h3>
+        <p>Ce test vérifie que les corrections du problème de compte à rebours et de récupération d'email fonctionnent
+        </p>
+    </div>
+
+    <div class="test-case">
+        <h3>🧪 Test 1: Simulation du composant Setup2FA</h3>
+        <div id="setup2fa-simulation">
+            <div class="text-center p-6 bg-blue-50 rounded-lg border-2 border-blue-200">
+                <h3>Configuration 2FA</h3>
+                <p>Email envoyé avec succès !</p>
+                <p>Adresse : <strong id="email-display">saza@hopital.sn</strong></p>
+
+                <div id="countdown-display" class="mt-4">
+                    <p>Renvoi possible dans <span id="countdown-value">279</span>s</p>
+                </div>
+
+                <button id="continue-button" class="button button-primary" disabled>
+                    J'ai configuré l'application, continuer
+                </button>
+
+                <div id="countdown-info" class="mt-2 text-sm text-gray-600" style="display: none;">
+                    <span>🕐 Renvoi d'email possible dans <span id="countdown-info-value">279</span>s</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="test-case">
+        <h3>🧪 Test 2: Logique de récupération d'email</h3>
+        <button onclick="testEmailRecovery()">Tester Récupération Email</button>
+        <div id="result-email"></div>
+    </div>
+
+    <div class="test-case">
+        <h3>🧪 Test 3: Structure de réponse API</h3>
+        <button onclick="testApiResponse()">Tester Structure API</button>
+        <div id="result-api"></div>
+    </div>
+
+    <div class="test-case">
+        <h3>🧪 Test 4: Bouton de continuation</h3>
+        <button onclick="testContinueButton()">Tester Bouton Continuation</button>
+        <div id="result-button"></div>
+    </div>
+
+    <script>
+        // Simulation des données de test
+        const mockUserData = {
+            id: 79,
+            nom: "Sakura",
+            prenom: "Saza",
+            numero_adeli: "123456789",
+            email: "saza@hopital.sn",
+            type: "professionnel",
+            tempTokenId: "temp_123",
+            generatedToken: "gen_456"
+        };
+
+        const mockApiResponse = {
+            status: 200,
+            data: {
+                user: {
+                    id: 79,
+                    nom: "Sakura",
+                    prenom: "Saza",
+                    email: "saza@hopital.sn"
+                },
+                totpCode: "910632",
+                recoveryCodes: ["code1", "code2"],
+                message: "2FA configuré avec succès"
+            }
+        };
+
+        // Variables de test
+        let countdown = 279;
+        let emailSent = true;
+        let emailAddress = "saza@hopital.sn";
+
+        // Mise à jour du compte à rebours
+        function updateCountdown() {
+            const countdownElement = document.getElementById('countdown-value');
+            const countdownInfoElement = document.getElementById('countdown-info-value');
+            const continueButton = document.getElementById('continue-button');
+            const countdownInfo = document.getElementById('countdown-info');
+
+            if (countdown > 0) {
+                countdown--;
+                countdownElement.textContent = countdown;
+                countdownInfoElement.textContent = countdown;
+
+                // CORRECTION : Le bouton n'est plus désactivé par le compte à rebours
+                continueButton.disabled = !emailSent;
+
+                // Afficher l'info du compte à rebours
+                countdownInfo.style.display = 'block';
+
+                setTimeout(updateCountdown, 1000);
+            } else {
+                countdownElement.textContent = "0";
+                countdownInfoElement.textContent = "0";
+                countdownInfo.style.display = 'none';
+
+                // Le bouton reste activé car emailSent est true
+                continueButton.disabled = !emailSent;
+            }
+        }
+
+        // Test de récupération d'email
+        function testEmailRecovery() {
+            const result = document.getElementById('result-email');
+
+            // Logique de récupération d'email depuis userData
+            const userEmail = mockUserData?.email ||
+                mockUserData?.professionnel?.email ||
+                mockUserData?.user?.email ||
+                mockUserData?.email_professionnel ||
+                mockUserData?.email_medecin;
+
+            // Logique de fallback depuis la réponse API
+            let finalEmail = userEmail;
+            if (!finalEmail && mockApiResponse.data) {
+                finalEmail = mockApiResponse.data.email ||
+                    mockApiResponse.data.data?.email ||
+                    mockApiResponse.data.user?.email ||
+                    mockApiResponse.data.professionnel?.email ||
+                    mockApiResponse.data.user?.email_professionnel ||
+                    mockApiResponse.data.user?.email_medecin;
+            }
+
+            result.innerHTML = `
+                <div class="${finalEmail ? 'success' : 'error'}">
+                    <h4>${finalEmail ? '✅' : '❌'} Récupération d'email testée:</h4>
+                    <pre>Email depuis userData: ${userEmail || 'NON TROUVÉ'}</pre>
+                    <pre>Email final après fallback: ${finalEmail || 'NON TROUVÉ'}</pre>
+                    <pre>Structure userData: ${JSON.stringify(mockUserData, null, 2)}</pre>
+                </div>
+            `;
+        }
+
+        // Test de la structure de réponse API
+        function testApiResponse() {
+            const result = document.getElementById('result-api');
+
+            const responseKeys = Object.keys(mockApiResponse.data);
+            const userKeys = mockApiResponse.data.user ? Object.keys(mockApiResponse.data.user) : 'N/A';
+
+            result.innerHTML = `
+                <div class="info">
+                    <h4>📊 Structure de la réponse API:</h4>
+                    <pre>Clés de response.data: ${responseKeys.join(', ')}</pre>
+                    <pre>Clés de response.data.user: ${userKeys}</pre>
+                    <pre>Email dans response.data.user: ${mockApiResponse.data.user?.email || 'NON TROUVÉ'}</pre>
+                    <pre>Réponse complète: ${JSON.stringify(mockApiResponse.data, null, 2)}</pre>
+                </div>
+            `;
+        }
+
+        // Test du bouton de continuation
+        function testContinueButton() {
+            const result = document.getElementById('result-button');
+            const continueButton = document.getElementById('continue-button');
+
+            const buttonState = {
+                disabled: continueButton.disabled,
+                emailSent: emailSent,
+                countdown: countdown,
+                shouldBeEnabled: emailSent // CORRECTION : Plus de dépendance au countdown
+            };
+
+            result.innerHTML = `
+                <div class="${buttonState.shouldBeEnabled ? 'success' : 'error'}">
+                    <h4>🔘 État du bouton de continuation:</h4>
+                    <pre>Bouton désactivé: ${buttonState.disabled ? 'OUI' : 'NON'}</pre>
+                    <pre>Email envoyé: ${buttonState.emailSent ? 'OUI' : 'NON'}</pre>
+                    <pre>Compte à rebours: ${buttonState.countdown}s</pre>
+                    <pre>Devrait être activé: ${buttonState.shouldBeEnabled ? 'OUI' : 'NON'}</pre>
+                    <pre>État correct: ${buttonState.disabled === !buttonState.shouldBeEnabled ? '✅' : '❌'}</pre>
+                </div>
+            `;
+        }
+
+        // Gestionnaire du bouton de continuation
+        document.getElementById('continue-button').addEventListener('click', function () {
+            alert('🎉 Bouton cliqué ! Passage à l\'étape de validation...');
+        });
+
+        // Initialisation
+        window.onload = function () {
+            console.log('🔐 Test Setup2FA - Corrections chargées');
+            console.log('📊 Données de test:', { mockUserData, mockApiResponse });
+
+            // Démarrer le compte à rebours
+            updateCountdown();
+
+            // Tester automatiquement la récupération d'email
+            testEmailRecovery();
+        };
+    </script>
+</body>
+
+</html>

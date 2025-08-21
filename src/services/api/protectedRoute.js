@@ -26,25 +26,39 @@ export const ProtectedRoute = ({ children, allowedUserTypes = ['medecin', 'patie
   useEffect(() => {
     const checkAuth = () => {
       console.log('🔍 ProtectedRoute - Vérification authentification...');
+      console.log('  - URL actuelle:', location.pathname);
+      console.log('  - Timestamp:', new Date().toISOString());
+      console.log('  - Types autorisés:', allowedUserTypes);
+      
+      // ✅ NOUVEAU : Logs détaillés des tokens
+      const token = localStorage.getItem('token');
+      const jwt = localStorage.getItem('jwt');
+      const medecin = localStorage.getItem('medecin');
+      const patient = localStorage.getItem('patient');
+      
+      console.log('  - 🔑 Tokens disponibles:');
+      console.log('    - token:', token ? `✅ Présent (${token.substring(0, 30)}...)` : '❌ Absent');
+      console.log('    - jwt:', jwt ? `✅ Présent (${jwt.substring(0, 30)}...)` : '❌ Absent');
+      console.log('    - medecin:', medecin ? `✅ Présent (${medecin.substring(0, 50)}...)` : '❌ Absent');
+      console.log('    - patient:', patient ? `✅ Présent (${patient.substring(0, 50)}...)` : '❌ Absent');
       
       const currentUserType = getUserType();
       const isMedecin = isMedecinAuthenticated();
       const isPatient = isPatientAuthenticated();
       const isGeneralAuth = isAuthenticated();
       
-      console.log('  - Type d\'utilisateur détecté:', currentUserType);
-      console.log('  - Médecin authentifié:', isMedecin);
-      console.log('  - Patient authentifié:', isPatient);
-      console.log('  - Authentification générale:', isGeneralAuth);
-      console.log('  - Types autorisés:', allowedUserTypes);
-      console.log('  - Token général présent:', !!localStorage.getItem('token'));
-      console.log('  - JWT patient présent:', !!localStorage.getItem('jwt'));
+      console.log('  - 🔍 Résultats des vérifications:');
+      console.log('    - Type d\'utilisateur détecté:', currentUserType);
+      console.log('    - Médecin authentifié:', isMedecin);
+      console.log('    - Patient authentifié:', isPatient);
+      console.log('    - Authentification générale:', isGeneralAuth);
       
       if (currentUserType && allowedUserTypes.includes(currentUserType)) {
-        console.log('✅ Utilisateur autorisé, affichage du contenu');
+        console.log('✅ ProtectedRoute - Utilisateur autorisé, affichage du contenu');
         setIsUserAuthenticated(true);
       } else {
-        console.log('❌ Accès non autorisé - redirection vers connexion');
+        console.log('❌ ProtectedRoute - Accès non autorisé - redirection vers connexion');
+        console.log('  - Raison: currentUserType =', currentUserType, 'allowedUserTypes =', allowedUserTypes);
         
         let message = "Veuillez vous connecter pour accéder à cette page";
         if (allowedUserTypes.length === 1) {
@@ -55,6 +69,7 @@ export const ProtectedRoute = ({ children, allowedUserTypes = ['medecin', 'patie
           }
         }
         
+        console.log('  - Redirection vers /connexion avec message:', message);
         navigate("/connexion", { 
           state: { 
             from: location.pathname,
@@ -65,6 +80,8 @@ export const ProtectedRoute = ({ children, allowedUserTypes = ['medecin', 'patie
       setIsLoading(false);
     };
 
+    console.log('🔐 ProtectedRoute - useEffect déclenché');
+    console.log('  - Dépendances:', { navigate: !!navigate, location: location.pathname, allowedUserTypes });
     checkAuth();
   }, [navigate, location, allowedUserTypes]);
 
@@ -74,6 +91,7 @@ export const ProtectedRoute = ({ children, allowedUserTypes = ['medecin', 'patie
 
 // Route protégée spécifiquement pour les médecins
 export const ProtectedMedecinRoute = ({ children }) => {
+  console.log('🔐 ProtectedMedecinRoute - Rendu du composant');
   return <ProtectedRoute allowedUserTypes={['medecin']}>{children}</ProtectedRoute>;
 };
 
