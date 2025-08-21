@@ -317,47 +317,144 @@ const getAllDossiersMedical = async () => {
                 console.log('=====================================');
             }
             
-            // Simple enrichment without external API calls to avoid failures
-            const enrichedDossiers = dossiers.map((dossier) => {
-                try {
-                    // Check if dossier already has patient and service info embedded
-                    const patient = dossier.patient_info || dossier.patient || dossier.Patient;
-                    const service = dossier.service_info || dossier.service || dossier.Service;
-                    
-                    // Create proper file number - Prioriser le numeroDossier, sinon générer un numéro basé sur l'ID
-                    let fileNumber = dossier.numeroDossier || dossier.numero_dossier;
-                    
-                    // Si le numeroDossier n'est pas présent, générer un numéro basé sur l'ID
-                    if (!fileNumber || fileNumber === 'N/A' || fileNumber === 'undefined') {
-                        const dossierId = dossier.id_dossier || dossier.id;
-                        fileNumber = `DOSSIER-${dossierId.toString().padStart(6, '0')}`;
-                    }
-                    
-                    return {
-                        ...dossier,
-                        id: dossier.id_dossier || dossier.id,
-                        numeroDossier: fileNumber,
-                        patient_name: patient ? `${patient.prenom || ''} ${patient.nom || ''}`.trim() : `Patient ID: ${dossier.patient_id || dossier.patientId || dossier.id_patient || 'undefined'}`,
-                        service_name: service ? (service.nom || service.name || service.libelle) : `Service ID: ${dossier.service_id || dossier.serviceId || dossier.id_service || 'undefined'}`,
-                        dateOuverture: dossier.dateCreation || dossier.createdAt,
-                        patient_info: patient,
-                        patient: patient, // Add direct patient reference
-                        service_info: service
-                    };
-                } catch (enrichError) {
-                    console.error('Error enriching dossier:', enrichError);
-                    return {
-                        ...dossier,
-                        id: dossier.id_dossier || dossier.id,
-                        patient_name: `Patient ID: ${dossier.patient_id || dossier.patientId || dossier.id_patient || 'undefined'}`,
-                        service_name: `Service ID: ${dossier.service_id || dossier.serviceId || dossier.id_service || 'undefined'}`,
-                        dateOuverture: dossier.dateCreation || dossier.createdAt
-                    };
-                }
-            });
+            // ✅ CORRECTION : Enrichir les dossiers avec les informations des patients et services
+            console.log('🔍 Enrichissement des dossiers avec les données patients et services...');
             
-            console.log('Enriched dossiers:', enrichedDossiers);
-            return { data: enrichedDossiers, status: 'success' };
+            try {
+                // Importer dynamiquement les fonctions nécessaires
+                const { getPatients } = await import('./patientApi.js');
+                const { getServices } = await import('./patientApi.js');
+                
+                // Récupérer les patients et services
+                const [patientsResponse, servicesResponse] = await Promise.all([
+                    getPatients(),
+                    getServices()
+                ]);
+                
+                console.log('📊 Patients récupérés pour enrichissement:', patientsResponse);
+                console.log('📊 Services récupérés pour enrichissement:', servicesResponse);
+                
+                // Créer des maps pour un accès rapide
+                const patientsMap = new Map();
+                const servicesMap = new Map();
+                
+                if (Array.isArray(patientsResponse)) {
+                    patientsResponse.forEach(patient => {
+                        const patientId = patient.id_patient || patient.id || patient.patientId;
+                        if (patientId) {
+                            patientsMap.set(patientId.toString(), patient);
+                        }
+                    });
+                }
+                
+                if (Array.isArray(servicesResponse)) {
+                    servicesResponse.forEach(service => {
+                        const serviceId = service.id_service || service.id || service.serviceId;
+                        if (serviceId) {
+                            servicesMap.set(serviceId.toString(), service);
+                        }
+                    });
+                }
+                
+                console.log(`🗺️ Map patients créée avec ${patientsMap.size} entrées`);
+                console.log(`🗺️ Map services créée avec ${servicesMap.size} entrées`);
+                
+                // Enrichir les dossiers
+                const enrichedDossiers = dossiers.map((dossier) => {
+                    try {
+                        // Identifier l'ID du patient et du service
+                        const patientId = dossier.patient_id || dossier.patientId || dossier.id_patient;
+                        const serviceId = dossier.service_id || dossier.serviceId || dossier.id_service;
+                        
+                        console.log(`🔍 Enrichissement dossier ${dossier.id_dossier || dossier.id}:`, {
+                            patientId,
+                            serviceId,
+                            patientFound: patientsMap.has(patientId?.toString()),
+                            serviceFound: servicesMap.has(serviceId?.toString())
+                        });
+                        
+                        // Récupérer les informations du patient et du service
+                        const patient = patientsMap.get(patientId?.toString());
+                        const service = servicesMap.get(serviceId?.toString());
+                        
+                        // Create proper file number
+                        let fileNumber = dossier.numeroDossier || dossier.numero_dossier;
+                        if (!fileNumber || fileNumber === 'N/A' || fileNumber === 'undefined') {
+                            const dossierId = dossier.id_dossier || dossier.id;
+                            fileNumber = `DOSSIER-${dossierId.toString().padStart(6, '0')}`;
+                        }
+                        
+                        return {
+                            ...dossier,
+                            id: dossier.id_dossier || dossier.id,
+                            numeroDossier: fileNumber,
+                            patient_name: patient ? `${patient.prenom || ''} ${patient.nom || ''}`.trim() : `Patient ID: ${patientId || 'undefined'}`,
+                            service_name: service ? (service.nom || service.name || service.libelle) : `Service ID: ${serviceId || 'undefined'}`,
+                            dateOuverture: dossier.dateCreation || dossier.createdAt,
+                            patient_info: patient,
+                            patient: patient,
+                            service_info: service,
+                            // Ajouter les IDs pour référence
+                            patient_id: patientId,
+                            service_id: serviceId
+                        };
+                    } catch (enrichError) {
+                        console.error('Error enriching dossier:', enrichError);
+                        return {
+                            ...dossier,
+                            id: dossier.id_dossier || dossier.id,
+                            patient_name: `Patient ID: ${dossier.patient_id || dossier.patientId || dossier.id_patient || 'undefined'}`,
+                            service_name: `Service ID: ${dossier.service_id || dossier.serviceId || dossier.id_service || 'undefined'}`,
+                            dateOuverture: dossier.dateCreation || dossier.createdAt
+                        };
+                    }
+                });
+                
+                console.log('✅ Dossiers enrichis avec succès:', enrichedDossiers);
+                return { data: enrichedDossiers, status: 'success' };
+                
+            } catch (enrichmentError) {
+                console.error('❌ Erreur lors de l\'enrichissement des dossiers:', enrichmentError);
+                console.log('⚠️ Utilisation de l\'enrichissement de base sans API externe...');
+                
+                // Fallback: enrichment de base sans API externe
+                const enrichedDossiers = dossiers.map((dossier) => {
+                    try {
+                        const patient = dossier.patient_info || dossier.patient || dossier.Patient;
+                        const service = dossier.service_info || dossier.service || dossier.Service;
+                        
+                        let fileNumber = dossier.numeroDossier || dossier.numero_dossier;
+                        if (!fileNumber || fileNumber === 'N/A' || fileNumber === 'undefined') {
+                            const dossierId = dossier.id_dossier || dossier.id;
+                            fileNumber = `DOSSIER-${dossierId.toString().padStart(6, '0')}`;
+                        }
+                        
+                        return {
+                            ...dossier,
+                            id: dossier.id_dossier || dossier.id,
+                            numeroDossier: fileNumber,
+                            patient_name: patient ? `${patient.prenom || ''} ${patient.nom || ''}`.trim() : `Patient ID: ${dossier.patient_id || dossier.patientId || dossier.id_patient || 'undefined'}`,
+                            service_name: service ? (service.nom || service.name || service.libelle) : `Service ID: ${dossier.service_id || dossier.serviceId || dossier.id_service || 'undefined'}`,
+                            dateOuverture: dossier.dateCreation || dossier.createdAt,
+                            patient_info: patient,
+                            patient: patient,
+                            service_info: service
+                        };
+                    } catch (enrichError) {
+                        console.error('Error enriching dossier:', enrichError);
+                        return {
+                            ...dossier,
+                            id: dossier.id_dossier || dossier.id,
+                            patient_name: `Patient ID: ${dossier.patient_id || dossier.patientId || dossier.id_patient || 'undefined'}`,
+                            service_name: `Service ID: ${dossier.service_id || dossier.serviceId || dossier.id_service || 'undefined'}`,
+                            dateOuverture: dossier.dateCreation || dossier.createdAt
+                        };
+                    }
+                });
+                
+                console.log('✅ Dossiers enrichis avec fallback:', enrichedDossiers);
+                return { data: enrichedDossiers, status: 'success' };
+            }
         }
         
         // Fallback: if data is directly an array
@@ -368,22 +465,16 @@ const getAllDossiersMedical = async () => {
         
         // Fallback: if dossiers is in root data
         if (response.data.dossiers && Array.isArray(response.data.dossiers)) {
-            console.log('Found dossiers in response.data.dossiers:', response.data.dossiers);
+            console.log('Dossiers found in root data:', response.data.dossiers);
             return { data: response.data.dossiers, status: 'success' };
         }
         
-        console.error('Unexpected dossiers medical response format:', response.data);
+        console.error('Unexpected dossiers response format:', response.data);
         return { data: [], status: 'error', message: 'Format de réponse inattendu' };
         
     } catch (error) {
-        console.error('Service dossiers medical non disponible:', error);
-        console.error('Error details:', {
-            message: error.message,
-            response: error.response?.data,
-            status: error.response?.status,
-            url: error.config?.url
-        });
-        return { data: [], status: 'error', message: 'Service non disponible' };
+        console.error('Erreur lors de la récupération des dossiers medicaux:', error);
+        return { data: [], status: 'error', message: error.message };
     }
 };
 

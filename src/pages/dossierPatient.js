@@ -7,7 +7,6 @@ import { getPatients, getServices } from "../services/api/patientApi";
 import { isAuthenticated, isMedecinAuthenticated, isPatientAuthenticated } from "../services/api/authApi";
 
 import { useDMP } from "../context/DMPContext";
-import TokenChecker from "../components/debug/TokenChecker";
 
 function DossierPatient() {
   const navigate = useNavigate();
@@ -656,20 +655,11 @@ function DossierPatient() {
     }
   };
 
-  // Fonction pour charger les dataState.patients
+  // Fonction pour charger les patients
   const loadPatients = useCallback(async () => {
-    // Vérifier l'authentification avant de faire l'appel API
-    if (!authState.isAuthenticated) {
-      console.log('Utilisateur non authentifié, impossible de charger les dataState.patients');
-      updateDataState({ patients: [] });
-      updateUIState({ loading: false });
-      return [];
-    }
-
     updateUIState({ loading: true });
     try {
       console.log('🔄 DEBUG - Début de loadPatients...');
-      console.log('🔐 DEBUG - État authentification:', authState.isAuthenticated);
       console.log('🌐 DEBUG - Appel API getPatients()...');
       
       const patientsData = await getPatients();
@@ -758,7 +748,7 @@ function DossierPatient() {
     } finally {
       updateUIState({ loading: false });
     }
-  }, [authState.isAuthenticated, navigate]);
+  }, [navigate]); // Suppression des dépendances loadPatients et loadServices
 
   // Vérification de l'authentification
   useEffect(() => {
@@ -776,16 +766,17 @@ function DossierPatient() {
       
       if (isAuth) {
         console.log('✅ Utilisateur authentifié, chargement des données...');
-        updateAuthState({ isAuthenticated: true });
+        // Mettre à jour l'état d'authentification
+        updateAuthState({ isAuthenticated: true, loading: false });
         
-        // Charger les données seulement si l'utilisateur est authentifié
+        // Charger les données directement
         console.log('🔄 Appel de loadPatients...');
         await loadPatients();
         console.log('🔄 Appel de loadServices...');
         await loadServices();
       } else {
         console.log('❌ Utilisateur non authentifié, redirection...');
-        updateAuthState({ isAuthenticated: false });
+        updateAuthState({ isAuthenticated: false, loading: false });
         // Rediriger vers la page de connexion
         navigate("/connexion", { 
           state: { 
@@ -794,11 +785,10 @@ function DossierPatient() {
           } 
         });
       }
-      updateUIState({ loading: false });
     };
 
     checkAuthentication();
-  }, [navigate]); // Suppression des dépendances loadPatients et loadServices
+  }, [navigate]);
 
   // Reload dataState.services when modal opens
   useEffect(() => {
@@ -1428,21 +1418,31 @@ const loadOrdonnancesRecentes = useCallback(async () => {
   // Load dossiers dataState.patients when switching to shared-folder tab
   useEffect(() => {
     console.log('Active tab changed to:', uiState.activeTab);
-    if (uiState.activeTab === "shared-folder") {
-      console.log('Switching to shared-folder tab, loading dossiers dataState.patients...');
-      loadDossiersPatients();
+    
+    // Utiliser un switch pour éviter les appels multiples
+    switch (uiState.activeTab) {
+      case "patients-list":
+        console.log('Switching to patients-list tab, loading patients...');
+        loadPatients();
+        break;
+      case "shared-folder":
+        console.log('Switching to shared-folder tab, loading dossiers patients...');
+        loadDossiersPatients();
+        break;
+      case "prescriptions":
+        console.log('Switching to prescriptions tab, loading prescriptions...');
+        loadPrescriptions();
+        break;
+      case "notifications":
+        console.log('Switching to notifications tab, loading notifications...');
+        loadOrdonnancesRecentes();
+        loadResumeAujourdhui();
+        loadNotifications();
+        break;
+      default:
+        console.log('Unknown tab:', uiState.activeTab);
     }
-    if (uiState.activeTab === "prescriptions") {
-      console.log('Switching to prescriptions tab, loading prescriptions...');
-      loadPrescriptions();
-    }
-    if (uiState.activeTab === "notifications") {
-      console.log('Switching to notifications tab, loading notifications...');
-      loadOrdonnancesRecentes();
-      loadResumeAujourdhui();
-      loadNotifications();
-    }
-  }, [uiState.activeTab, loadPrescriptions, loadDossiersPatients, loadOrdonnancesRecentes, loadResumeAujourdhui, loadNotifications]);
+  }, [uiState.activeTab]); // Supprimer toutes les dépendances de fonctions pour éviter la boucle infinie
 
   // Afficher un écran de chargement pendant la vérification d'authentification
   if (authState.loading) {
@@ -1547,11 +1547,6 @@ const loadOrdonnancesRecentes = useCallback(async () => {
 
         {/* Main Content */}
         <div className="content-area flex-1 p-6">
-          {/* 🔍 DEBUG TEMPORAIRE - Vérificateur de Tokens */}
-          <div className="mb-6">
-            <TokenChecker />
-          </div>
-          
           {/* Patients List */}
           {uiState.activeTab === "patients-list" && (
             <div>

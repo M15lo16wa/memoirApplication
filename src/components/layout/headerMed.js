@@ -2,8 +2,9 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 // gestion du profil medecin
-import { getMedecinProfile, logoutMedecin, fetchMedecinDetails, fetchPatientsList } from "../../services/api/authApi";
+import { getMedecinProfile, logoutMedecin, fetchMedecinDetails } from "../../services/api/authApi";
 import { getAllConsultations, getAllDossiersMedical } from "../../services/api/medicalApi";
+import { getPatients } from "../../services/api/patientApi";
 
 function MedHeader({ doctor = { nom: "{user?.nom || 'Utilisateur'}", specialite: "[Spécialité]", photo: "https://storage.googleapis.com/workspace-0f70711f-8b4e-4d94-86f1-2a93ccde5887/image/f9ed6aa5-deb1-41fb-9d2a-5f987e9ff42e.png" }, onLogout }) {
   const [user, setUser] = useState(null);
@@ -19,10 +20,21 @@ function MedHeader({ doctor = { nom: "{user?.nom || 'Utilisateur'}", specialite:
     try {
       console.log('🔍 Récupération des données du tableau de bord...');
       
-      // Récupérer la liste des patients
-      const patients = await fetchPatientsList();
-      setPatientsCount(patients.length);
-      console.log('✅ Nombre de patients récupéré:', patients.length);
+      // ✅ CORRECTION : Utiliser getPatients de patientApi au lieu de fetchPatientsList
+      console.log('🔍 Récupération des patients via getPatients...');
+      const patients = await getPatients();
+      console.log('📊 Patients reçus:', patients);
+      
+      if (patients && Array.isArray(patients)) {
+        setPatientsCount(patients.length);
+        console.log('✅ Nombre de patients récupéré:', patients.length);
+      } else if (patients && patients.data && Array.isArray(patients.data)) {
+        setPatientsCount(patients.data.length);
+        console.log('✅ Nombre de patients récupéré (depuis data):', patients.data.length);
+      } else {
+        console.warn('⚠️ Format de patients inattendu:', patients);
+        setPatientsCount(0);
+      }
       
       // ✅ CORRECTION : Utiliser getAllDossiersMedical de medicalApi au lieu de fetchPatientFiles
       console.log('🔍 Récupération des dossiers médicaux via getAllDossiersMedical...');
