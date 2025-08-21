@@ -4,7 +4,7 @@ import { QRCodeCanvas } from 'qrcode.react';
 
 import { createDossierMedical, getAllDossiersMedical, getDossierMedical, closeDossierPatient, updateDossierPatient, createOrdonnance, createExamen, getAllPrescriptions, getOrdonnancesRecentes, createOrdonnanceComplete, ajouterPrescriptionAuDossier, marquerNotificationLue, getNotificationsPatient, getResumeAujourdhui } from "../services/api/medicalApi";
 import { getPatients, getServices } from "../services/api/patientApi";
-import { isAuthenticated, isMedecinAuthenticated, isPatientAuthenticated } from "../services/api/authApi";
+import { isAuthenticated, isMedecinAuthenticated, isPatientAuthenticated, getMedecinProfile } from "../services/api/authApi";
 
 import { useDMP } from "../context/DMPContext";
 
@@ -161,6 +161,29 @@ function DossierPatient() {
   const sharePatientRef = useRef(null);
   const dossierDetailsRef = useRef(null);
 
+  // État pour forcer la re-render quand on décoche un patient
+  const [patientSelectionKey, setPatientSelectionKey] = useState(0);
+  
+  // État pour forcer la re-render du formulaire de création de dossier
+  const [formKey, setFormKey] = useState(0);
+  
+  // États locaux pour le formulaire de création de dossier
+  const [formData, setFormData] = useState({
+    patient_id: '',
+    service_id: '',
+    statut: 'actif',
+    dateOuverture: new Date().toISOString().split('T')[0],
+    dateFermeture: '',
+    resume_medical: '',
+    antecedents_medicaux: '',
+    allergies: '',
+    traitement: '',
+    signes_vitaux: '',
+    histoire_familiale: '',
+    observations: '',
+    directives_anticipees: ''
+  });
+
   // Fonctions utilitaires pour la mise à jour des états
   const updateAuthState = useCallback((updates) => {
     setAuthState(prev => ({ ...prev, ...updates }));
@@ -180,6 +203,13 @@ function DossierPatient() {
 
   const updateLoadingState = useCallback((updates) => {
     setLoadingState(prev => ({ ...prev, ...updates }));
+  }, []);
+
+  // Fonction pour décocher le patient sélectionné
+  const deselectPatient = useCallback(() => {
+    selectedPatientForPrescriptionRef.current = null;
+    setPatientSelectionKey(prev => prev + 1); // Force la re-render
+    console.log('Patient décocher avec succès');
   }, []);
 
   // Données dérivées avec useMemo
@@ -368,21 +398,70 @@ function DossierPatient() {
     // Set modal to open first
     updateModalState({ showPatientFile: true });
     
-    // Load dataState.services and dataState.patients in parallel
     try {
-      await Promise.all([
+      // Récupérer le profil du médecin connecté pour pré-remplir le service
+      let medecinProfile = null;
+      try {
+        const profileResponse = await getMedecinProfile();
+        medecinProfile = profileResponse?.data?.professionnel || profileResponse?.professionnel;
+        console.log('🔍 DEBUG - Profil médecin récupéré:', medecinProfile);
+        console.log('🔍 DEBUG - Specialite ID:', medecinProfile?.specialite_id);
+        console.log('🔍 DEBUG - Toutes les clés du profil:', medecinProfile ? Object.keys(medecinProfile) : 'null');
+      } catch (profileError) {
+        console.warn('Impossible de récupérer le profil médecin:', profileError);
+      }
+      
+      // Load services and patients in parallel
+      const [servicesResult, patientsResult] = await Promise.all([
         loadServices(),
         loadPatientsForSelect()
       ]);
-      console.log('Services and dataState.patients loaded successfully');
+      
+      // Pré-remplir le service du médecin si disponible
+      if (medecinProfile && medecinProfile.specialite_id) {
+        console.log('🔍 DEBUG - Tentative de pré-remplissage du service...');
+        console.log('🔍 DEBUG - Specialite ID du médecin:', medecinProfile.specialite_id);
+        
+        // Utiliser directement les services chargés au lieu d'attendre l'état
+        const servicesLoaded = await getServices();
+        console.log('🔍 DEBUG - Services chargés directement:', servicesLoaded);
+        console.log('🔍 DEBUG - Nombre de services:', servicesLoaded?.length || 0);
+        
+        // Chercher le service correspondant à la spécialité du médecin
+        const medecinService = servicesLoaded.find(service => {
+          const serviceId = service.id || service.id_service || service.service_id;
+          const match = serviceId == medecinProfile.specialite_id;
+          console.log(`🔍 DEBUG - Service ${serviceId} vs ${medecinProfile.specialite_id}: ${match ? 'MATCH!' : 'non'}`);
+          return match;
+        });
+        
+        if (medecinService) {
+          const serviceId = medecinService.id || medecinService.id_service || medecinService.service_id;
+          setFormData(prev => ({ ...prev, service_id: serviceId }));
+          console.log('✅ SUCCESS - Service du médecin pré-rempli:', medecinService.name || medecinService.nom, 'ID:', serviceId);
+        } else {
+          console.log('❌ ERROR - Service du médecin non trouvé dans la liste des services disponibles');
+          console.log('🔍 DEBUG - Specialite ID recherché:', medecinProfile.specialite_id);
+          console.log('🔍 DEBUG - Services disponibles:', servicesLoaded.map(s => ({
+            id: s.id || s.id_service || s.service_id,
+            name: s.name || s.nom || s.libelle || s.service_name
+          })));
+        }
+      } else {
+        console.log('⚠️ WARNING - Impossible de pré-remplir le service:');
+        console.log('  - medecinProfile:', !!medecinProfile);
+        console.log('  - specialite_id:', medecinProfile?.specialite_id);
+      }
+      
+      console.log('Services and patients loaded successfully');
     } catch (error) {
-      console.error('Error uiState.loading data for modal:', error);
+      console.error('Error loading data for modal:', error);
     }
   };
 
   const closePatientFileModal = () => {
     updateModalState({ showPatientFile: false });
-    patientFileFormRef.current = {
+    setFormData({
       patient_id: '',
       service_id: '',
       statut: 'actif',
@@ -396,7 +475,7 @@ function DossierPatient() {
       histoire_familiale: '',
       observations: '',
       directives_anticipees: ''
-    };
+    });
   };
 
   const loadServices = useCallback(async () => {
@@ -467,28 +546,53 @@ function DossierPatient() {
     return `Service ID: ${serviceId}`;
   };
 
+  // Function to get medecin's service ID
+  const getMedecinServiceId = useCallback(async () => {
+    try {
+      const profileResponse = await getMedecinProfile();
+      const medecinProfile = profileResponse?.data?.professionnel || profileResponse?.professionnel;
+      
+      if (medecinProfile && medecinProfile.specialite_id) {
+        console.log('Service ID du médecin trouvé:', medecinProfile.specialite_id);
+        return medecinProfile.specialite_id;
+      }
+      
+      console.log('Aucun service ID trouvé pour le médecin');
+      return null;
+    } catch (error) {
+      console.warn('Erreur lors de la récupération du service du médecin:', error);
+      return null;
+    }
+  }, []);
+
+  // Fonction pour gérer les changements dans le formulaire
+  const handleFormChange = useCallback((field, value) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+    console.log(`Champ ${field} modifié:`, value);
+  }, []);
+
   const handleCreatePatientFile = async (e) => {
     e.preventDefault();
-    console.log('Submitting patient file form:', patientFileFormRef.current);
+    console.log('Submitting patient file form:', formData);
     
     // Validation côté client
-    if (!patientFileFormRef.current.patient_id) {
+    if (!formData.patient_id) {
       alert('Veuillez sélectionner un patient');
       return;
     }
     
-    if (!patientFileFormRef.current.service_id) {
+    if (!formData.service_id) {
       alert('Veuillez sélectionner un service');
       return;
     }
     
-    if (!patientFileFormRef.current.dateOuverture) {
+    if (!formData.dateOuverture) {
       alert('Veuillez saisir une date d\'ouverture');
       return;
     }
     
     // Validation de la date de fermeture si elle est fournie
-    if (patientFileFormRef.current.dateFermeture && patientFileFormRef.current.dateFermeture < patientFileFormRef.current.dateOuverture) {
+    if (formData.dateFermeture && formData.dateFermeture < formData.dateOuverture) {
       alert('La date de fermeture ne peut pas être antérieure à la date d\'ouverture');
       return;
     }
@@ -496,25 +600,25 @@ function DossierPatient() {
     updateUIState({ loading: true });
     try {
       // Convert dates to ISO format
-      const formData = {
-        ...patientFileFormRef.current,
-        dateOuverture: patientFileFormRef.current.dateOuverture ? new Date(patientFileFormRef.current.dateOuverture).toISOString() : null,
-        dateFermeture: patientFileFormRef.current.dateFermeture ? new Date(patientFileFormRef.current.dateFermeture).toISOString() : null
+      const submissionData = {
+        ...formData,
+        dateOuverture: formData.dateOuverture ? new Date(formData.dateOuverture).toISOString() : null,
+        dateFermeture: formData.dateFermeture ? new Date(formData.dateFermeture).toISOString() : null
       };
       
-      console.log('Formatted form data:', formData);
-      const response = await createDossierMedical(formData);
+      console.log('Formatted form data:', submissionData);
+      const response = await createDossierMedical(submissionData);
       console.log('Dossier créé avec succès:', response);
       alert('Dossier patient créé avec succès!');
       updateModalState({ showPatientFile: false });
       
-      // Reload dossiers dataState.patients if we're on the shared-folder tab
+      // Reload dossiers patients if we're on the shared-folder tab
       if (uiState.activeTab === "shared-folder") {
         await loadDossiersPatients();
       }
       
       // Reset form
-      patientFileFormRef.current = Object.assign(patientFileFormRef.current, {
+      setFormData({
         patient_id: '',
         service_id: '',
         statut: 'actif',
@@ -553,10 +657,7 @@ function DossierPatient() {
     }
   };
 
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    patientFileFormRef.current = { ...patientFileFormRef.current, [name]: value };
-  };
+
 
   const loadPatientsForSelect = async () => {
     try {
@@ -565,7 +666,7 @@ function DossierPatient() {
       console.log('Patients loaded for select:', patientsData);
       
       if (!Array.isArray(patientsData)) {
-        console.error('Expected an array of dataState.patients but received:', dataState.patientsData);
+        console.error('Expected an array of patients but received:', patientsData);
         updateDataState({ patientsForSelect: [] });
         return;
       }
@@ -1415,7 +1516,7 @@ const loadOrdonnancesRecentes = useCallback(async () => {
     });
   }, []); // Exécuté une seule fois au montage
 
-  // Load dossiers dataState.patients when switching to shared-folder tab
+  // Load dossiers patients when switching to shared-folder tab
   useEffect(() => {
     console.log('Active tab changed to:', uiState.activeTab);
     
@@ -1443,6 +1544,12 @@ const loadOrdonnancesRecentes = useCallback(async () => {
         console.log('Unknown tab:', uiState.activeTab);
     }
   }, [uiState.activeTab]); // Supprimer toutes les dépendances de fonctions pour éviter la boucle infinie
+
+  // Charger les patients pour la sélection au montage du composant
+  useEffect(() => {
+    console.log('Chargement initial des patients pour sélection...');
+    loadPatientsForSelect();
+  }, []); // Exécuté une seule fois au montage
 
   // Afficher un écran de chargement pendant la vérification d'authentification
   if (authState.loading) {
@@ -2099,118 +2206,141 @@ const loadOrdonnancesRecentes = useCallback(async () => {
             </div>
           )}
           {/* Prescriptions */}
-          {uiState.activeTab === "dataState.prescriptions" && (
-            <div>
-              <div className="flex justify-between items-center mb-6">
-                <div>
-                  <h2 className="text-2xl font-bold">Prescriptions</h2>
-                  {selectedPatientForPrescriptionRef.current && (
-                    <div className="flex items-center mt-2">
-                      <span className="text-sm text-gray-600 mr-2">Patient sélectionné:</span>
-                      <span className="text-sm font-medium text-blue-600 bg-blue-100 px-2 py-1 rounded">
-                        {selectedPatientForPrescriptionRef.current.name || `${selectedPatientForPrescriptionRef.current.prenom || ''} ${selectedPatientForPrescriptionRef.current.nom || ''}`.trim() || 'Patient inconnu'}
-                      </span>
+          {uiState.activeTab === "prescriptions" && (
+            <div className="space-y-6">
+              {/* Header avec statistiques */}
+              <div className="bg-gradient-to-r from-emerald-500 to-teal-600 rounded-2xl p-6 text-white shadow-xl">
+                <div className="flex justify-between items-center mb-4">
+                  <div>
+                    <h2 className="text-3xl font-bold">Prescriptions & Examens</h2>
+                    <p className="text-emerald-100 mt-1">Gérez les prescriptions et demandes d'examens</p>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-4xl font-bold">{dataState.prescriptions.length}</div>
+                    <div className="text-emerald-100">Prescriptions</div>
+                  </div>
+                </div>
+                
+                {/* Patient sélectionné */}
+                {selectedPatientForPrescriptionRef.current && (
+                  <div className="bg-white/20 backdrop-blur-sm rounded-xl p-4 border border-white/30">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-10 h-10 bg-white/30 rounded-full flex items-center justify-center">
+                          <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                          </svg>
+                        </div>
+                        <div>
+                          <p className="text-sm text-emerald-100">Patient sélectionné</p>
+                          <p className="font-semibold text-white">
+                            {selectedPatientForPrescriptionRef.current.name || 
+                             `${selectedPatientForPrescriptionRef.current.prenom || ''} ${selectedPatientForPrescriptionRef.current.nom || ''}`.trim() || 
+                             'Patient inconnu'}
+                          </p>
+                        </div>
+                      </div>
                       <button
-                        onClick={() => selectedPatientForPrescriptionRef.current = null}
-                        className="ml-2 text-red-600 hover:text-red-800"
+                        onClick={() => deselectPatient()}
+                        className="text-white/80 hover:text-white p-2 rounded-lg hover:bg-white/20 transition-colors duration-200"
                         title="Désélectionner le patient"
                       >
-                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
                         </svg>
                       </button>
                     </div>
-                  )}
-                </div>
-                <div className="flex space-x-3">
+                  </div>
+                )}
+                
+                <div className="flex space-x-4 mt-4">
                   <button 
                     onClick={() => openPrescriptionModal()}
-                    className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 flex items-center"
+                    className="bg-white/20 backdrop-blur-sm text-white px-6 py-3 rounded-xl hover:bg-white/30 transition-all duration-200 flex items-center space-x-2 border border-white/30 disabled:opacity-50 disabled:cursor-not-allowed"
                     disabled={!selectedPatientForPrescriptionRef.current}
                   >
-                    <svg className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                     </svg>
-                    Nouvelle Ordonnance
+                    <span>Nouvelle Ordonnance</span>
                   </button>
                   <button 
                     onClick={() => openExamenModal()}
-                    className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 flex items-center"
+                    className="bg-white/20 backdrop-blur-sm text-white px-6 py-3 rounded-xl hover:bg-white/30 transition-all duration-200 flex items-center space-x-2 border border-white/30 disabled:opacity-50 disabled:cursor-not-allowed"
                     disabled={!selectedPatientForPrescriptionRef.current}
                   >
-                    <svg className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
-                    Demande d'Examen
+                    <span>Demande d'Examen</span>
                   </button>
                   <button
                     onClick={loadPrescriptions}
-                    className="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 flex items-center"
+                    className="bg-white text-emerald-600 px-6 py-3 rounded-xl hover:bg-gray-50 transition-all duration-200 flex items-center space-x-2 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                     disabled={loadingState.dataState_prescriptions || !selectedPatientForPrescriptionRef.current}
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                     </svg>
-                    {loadingState.dataState_prescriptions ? 'Chargement...' : 'Actualiser'}
+                    <span>{loadingState.dataState_prescriptions ? 'Chargement...' : 'Actualiser'}</span>
                   </button>
                 </div>
               </div>
               
-                              {loadingState.dataState_prescriptions ? (
-                <div className="bg-white rounded-lg shadow-md p-6">
-                  <div className="flex items-center justify-center py-8">
-                    <svg className="animate-spin h-8 w-8 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              {/* Contenu principal */}
+              {loadingState.dataState_prescriptions ? (
+                <div className="bg-white rounded-2xl shadow-lg p-8 border border-gray-100">
+                  <div className="flex items-center justify-center py-12">
+                    <svg className="animate-spin h-12 w-12 text-emerald-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
-                    <span className="ml-3 text-gray-600">Chargement des dataState.prescriptions...</span>
+                    <span className="ml-4 text-lg text-gray-600">Chargement des prescriptions...</span>
                   </div>
                 </div>
               ) : !selectedPatientForPrescriptionRef.current ? (
-                <div className="bg-white rounded-lg shadow-md p-6">
-                  <div className="flex items-center justify-center py-8">
-                    <div className="text-center">
-                      <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <div className="bg-white rounded-2xl shadow-lg p-8 border border-gray-100">
+                  <div className="text-center py-12">
+                    <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                      <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                       </svg>
-                      <h3 className="mt-2 text-sm font-medium text-gray-900">Aucun patient sélectionné</h3>
-                      <p className="mt-1 text-sm text-gray-500">
-                        Veuillez sélectionner un patient depuis la liste des dataState.patients pour voir ses dataState.prescriptions.
-                      </p>
-                      <div className="mt-6">
-                        <button
-                          onClick={() => updateUIState({ activeTab: "patients-list" })}
-                          className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
-                        >
-                          <svg className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
-                          </svg>
-                          Voir les dataState.patients
-                        </button>
-                      </div>
                     </div>
+                    <h3 className="text-xl font-medium text-gray-900 mb-3">Aucun patient sélectionné</h3>
+                    <p className="text-gray-500 mb-8 max-w-md mx-auto">
+                      Veuillez sélectionner un patient depuis la liste des patients pour voir ses prescriptions et examens.
+                    </p>
+                    <button
+                      onClick={() => updateUIState({ activeTab: "patients-list" })}
+                      className="bg-emerald-600 text-white px-8 py-3 rounded-xl hover:bg-emerald-700 transition-colors duration-200 font-medium flex items-center space-x-2 mx-auto"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+                      </svg>
+                      <span>Voir les patients</span>
+                    </button>
                   </div>
                 </div>
               ) : (
-                <div className="bg-white rounded-lg shadow-md p-6">
+                <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
                   {dataState.prescriptions && dataState.prescriptions.length > 0 ? (
                     <div className="overflow-x-auto">
                       <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
+                        <thead className="bg-gradient-to-r from-gray-50 to-gray-100">
                           <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Numéro</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Patient</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Principe Actif/Examen</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Dosage/Paramètres</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Statut</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Numéro</th>
+                            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Patient</th>
+                            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Type</th>
+                            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Principe Actif/Examen</th>
+                            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Dosage/Paramètres</th>
+                            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Date</th>
+                            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Statut</th>
+                            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Actions</th>
                           </tr>
                         </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
+                        <tbody className="bg-white divide-y divide-gray-100">
                           {dataState.prescriptions.map((prescription, idx) => (
-                            <tr key={prescription.id_prescription || idx} className="hover:bg-gray-50">
+                            <tr key={prescription.id_prescription || idx} className="hover:bg-gray-50 transition-colors duration-150">
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <div className="text-sm font-medium text-gray-900">
                                   {prescription.prescriptionNumber || prescription.numero_prescription || `PRES-${idx + 1}`}
@@ -2225,7 +2355,7 @@ const loadOrdonnancesRecentes = useCallback(async () => {
                                 </div>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
-                                <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                <span className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${
                                   prescription.type_prescription === 'examen' 
                                     ? 'bg-blue-100 text-blue-800' 
                                     : 'bg-green-100 text-green-800'
@@ -2253,64 +2383,62 @@ const loadOrdonnancesRecentes = useCallback(async () => {
                                   </div>
                                 )}
                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                {prescription.date_prescription ? 
-                                  new Date(prescription.date_prescription).toLocaleDateString('fr-FR') : 
-                                  'Non spécifié'
-                                }
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-sm text-gray-900">
+                                  {prescription.date_creation ? new Date(prescription.date_creation).toLocaleDateString('fr-FR') : 'Non spécifiée'}
+                                </div>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
-                                <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                                  prescription.statut === 'active' ? 'bg-green-100 text-green-800' :
-                                  prescription.statut === 'en_attente' ? 'bg-yellow-100 text-yellow-800' :
-                                  prescription.statut === 'terminee' ? 'bg-gray-100 text-gray-800' :
-                                  'bg-red-100 text-red-800'
+                                <span className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${
+                                  prescription.statut === 'active' || prescription.statut === 'actif'
+                                    ? 'bg-green-100 text-green-800'
+                                    : prescription.statut === 'terminee' || prescription.statut === 'terminé'
+                                    ? 'bg-blue-100 text-blue-800'
+                                    : 'bg-gray-100 text-gray-800'
                                 }`}>
-                                  {prescription.statut === 'active' ? 'Active' :
-                                   prescription.statut === 'en_attente' ? 'En attente' :
-                                   prescription.statut === 'terminee' ? 'Terminée' :
-                                   prescription.statut === 'annulee' ? 'Annulée' : 'Inconnu'}
+                                  {prescription.statut || 'Non spécifié'}
                                 </span>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                <button 
-                                  onClick={() => {
-                                    const qrData = {
-                                      id: prescription.id_prescription || prescription.id,
-                                      number: prescription.prescriptionNumber || prescription.numero_prescription,
-                                      patient: prescription.patient_id || prescription.patient?.id_patient,
-                                      professionnel: prescription.professionnel_id || prescription.professionnel?.id_professionnel,
-                                      date: prescription.date_prescription || prescription.createdAt,
-                                      type: prescription.type_prescription || 'ordonnance',
-                                      hash: generateHash(`${prescription.id_prescription || prescription.id}-${prescription.prescriptionNumber || prescription.numero_prescription}`)
-                                    };
-                                    qrCodeDataRef.current = qrData;
-                                    createdPrescriptionRef.current = prescription;
-                                    updateModalState({ showQRModal: true });
-                                  }}
-                                  className="text-green-600 hover:text-green-900 mr-3"
-                                  title="Voir QR Code"
-                                >
-                                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V6a1 1 0 00-1-1H5a1 1 0 00-1 1v1a1 1 0 001 1zm12 0h2a1 1 0 001-1V6a1 1 0 00-1-1h-2a1 1 0 00-1 1v1a1 1 0 001 1zM5 20h2a1 1 0 001-1v-1a1 1 0 00-1-1H5a1 1 0 00-1 1v1a1 1 0 001 1z" />
-                                  </svg>
-                                </button>
-                                <button className="text-blue-600 hover:text-blue-900 mr-3" title="Voir détails">
-                                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                  </svg>
-                                </button>
-                                <button className="text-yellow-600 hover:text-yellow-900 mr-3" title="Modifier">
-                                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                  </svg>
-                                </button>
-                                <button className="text-red-600 hover:text-red-900" title="Supprimer">
-                                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                  </svg>
-                                </button>
+                                <div className="flex space-x-2">
+                                  <button
+                                    onClick={() => {
+                                      // Voir les détails de la prescription
+                                      console.log('Voir prescription:', prescription);
+                                    }}
+                                    className="text-emerald-600 hover:text-emerald-900 p-1 rounded hover:bg-emerald-50 transition-colors duration-200"
+                                    title="Voir détails"
+                                  >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                    </svg>
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      // Modifier la prescription
+                                      console.log('Modifier prescription:', prescription);
+                                    }}
+                                    className="text-blue-600 hover:text-blue-900 p-1 rounded hover:bg-blue-50 transition-colors duration-200"
+                                    title="Modifier"
+                                  >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                    </svg>
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      // Supprimer la prescription
+                                      console.log('Supprimer prescription:', prescription);
+                                    }}
+                                    className="text-red-600 hover:text-red-900 p-1 rounded hover:bg-red-50 transition-colors duration-200"
+                                    title="Supprimer"
+                                  >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
+                                  </button>
+                                </div>
                               </td>
                             </tr>
                           ))}
@@ -2318,14 +2446,22 @@ const loadOrdonnancesRecentes = useCallback(async () => {
                       </table>
                     </div>
                   ) : (
-                    <div className="text-center py-10 text-gray-500">
-                      <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                      </svg>
-                      <h3 className="mt-2 text-sm font-medium text-gray-900">Aucune prescription</h3>
-                      <p className="mt-1 text-sm text-gray-500">
-                        Commencez par créer une nouvelle ordonnance ou une demande d'examen.
+                    <div className="text-center py-12">
+                      <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <svg className="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                      </div>
+                      <h3 className="text-lg font-medium text-gray-900 mb-2">Aucune prescription trouvée</h3>
+                      <p className="text-gray-500 mb-6">
+                        Ce patient n'a pas encore de prescriptions ou d'examens.
                       </p>
+                      <button
+                        onClick={() => openPrescriptionModal()}
+                        className="bg-emerald-600 text-white px-6 py-3 rounded-xl hover:bg-emerald-700 transition-colors duration-200 font-medium"
+                      >
+                        Créer la première prescription
+                      </button>
                     </div>
                   )}
                 </div>
@@ -2684,7 +2820,7 @@ Dr. Dupont`
                 </button>
               </div>
             </div>
-            <form onSubmit={handleCreatePatientFile} className="p-4 sm:p-6">
+            <form onSubmit={handleCreatePatientFile} className="p-4 sm:p-6" key={formKey}>
               {/* Information Banner */}
               <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
                 <div className="flex items-start">
@@ -2708,20 +2844,24 @@ Dr. Dupont`
                     </label>
                     <select 
                       name="patient_id" 
-                      value={patientFileFormRef.current.patient_id} 
-                      onChange={handleInputChange} 
+                      value={formData.patient_id} 
+                      onChange={(e) => handleFormChange('patient_id', e.target.value)} 
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
                       required
                       disabled={uiState.loading}
                     >
                       <option value="">Sélectionnez un patient</option>
-                      {Array.isArray(dataState.dataState.patientsForSelect) && dataState.dataState.patientsForSelect.map(patient => (
+                      {Array.isArray(dataState.patientsForSelect) && dataState.patientsForSelect.length > 0 ? dataState.patientsForSelect.map(patient => (
                         <option key={patient.id} value={patient.id}>
                           {patient.name} {patient.numero_dossier !== 'N/A' ? `(${patient.numero_dossier})` : ''}
                         </option>
-                      ))}
+                      )) : (
+                        <option value="" disabled>
+                          {uiState.loading ? "Chargement des patients..." : "Aucun patient disponible"}
+                        </option>
+                      )}
                     </select>
-                    {dataState.dataState.patientsForSelect.length === 0 && !uiState.loading && (
+                    {!uiState.loading && (!dataState.patientsForSelect || dataState.patientsForSelect.length === 0) && (
                       <div className="mt-1 text-sm text-red-600">
                         Aucun patient disponible
                       </div>
@@ -2730,12 +2870,22 @@ Dr. Dupont`
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Service <span className="text-red-500">*</span>
+                      {formData.service_id && (
+                        <span className="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                          <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                          </svg>
+                          Auto-rempli
+                        </span>
+                      )}
                     </label>
                     <select 
                       name="service_id" 
-                      value={patientFileFormRef.current.service_id} 
-                      onChange={handleInputChange} 
-                      className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
+                      value={formData.service_id} 
+                      onChange={(e) => handleFormChange('service_id', e.target.value)} 
+                      className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                        formData.service_id ? 'bg-green-50 border-green-300' : ''
+                      }`}
                       required
                       disabled={loadingState.services || uiState.loading}
                     >
@@ -2754,7 +2904,7 @@ Dr. Dupont`
                     </select>
                     {loadingState.services && (
                       <div className="mt-1 text-sm text-blue-600">
-                        Chargement des dataState.services...
+                        Chargement des services...
                       </div>
                     )}
                     {!loadingState.services && dataState.services.length === 0 && (
@@ -2767,6 +2917,27 @@ Dr. Dupont`
                         {dataState.services.length} service(s) chargé(s)
                       </div>
                     )}
+                    {formData.service_id && !loadingState.services && (
+                      <div className="mt-1 text-sm text-green-600 flex items-center justify-between">
+                        <div className="flex items-center">
+                          <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                          </svg>
+                          Service pré-rempli automatiquement depuis votre profil
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFormData(prev => ({ ...prev, service_id: '' }));
+                            console.log('Service réinitialisé manuellement');
+                          }}
+                          className="text-xs text-gray-500 hover:text-gray-700 underline"
+                          title="Réinitialiser le service"
+                        >
+                          Changer
+                        </button>
+                      </div>
+                    )}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -2774,8 +2945,8 @@ Dr. Dupont`
                     </label>
                     <select 
                       name="statut" 
-                      value={patientFileFormRef.current.statut} 
-                      onChange={handleInputChange} 
+                      value={formData.statut} 
+                      onChange={(e) => handleFormChange('statut', e.target.value)} 
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
                       required
                       disabled={uiState.loading}
@@ -2792,8 +2963,8 @@ Dr. Dupont`
                     <input 
                       type="date" 
                       name="dateOuverture" 
-                      value={patientFileFormRef.current.dateOuverture} 
-                      onChange={handleInputChange} 
+                      value={formData.dateOuverture} 
+                      onChange={(e) => handleFormChange(e.target.name, e.target.value)} 
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
                       required 
                       disabled={uiState.loading}
@@ -2805,11 +2976,11 @@ Dr. Dupont`
                     <input 
                       type="date" 
                       name="dateFermeture" 
-                      value={patientFileFormRef.current.dateFermeture} 
-                      onChange={handleInputChange} 
+                      value={formData.dateFermeture} 
+                      onChange={(e) => handleFormChange(e.target.name, e.target.value)} 
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
                       disabled={uiState.loading}
-                      min={patientFileFormRef.current.dateOuverture || new Date().toISOString().split('T')[0]}
+                      min={formData.dateOuverture || new Date().toISOString().split('T')[0]}
                     />
                   </div>
                 </div>
@@ -2821,45 +2992,45 @@ Dr. Dupont`
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Résumé Médical</label>
-                    <input type="text" name="resume_medical" value={patientFileFormRef.current.resume_medical} onChange={handleInputChange} className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="Bref résumé de l'état médical du patient" />
+                    <input type="text" name="resume_medical" value={formData.resume_medical} onChange={(e) => handleFormChange(e.target.name, e.target.value)} className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="Bref résumé de l'état médical du patient" />
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Antécédents Médicaux</label>
-                      <textarea name="antecedents_medicaux" value={patientFileFormRef.current.antecedents_medicaux} onChange={handleInputChange} className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" rows={3} placeholder="Historique médical du patient"></textarea>
+                      <textarea name="antecedents_medicaux" value={formData.antecedents_medicaux} onChange={(e) => handleFormChange(e.target.name, e.target.value)} className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" rows={3} placeholder="Historique médical du patient"></textarea>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Allergies</label>
-                      <textarea name="allergies" value={patientFileFormRef.current.allergies} onChange={handleInputChange} className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" rows={3} placeholder="Allergies connues"></textarea>
+                      <textarea name="allergies" value={formData.allergies} onChange={(e) => handleFormChange(e.target.name, e.target.value)} className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" rows={3} placeholder="Allergies connues"></textarea>
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Traitement</label>
-                      <textarea name="traitement" value={patientFileFormRef.current.traitement} onChange={handleInputChange} className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" rows={3} placeholder="Traitements actuels"></textarea>
+                      <textarea name="traitement" value={formData.traitement} onChange={(e) => handleFormChange(e.target.name, e.target.value)} className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" rows={3} placeholder="Traitements actuels"></textarea>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Signes Vitaux</label>
-                      <textarea name="signes_vitaux" value={patientFileFormRef.current.signes_vitaux} onChange={handleInputChange} className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" rows={3} placeholder="Tension, poids, température, etc."></textarea>
+                      <textarea name="signes_vitaux" value={formData.signes_vitaux} onChange={(e) => handleFormChange(e.target.name, e.target.value)} className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" rows={3} placeholder="Tension, poids, température, etc."></textarea>
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Histoire Familiale</label>
-                      <textarea name="histoire_familiale" value={patientFileFormRef.current.histoire_familiale} onChange={handleInputChange} className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" rows={3} placeholder="Antécédents familiaux"></textarea>
+                      <textarea name="histoire_familiale" value={formData.histoire_familiale} onChange={(e) => handleFormChange(e.target.name, e.target.value)} className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" rows={3} placeholder="Antécédents familiaux"></textarea>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Observations</label>
-                      <textarea name="observations" value={patientFileFormRef.current.observations} onChange={handleInputChange} className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" rows={3} placeholder="Observations cliniques"></textarea>
+                      <textarea name="observations" value={formData.observations} onChange={(e) => handleFormChange(e.target.name, e.target.value)} className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" rows={3} placeholder="Observations cliniques"></textarea>
                     </div>
                   </div>
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Directives Anticipées</label>
-                    <textarea name="directives_anticipees" value={patientFileFormRef.current.directives_anticipees} onChange={handleInputChange} className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" rows={2} placeholder="Directives pour les soins futurs"></textarea>
+                    <textarea name="directives_anticipees" value={formData.directives_anticipees} onChange={(e) => handleFormChange(e.target.name, e.target.value)} className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" rows={2} placeholder="Directives pour les soins futurs"></textarea>
                   </div>
                 </div>
               </div>
