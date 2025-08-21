@@ -1475,71 +1475,108 @@ const loadOrdonnancesRecentes = useCallback(async () => {
     
       <div className="flex container mx-auto">
         {/* Sidebar */}
-        <div className="sidebar w-64 bg-white p-4 shadow-md">
-          <div className="mb-6">
-            <h2 className="text-lg font-semibold mb-2">Menu</h2>
-            <ul className="space-y-2">
+        <div className="sidebar w-72 bg-gradient-to-b from-blue-50 to-indigo-100 p-6 shadow-xl border-r border-blue-200">
+          <div className="mb-8">
+            <div className="flex items-center space-x-3 mb-6">
+              <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center">
+                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                </svg>
+              </div>
+              <h1 className="text-xl font-bold text-gray-800">Dossier Patient</h1>
+            </div>
+            
+            <ul className="space-y-3">
               <li>
                 <button
                   onClick={() => updateUIState({ activeTab: "patients-list"})}
-                  className={`w-full text-left px-3 py-2 rounded-md flex items-center space-x-2 ${uiState.activeTab === "patients-list" ? "bg-blue-100 font-bold" : "hover:bg-blue-50"}`}>
-                  <span>📁</span> <span>Liste des Patients</span>
+                  className={`w-full text-left px-4 py-3 rounded-xl flex items-center space-x-3 transition-all duration-200 ${
+                    uiState.activeTab === "patients-list" 
+                      ? "bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg transform scale-105" 
+                      : "text-gray-700 hover:bg-white hover:shadow-md hover:scale-105"
+                  }`}>
+                  <span className="text-lg">👥</span>
+                  <span className="font-medium">Liste des Patients</span>
                 </button>
               </li>
               <li>
                 <button
                   onClick={() => updateUIState({ activeTab: "shared-folder"})}
-                  className={`w-full text-left px-3 py-2 rounded-md flex items-center space-x-2 ${uiState.activeTab === "shared-folder" ? "bg-blue-100 font-bold" : "hover:bg-blue-50"}`}>
-                  <span>📁</span> <span>Dossiers Patients</span>
+                  className={`w-full text-left px-4 py-3 rounded-xl flex items-center space-x-3 transition-all duration-200 ${
+                    uiState.activeTab === "shared-folder" 
+                      ? "bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg transform scale-105" 
+                      : "text-gray-700 hover:bg-white hover:shadow-md hover:scale-105"
+                  }`}>
+                  <span className="text-lg">📁</span>
+                  <span className="font-medium">Dossiers Patients</span>
                 </button>
               </li>
-
               <li>
                 <button
                   onClick={() => updateUIState({ activeTab: "notifications"})}
-                  className={`w-full text-left px-3 py-2 rounded-md flex items-center space-x-2 relative ${uiState.activeTab === "notifications" ? "bg-blue-100 font-bold" : "hover:bg-blue-50"}`}>
-                  <span>🔔</span> <span>Notifications</span>
-                  <span className="notification-badge absolute top-0 right-0 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center" style={{display:"inline"}}>3</span>
+                  className={`w-full text-left px-4 py-3 rounded-xl flex items-center space-x-3 transition-all duration-200 relative ${
+                    uiState.activeTab === "notifications" 
+                      ? "bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg transform scale-105" 
+                      : "text-gray-700 hover:bg-white hover:shadow-md hover:scale-105"
+                  }`}>
+                  <span className="text-lg">🔔</span>
+                  <span className="font-medium">Notifications</span>
+                  <span className="absolute -top-1 -right-1 w-6 h-6 bg-red-500 text-white rounded-full text-xs flex items-center justify-center font-bold animate-pulse">3</span>
                 </button>
               </li>
               <li>
                 <button
                   onClick={() => updateUIState({ activeTab: "prescriptions"})}
-                  className={`w-full text-left px-3 py-2 rounded-md flex items-center space-x-2 ${uiState.activeTab === "prescriptions" ? "bg-blue-100 font-bold" : "hover:bg-blue-50"}`}>
-                  <span>💊</span> <span>Prescriptions</span>
+                  className={`w-full text-left px-4 py-3 rounded-xl flex items-center space-x-3 transition-all duration-200 ${
+                    uiState.activeTab === "prescriptions" 
+                      ? "bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg transform scale-105" 
+                      : "text-gray-700 hover:bg-white hover:shadow-md hover:scale-105"
+                  }`}>
+                  <span className="text-lg">💊</span>
+                  <span className="font-medium">Prescriptions</span>
                 </button>
               </li>
             </ul>
           </div>
 
-          <div>
-            <h2 className="text-lg font-semibold mb-2">Recherche</h2>
+          <div className="mb-8">
+            <h2 className="text-lg font-semibold mb-4 text-gray-800 flex items-center space-x-2">
+              <svg className="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <span>Recherche</span>
+            </h2>
             <div className="relative">
               <input
                 type="text"
                 placeholder="Rechercher un patient..."
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 py-3 border-2 border-blue-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-white/80 backdrop-blur-sm"
                 value={uiState.search}
                 onChange={(e) => updateUIState({ search: e.target.value })}
               />
-              <button className="absolute right-2 top-2 text-gray-400">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <div className="absolute right-3 top-3 text-blue-400">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
-              </button>
+              </div>
             </div>
           </div>
 
-          <div className="mt-6">
-            <h2 className="text-lg font-semibold mb-2">Filtres</h2>
-            <div className="space-y-2">
-              <label className="flex items-center space-x-2">
-                <input type="checkbox" className="rounded text-blue-500" checked={uiState.filterRecent} onChange={() => updateUIState({ filterRecent: (v) => !v })} />
-                <span>Consultation récente</span>
+          <div className="mb-6">
+            <h2 className="text-lg font-semibold mb-4 text-gray-800 flex items-center space-x-2">
+              <svg className="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.207A1 1 0 013 6.5V4z" />
+              </svg>
+              <span>Filtres</span>
+            </h2>
+            <div className="space-y-3">
+              <label className="flex items-center space-x-3 p-3 rounded-lg hover:bg-white/50 transition-colors duration-200 cursor-pointer">
+                <input type="checkbox" className="w-5 h-5 rounded-lg text-blue-500 focus:ring-blue-500 border-gray-300" checked={uiState.filterRecent} onChange={() => updateUIState({ filterRecent: (v) => !v })} />
+                <span className="text-gray-700 font-medium">Consultation récente</span>
               </label>
-              <label className="flex items-center space-x-2">
-                <input type="checkbox" className="rounded text-blue-500" checked={uiState.filterShared} onChange={() => updateUIState({ filterShared: (v) => !v })} />
-                <span>Dossiers mutualisés</span>
+              <label className="flex items-center space-x-3 p-3 rounded-lg hover:bg-white/50 transition-colors duration-200 cursor-pointer">
+                <input type="checkbox" className="w-5 h-5 rounded-lg text-blue-500 focus:ring-blue-500 border-gray-300" checked={uiState.filterShared} onChange={() => updateUIState({ filterShared: (v) => !v })} />
+                <span className="text-gray-700 font-medium">Dossiers mutualisés</span>
               </label>
             </div>
           </div>
@@ -1549,83 +1586,156 @@ const loadOrdonnancesRecentes = useCallback(async () => {
         <div className="content-area flex-1 p-6">
           {/* Patients List */}
           {uiState.activeTab === "patients-list" && (
-            <div>
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold">Liste des Patients</h2>
-                <div className="flex space-x-3">
-                  <button className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700" onClick={openPatientFileModal}>
-                    + Créer Dossier Patient
+            <div className="space-y-6">
+              {/* Header avec statistiques */}
+              <div className="bg-gradient-to-r from-blue-500 to-indigo-600 rounded-2xl p-6 text-white shadow-xl">
+                <div className="flex justify-between items-center mb-4">
+                  <div>
+                    <h2 className="text-3xl font-bold">Liste des Patients</h2>
+                    <p className="text-blue-100 mt-1">Gérez vos patients et leurs dossiers médicaux</p>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-4xl font-bold">{dataState.patients.length}</div>
+                    <div className="text-blue-100">Patients</div>
+                  </div>
+                </div>
+                <div className="flex space-x-4">
+                  <button 
+                    className="bg-white/20 backdrop-blur-sm text-white px-6 py-3 rounded-xl hover:bg-white/30 transition-all duration-200 flex items-center space-x-2 border border-white/30" 
+                    onClick={openPatientFileModal}
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                    </svg>
+                    <span>Créer Dossier</span>
                   </button>
-                  <button className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700" onClick={openAddModal}>
-                    + Ajouter un patient
+                  <button 
+                    className="bg-white text-blue-600 px-6 py-3 rounded-xl hover:bg-gray-50 transition-all duration-200 flex items-center space-x-2 font-medium" 
+                    onClick={openAddModal}
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                    </svg>
+                    <span>Ajouter Patient</span>
                   </button>
                 </div>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+
+              {/* Grille des patients */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {Array.isArray(dataState.patients) && dataState.patients.length > 0 ? (
                   dataState.patients.map((p, idx) => (
-                    <div key={idx} className="patient-card bg-white rounded-lg shadow-md p-4 relative transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
-                      <div className="flex justify-between items-start mb-3">
-                        <div>
-                          <h3 className="font-bold text-lg">{p.name || 'Nom inconnu'}</h3>
-                          <p className="text-gray-500 text-sm">Né le {p.birth || 'Date inconnue'}</p>
+                    <div key={idx} className="group bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 border border-gray-100 overflow-hidden">
+                      {/* Header de la carte */}
+                      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 border-b border-gray-100">
+                        <div className="flex justify-between items-start mb-3">
+                          <div className="flex-1">
+                            <h3 className="font-bold text-lg text-gray-800 truncate">{p.name || 'Nom inconnu'}</h3>
+                            <p className="text-gray-600 text-sm flex items-center space-x-1 mt-1">
+                              <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                              </svg>
+                              <span>{p.birth || 'Date inconnue'}</span>
+                            </p>
+                          </div>
+                          <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                            p.statusColor === 'green' ? 'bg-green-100 text-green-800' :
+                            p.statusColor === 'red' ? 'bg-red-100 text-red-800' :
+                            'bg-gray-100 text-gray-800'
+                          }`}>
+                            {p.status || 'Inconnu'}
+                          </span>
                         </div>
-                        <span className={`bg-${p.statusColor || 'gray'}-100 text-${p.statusColor || 'gray'}-800 text-xs px-2 py-1 rounded-md`}>
-                          {p.status || 'Inconnu'}
-                        </span>
+                        
+                        {/* Informations du patient */}
+                        <div className="space-y-2">
+                          <div className="flex items-center space-x-2 text-sm text-gray-600">
+                            <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                            </svg>
+                            <span>{p.gender || 'Non spécifié'}</span>
+                          </div>
+                          {p.phone && (
+                            <div className="flex items-center space-x-2 text-sm text-gray-600">
+                              <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                              </svg>
+                              <span>{p.phone}</span>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                      {p.specialties && p.specialties.length > 0 && (
-                        <div className="flex items-center space-x-2 mb-3">
-                          {p.specialties.map((spec, i) => (
-                            <span key={i} className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-md">
-                              {spec}
-                            </span>
-                          ))}
+
+                      {/* Actions */}
+                      <div className="p-4">
+                        <div className="flex justify-between items-center">
+                          <button 
+                            className="text-blue-600 hover:text-blue-800 p-2 rounded-lg hover:bg-blue-50 transition-colors duration-200" 
+                            onClick={() => selectPatientForPrescription(p)}
+                            title="Sélectionner pour prescriptions"
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                          </button>
+                          <button 
+                            className="text-green-600 hover:text-green-800 p-2 rounded-lg hover:bg-green-50 transition-colors duration-200" 
+                            onClick={() => navigate(`/dmp-access/${p.id}`)}
+                            title="Accès DMP"
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                          </button>
+                          <button 
+                            className="text-purple-600 hover:text-purple-800 p-2 rounded-lg hover:bg-purple-50 transition-colors duration-200" 
+                            onClick={() => openPatientModal(p)}
+                            title="Voir détails"
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            </svg>
+                          </button>
+                          <button 
+                            className="text-yellow-600 hover:text-yellow-800 p-2 rounded-lg hover:bg-yellow-50 transition-colors duration-200" 
+                            onClick={() => openEditModal(p)}
+                            title="Modifier"
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                          </button>
+                          <button 
+                            className="text-indigo-600 hover:text-indigo-800 p-2 rounded-lg hover:bg-indigo-50 transition-colors duration-200" 
+                            onClick={() => openShareModal(p)}
+                            title="Partager"
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                            </svg>
+                          </button>
                         </div>
-                      )}
-                      <p className="text-gray-700 mb-4">Dernière consultation: {p.lastConsult || 'Aucune'}</p>
-                      <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3 justify-end">
-                        <button 
-                          className="text-purple-600 hover:text-purple-800" 
-                          onClick={() => selectPatientForPrescription(p)}
-                          title="Sélectionner pour prescriptions"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                        </button>
-                        <button 
-                          className="text-green-600 hover:text-green-800" 
-                          onClick={() => navigate(`/dmp-access/${p.id}`)}
-                          title="Accès DMP"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                          </svg>
-                        </button>
-                        <button className="text-blue-600 hover:text-blue-800" onClick={() => openPatientModal(p)}>
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                          </svg>
-                        </button>
-                        <button className="text-yellow-600 hover:text-yellow-800" onClick={() => openEditModal(p)}>
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                          </svg>
-                        </button>
-                        <button className="text-green-600 hover:text-green-800" onClick={() => openShareModal(p)}>
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-                          </svg>
-                        </button>
                       </div>
                     </div>
                   ))
                 ) : (
-                  <div className="col-span-3 text-center py-10 text-gray-500">
-                    Aucun patient trouvé. Essayez de rafraîchir la page ou d'ajouter un nouveau patient.
+                  <div className="col-span-full text-center py-16">
+                    <div className="max-w-md mx-auto">
+                      <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                        </svg>
+                      </div>
+                      <h3 className="text-lg font-medium text-gray-900 mb-2">Aucun patient trouvé</h3>
+                      <p className="text-gray-500 mb-6">Commencez par ajouter votre premier patient pour organiser vos dossiers médicaux.</p>
+                      <button 
+                        className="bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700 transition-colors duration-200 font-medium"
+                        onClick={openAddModal}
+                      >
+                        Ajouter un patient
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -1633,244 +1743,274 @@ const loadOrdonnancesRecentes = useCallback(async () => {
           )}
           {/* Shared Folders */}
           {uiState.activeTab === "shared-folder" && (
-            <div>
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold">Dossiers Patients</h2>
-                <div className="flex items-center space-x-3">
+            <div className="space-y-6">
+              {/* Header avec statistiques */}
+              <div className="bg-gradient-to-r from-green-500 to-emerald-600 rounded-2xl p-6 text-white shadow-xl">
+                <div className="flex justify-between items-center mb-4">
+                  <div>
+                    <h2 className="text-3xl font-bold">Dossiers Patients</h2>
+                    <p className="text-green-100 mt-1">Gérez les dossiers médicaux de vos patients</p>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-4xl font-bold">{dataState.dossiersPatients.length}</div>
+                    <div className="text-green-100">Dossiers</div>
+                  </div>
+                </div>
+                <div className="flex space-x-4">
                   <button
                     onClick={openPatientFileModal}
-                    className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 flex items-center"
+                    className="bg-white/20 backdrop-blur-sm text-white px-6 py-3 rounded-xl hover:bg-white/30 transition-all duration-200 flex items-center space-x-2 border border-white/30"
                   >
-                    <svg className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                     </svg>
-                    Créer Nouveau Dossier
+                    <span>Nouveau Dossier</span>
                   </button>
                   <button
-                    onClick={() => {
-                      console.log('Actualisation des dossiers');
-                      loadDossiersPatients();
-                    }}
-                    className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 flex items-center"
-                    disabled={loadingState.dossiers}
+                    onClick={() => updateUIState({ activeTab: "patients-list" })}
+                    className="bg-white text-green-600 px-6 py-3 rounded-xl hover:bg-gray-50 transition-all duration-200 flex items-center space-x-2 font-medium"
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                     </svg>
-                    {loadingState.dossiers ? 'Chargement...' : 'Actualiser'}
+                    <span>Voir Patients</span>
                   </button>
                 </div>
               </div>
-              
-              {loadingState.dossiers ? (
-                <div className="bg-white rounded-lg shadow-md p-6">
-                  <div className="flex items-center justify-center py-8">
-                    <svg className="animate-spin h-8 w-8 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    <span className="ml-3 text-gray-600">Chargement des dossiers patients...</span>
-                  </div>
-                </div>
-              ) : (
-                <div className="bg-white rounded-lg shadow-md p-6">
-                  {dataState.dossiersPatients && dataState.dossiersPatients.length > 0 ? (
-                    <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Patient</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Service</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date d'ouverture</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Statut</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
-                        {dataState.dossiersPatients.map((dossier, idx) => (
-                          <tr key={dossier.id || idx} className="hover:bg-gray-50">
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="flex items-center">
-                                <div className="flex-shrink-0 h-10 w-10">
-                                  <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
-                                    <svg className="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                                    </svg>
-                                  </div>
-                                </div>
-                                <div className="ml-4">
-                                  <div className="text-sm font-medium text-gray-900">
-                                    {dossier.patient && (dossier.patient.prenom || dossier.patient.nom) ?
-                                      `${dossier.patient.prenom || ''} ${dossier.patient.nom || ''}`.trim() :
-                                      dossier.patient_name || dossier.patient_nom || dossier.Patient?.nom ||
-                                      (dossier.patient_id ? `Patient ID: ${dossier.patient_id}` : 'Patient inconnu')
-                                    }
-                                  </div>
-                                  <div className="text-sm text-gray-500">
-                                    {(() => {
-                                      // Prioriser le numeroDossier (avec D majuscule), ne jamais afficher l'ID
-                                      const numeroDossier = dossier.numeroDossier || dossier.numero_dossier || 'N/A';
-                                      console.log('Affichage numéro dossier:', {
-                                        numeroDossier: dossier.numeroDossier,
-                                        numero_dossier: dossier.numero_dossier,
-                                        id_dossier: dossier.id_dossier,
-                                        id: dossier.id,
-                                        final: numeroDossier,
-                                        rawDossier: dossier
-                                      });
-                                      return `Dossier #${numeroDossier}`;
-                                    })()}
-                                    {dossier.patient?.sexe && (
-                                      <span className="ml-2 px-1 py-0.5 bg-blue-100 text-blue-800 text-xs rounded">
-                                        {dossier.patient.sexe === 'M' ? 'Homme' : dossier.patient.sexe === 'F' ? 'Femme' : dossier.patient.sexe}
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="text-sm text-gray-900">
-                                {dossier.service_id ? getServiceNameById(dossier.service_id) : 'Service non défini'}
-                              </div>
-                              <div className="text-sm text-gray-500">
-                                {dossier.type_dossier || 'Type non défini'}
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              {dossier.dateCreation ? new Date(dossier.dateCreation).toLocaleDateString('fr-FR') :
-                              dossier.createdAt ? new Date(dossier.createdAt).toLocaleDateString('fr-FR') :
-                              'Non définie'}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                                dossier.statut === 'actif'
-                                  ? 'bg-green-100 text-green-800'
-                                  : dossier.statut === 'ferme' || dossier.statut === 'fermé'
-                                    ? 'bg-red-100 text-red-800'
-                                    : 'bg-yellow-100 text-yellow-800'
-                              }`}>
-                                {dossier.statut || 'Inconnu'}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              <button
-                                onClick={() => openDossierModal(dossier)}
-                                className="text-blue-600 hover:text-blue-900 mr-3"
-                              >
-                                Voir
-                              </button>
-                              <button
-                                onClick={() => handleEditDossier(dossier)}
-                                className="text-yellow-600 hover:text-yellow-900 mr-3"
-                              >
-                                Modifier
-                              </button>
-                              {dossier.statut === 'actif' ? (
-                                <button
-                                  onClick={() => handleCloseDossier(dossier)}
-                                  className="text-red-600 hover:text-red-900"
-                                >
-                                  Fermer
-                                </button>
-                              ) : (
-                                <button
-                                  onClick={() => handleReactivateDossier(dossier)}
-                                  className="text-green-600 hover:text-green-900"
-                                >
-                                  Réactiver
-                                </button>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  ) : (
-                    <div className="text-center py-8">
-                      <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                      </svg>
-                      <h3 className="mt-2 text-sm font-medium text-gray-900">Aucun dossier patient</h3>
-                      <p className="mt-1 text-sm text-gray-500">
-                        Aucun dossier patient n'a été créé pour le moment.
-                      </p>
-                      <div className="mt-6">
-                        <button 
-                          onClick={openPatientFileModal}
-                          className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
-                        >
-                          <svg className="-ml-1 mr-2 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                          </svg>
-                          Créer un dossier patient
-                        </button>
+
+              {/* Grille des dossiers */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {Array.isArray(dataState.dossiersPatients) && dataState.dossiersPatients.length > 0 ? (
+                  dataState.dossiersPatients.map((dossier, idx) => (
+                    <div key={idx} className="group bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 border border-gray-100 overflow-hidden">
+                      {/* Header du dossier */}
+                      <div className="bg-gradient-to-r from-green-50 to-emerald-50 p-4 border-b border-gray-100">
+                        <div className="flex justify-between items-start mb-3">
+                          <div className="flex-1">
+                            <h3 className="font-bold text-lg text-gray-800 truncate">
+                              {dossier.numeroDossier || `Dossier #${dossier.id}`}
+                            </h3>
+                            <p className="text-gray-600 text-sm flex items-center space-x-1 mt-1">
+                              <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                              </svg>
+                              <span>{dossier.patient_name || 'Patient inconnu'}</span>
+                            </p>
+                          </div>
+                          <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                            dossier.statut === 'actif' ? 'bg-green-100 text-green-800' :
+                            dossier.statut === 'ferme' ? 'bg-red-100 text-red-800' :
+                            'bg-gray-100 text-gray-800'
+                          }`}>
+                            {dossier.statut || 'Inconnu'}
+                          </span>
+                        </div>
+                        
+                        {/* Informations du dossier */}
+                        <div className="space-y-2">
+                          <div className="flex items-center space-x-2 text-sm text-gray-600">
+                            <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                            </svg>
+                            <span>{dossier.service_name || 'Service non spécifié'}</span>
+                          </div>
+                          {dossier.dateOuverture && (
+                            <div className="flex items-center space-x-2 text-sm text-gray-600">
+                              <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                              </svg>
+                              <span>Ouvert le {new Date(dossier.dateOuverture).toLocaleDateString('fr-FR')}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Actions */}
+                      <div className="p-4">
+                        <div className="flex justify-between items-center">
+                          <button 
+                            className="text-blue-600 hover:text-blue-800 p-2 rounded-lg hover:bg-blue-50 transition-colors duration-200" 
+                            onClick={() => openDossierModal(dossier)}
+                            title="Voir détails"
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            </svg>
+                          </button>
+                          <button 
+                            className="text-yellow-600 hover:text-yellow-800 p-2 rounded-lg hover:bg-yellow-50 transition-colors duration-200" 
+                            onClick={() => handleEditDossier(dossier)}
+                            title="Modifier"
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                          </button>
+                          {dossier.statut === 'actif' ? (
+                            <button 
+                              className="text-red-600 hover:text-red-800 p-2 rounded-lg hover:bg-red-50 transition-colors duration-200" 
+                              onClick={() => handleCloseDossier(dossier)}
+                              title="Fermer le dossier"
+                            >
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          ) : (
+                            <button 
+                              className="text-green-600 hover:text-green-800 p-2 rounded-lg hover:bg-green-50 transition-colors duration-200" 
+                              onClick={() => handleReactivateDossier(dossier)}
+                              title="Réactiver le dossier"
+                            >
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                              </svg>
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  )}
-                </div>
-              )}
+                  ))
+                ) : (
+                  <div className="col-span-full text-center py-16">
+                    <div className="max-w-md mx-auto">
+                      <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                        </svg>
+                      </div>
+                      <h3 className="text-lg font-medium text-gray-900 mb-2">Aucun dossier trouvé</h3>
+                      <p className="text-gray-500 mb-6">Créez votre premier dossier patient pour commencer à organiser les informations médicales.</p>
+                      <button 
+                        className="bg-green-600 text-white px-6 py-3 rounded-xl hover:bg-green-700 transition-colors duration-200 font-medium"
+                        onClick={openPatientFileModal}
+                      >
+                        Créer un dossier
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
           {/* Notifications */}
           {uiState.activeTab === "notifications" && (
-            <div>
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold">Centre de Notifications</h2>
-                <div className="flex space-x-3">
-                  <button 
-                    onClick={() => openOrdonnanceCompleteModal()}
-                    className="bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 flex items-center"
-                  >
-                    <svg className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                    </svg>
-                    Ordonnance Complète
-                  </button>
+            <div className="space-y-6">
+              {/* Header avec statistiques */}
+              <div className="bg-gradient-to-r from-purple-500 to-pink-600 rounded-2xl p-6 text-white shadow-xl">
+                <div className="flex justify-between items-center mb-4">
+                  <div>
+                    <h2 className="text-3xl font-bold">Notifications & Rapports</h2>
+                    <p className="text-purple-100 mt-1">Suivez vos activités et restez informé</p>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-4xl font-bold">3</div>
+                    <div className="text-purple-100">Nouvelles</div>
+                  </div>
+                </div>
+                <div className="flex space-x-4">
                   <button
-                    onClick={() => {
-                      loadOrdonnancesRecentes();
-                      loadResumeAujourdhui();
-                    }}
-                    className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 flex items-center"
-                    disabled={loadingState.ordonnances || loadingState.resume}
+                    onClick={() => updateUIState({ activeTab: "prescriptions" })}
+                    className="bg-white/20 backdrop-blur-sm text-white px-6 py-3 rounded-xl hover:bg-white/30 transition-all duration-200 flex items-center space-x-2 border border-white/30"
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
-                    Actualiser
+                    <span>Voir Prescriptions</span>
                   </button>
                 </div>
               </div>
 
-              {/* Résumé d'aujourd'hui */}
-              {dataState.resumeAujourdhui && (
-                <div className="bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg shadow-md p-6 mb-6 text-white">
-                  <h3 className="text-lg font-semibold mb-4">📊 Résumé d'Aujourd'hui</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <div className="text-center">
-                      <div className="text-2xl font-bold">{dataState.resumeAujourdhui.total_ordonnances || 0}</div>
-                      <div className="text-sm opacity-90">Ordonnances</div>
+              {/* Résumé de la journée */}
+              <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
+                <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center space-x-2">
+                  <svg className="w-6 h-6 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                  </svg>
+                  <span>Résumé de la Journée</span>
+                </h3>
+                
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                  <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-xl border border-blue-200">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center">
+                        <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                        </svg>
+                      </div>
+                      <div>
+                        <div className="text-2xl font-bold text-blue-900">{dataState.patients.length}</div>
+                        <div className="text-sm text-blue-700">Patients</div>
+                      </div>
                     </div>
-                    <div className="text-center">
-                      <div className="text-2xl font-bold">{dataState.resumeAujourdhui.total_examens || 0}</div>
-                      <div className="text-sm opacity-90">Examens</div>
+                  </div>
+                  
+                  <div className="bg-gradient-to-br from-green-50 to-green-100 p-4 rounded-xl border border-green-200">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-10 h-10 bg-green-500 rounded-lg flex items-center justify-center">
+                        <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                        </svg>
+                      </div>
+                      <div>
+                        <div className="text-2xl font-bold text-green-900">{dataState.dossiersPatients.length}</div>
+                        <div className="text-sm text-green-700">Dossiers</div>
+                      </div>
                     </div>
-                    <div className="text-center">
-                      <div className="text-2xl font-bold">{dataState.resumeAujourdhui.notifications_envoyees || 0}</div>
-                      <div className="text-sm opacity-90">Notifications</div>
+                  </div>
+                  
+                  <div className="bg-gradient-to-br from-purple-50 to-purple-100 p-4 rounded-xl border border-purple-200">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-10 h-10 bg-purple-500 rounded-lg flex items-center justify-center">
+                        <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                      </div>
+                      <div>
+                        <div className="text-2xl font-bold text-purple-900">{dataState.prescriptions.length}</div>
+                        <div className="text-sm text-purple-700">Prescriptions</div>
+                      </div>
                     </div>
-                    <div className="text-center">
-                      <div className="text-2xl font-bold">{dataState.resumeAujourdhui.derniere_creation || 'Aucune'}</div>
-                      <div className="text-sm opacity-90">Dernière création</div>
+                  </div>
+                  
+                  <div className="bg-gradient-to-br from-orange-50 to-orange-100 p-4 rounded-xl border border-orange-200">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-10 h-10 bg-orange-500 rounded-lg flex items-center justify-center">
+                        <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      </div>
+                      <div>
+                        <div className="text-2xl font-bold text-orange-900">{dataState.ordonnancesRecentes.length}</div>
+                        <div className="text-sm text-orange-700">Récents</div>
+                      </div>
                     </div>
                   </div>
                 </div>
-              )}
+
+                <button
+                  onClick={loadResumeAujourdhui}
+                  className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-6 py-3 rounded-xl hover:from-blue-600 hover:to-indigo-700 transition-all duration-200 flex items-center space-x-2 font-medium shadow-lg"
+                  disabled={loadingState.ordonnances || loadingState.resume}
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  <span>Actualiser les Statistiques</span>
+                </button>
+              </div>
 
               {/* Ordonnances récentes */}
-              <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-                <h3 className="text-lg font-semibold mb-4">📋 Ordonnances Récentes</h3>
+              <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
+                <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center space-x-2">
+                  <svg className="w-6 h-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  <span>Ordonnances Récentes</span>
+                </h3>
+                
                 {loadingState.ordonnances ? (
                   <div className="flex items-center justify-center py-8">
                     <svg className="animate-spin h-8 w-8 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -1882,47 +2022,57 @@ const loadOrdonnancesRecentes = useCallback(async () => {
                 ) : dataState.ordonnancesRecentes && dataState.ordonnancesRecentes.length > 0 ? (
                   <div className="space-y-4">
                     {dataState.ordonnancesRecentes.map((ordonnance, idx) => (
-                      <div key={ordonnance.id || idx} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50">
+                      <div key={ordonnance.id || idx} className="border border-gray-200 rounded-xl p-4 hover:bg-gray-50 transition-all duration-200 hover:shadow-md">
                         <div className="flex justify-between items-start">
-                          <div>
-                            <h4 className="font-medium text-gray-900">
-                              Ordonnance #{ordonnance.numero_prescription || ordonnance.id}
+                          <div className="flex-1">
+                            <h4 className="font-medium text-gray-900 flex items-center space-x-2">
+                              <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                              <span>Ordonnance #{ordonnance.numero_prescription || ordonnance.id}</span>
                             </h4>
-                            <p className="text-sm text-gray-600">
-                              Patient: {ordonnance.patient?.nom || 'Patient inconnu'}
-                            </p>
-                            <p className="text-sm text-gray-600">
-                              Médicament: {ordonnance.principe_actif || 'Non spécifié'}
-                            </p>
-                            <p className="text-sm text-gray-600">
-                              Créée le: {ordonnance.date_creation ? new Date(ordonnance.date_creation).toLocaleDateString('fr-FR') : 'Date inconnue'}
-                            </p>
+                            <div className="mt-2 space-y-1">
+                              <p className="text-sm text-gray-600 flex items-center space-x-2">
+                                <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                </svg>
+                                <span>Patient: {ordonnance.patient?.nom || 'Patient inconnu'}</span>
+                              </p>
+                              <p className="text-sm text-gray-600 flex items-center space-x-2">
+                                <svg className="w-4 h-4 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+                                </svg>
+                                <span>Médicament: {ordonnance.principe_actif || 'Non spécifié'}</span>
+                              </p>
+                              <p className="text-sm text-gray-600 flex items-center space-x-2">
+                                <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                </svg>
+                                <span>Créée le: {ordonnance.date_creation ? new Date(ordonnance.date_creation).toLocaleDateString('fr-FR') : 'Date inconnue'}</span>
+                              </p>
+                            </div>
                           </div>
-                          <div className="flex space-x-2">
+                          <div className="flex space-x-2 ml-4">
                             <button
                               onClick={() => {
-                                // Ajouter au dossier patient
                                 if (ordonnance.id && selectedPatientForPrescriptionRef.current?.dossier_id) {
                                   ajouterPrescriptionAuDossier(ordonnance.id, selectedPatientForPrescriptionRef.current.dossier_id);
                                 }
                               }}
-                              className="text-blue-600 hover:text-blue-800 text-sm"
+                              className="text-blue-600 hover:text-blue-800 p-2 rounded-lg hover:bg-blue-50 transition-colors duration-200"
                               title="Ajouter au dossier"
                             >
-                              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                               </svg>
                             </button>
                             <button
                               onClick={() => {
-                                // Voir les détails
                                 selectedNotificationRef.current = ordonnance;
                                 updateModalState({ showNotificationModal: true });
                               }}
-                              className="text-green-600 hover:text-green-800 text-sm"
+                              className="text-green-600 hover:text-green-800 p-2 rounded-lg hover:bg-green-50 transition-colors duration-200"
                               title="Voir détails"
                             >
-                              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                               </svg>
@@ -1934,85 +2084,14 @@ const loadOrdonnancesRecentes = useCallback(async () => {
                   </div>
                 ) : (
                   <div className="text-center py-8 text-gray-500">
-                    <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    <h3 className="mt-2 text-sm font-medium text-gray-900">Aucune ordonnance récente</h3>
-                    <p className="mt-1 text-sm text-gray-500">
+                    <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                    </div>
+                    <h3 className="text-sm font-medium text-gray-900 mb-2">Aucune ordonnance récente</h3>
+                    <p className="text-sm text-gray-500">
                       Créez votre première ordonnance pour commencer.
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              {/* Notifications de prescription */}
-              <div className="bg-white rounded-lg shadow-md p-6">
-                <h3 className="text-lg font-semibold mb-4">🔔 Notifications de Prescription</h3>
-                {loadingState.notifications ? (
-                  <div className="flex items-center justify-center py-8">
-                    <svg className="animate-spin h-8 w-8 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    <span className="ml-3 text-gray-600">Chargement des notifications...</span>
-                  </div>
-                ) : dataState.prescriptionNotifications && dataState.prescriptionNotifications.length > 0 ? (
-                  <div className="space-y-4">
-                    {dataState.prescriptionNotifications.map((notif, idx) => (
-                      <div key={notif.id || idx} className="flex items-start p-4 border border-gray-200 rounded-lg hover:bg-gray-50">
-                        <div className="flex-shrink-0 mt-1">
-                          <div className={`w-8 h-8 rounded-full ${
-                            notif.priorite === 'urgente' ? 'bg-red-100' :
-                            notif.priorite === 'haute' ? 'bg-orange-100' :
-                            notif.priorite === 'normale' ? 'bg-blue-100' : 'bg-gray-100'
-                          } flex items-center justify-center`}>
-                            <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 ${
-                              notif.priorite === 'urgente' ? 'text-red-600' :
-                              notif.priorite === 'haute' ? 'text-orange-600' :
-                              notif.priorite === 'normale' ? 'text-blue-600' : 'text-gray-600'
-                            }`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-5 5v-5zM4 19h6v-6H4v6z" />
-                            </svg>
-                          </div>
-                        </div>
-                        <div className="ml-3 flex-1">
-                          <div className="flex justify-between">
-                            <p className="text-sm font-medium text-gray-900">{notif.titre || 'Notification'}</p>
-                            <span className="text-xs text-gray-500">{notif.date_creation ? new Date(notif.date_creation).toLocaleDateString('fr-FR') : 'Date inconnue'}</span>
-                          </div>
-                          <p className="text-sm text-gray-500">{notif.contenu || notif.message}</p>
-                          <div className="mt-2 flex space-x-2">
-                            <span className={`text-xs px-2 py-1 rounded-full ${
-                              notif.priorite === 'urgente' ? 'bg-red-100 text-red-800' :
-                              notif.priorite === 'haute' ? 'bg-orange-100 text-orange-800' :
-                              notif.priorite === 'normale' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'
-                            }`}>
-                              {notif.priorite || 'normale'}
-                            </span>
-                            <span className="text-xs px-2 py-1 rounded-full bg-green-100 text-green-800">
-                              {notif.canal || 'application'}
-                            </span>
-                            {!notif.lue && (
-                              <button
-                                onClick={() => marquerNotificationCommeLue(notif.id)}
-                                className="text-xs px-2 py-1 rounded-md bg-blue-100 text-blue-800 hover:bg-blue-200"
-                              >
-                                Marquer comme lue
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-8 text-gray-500">
-                    <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-5 5v-5zM4 19h6v-6H4v6z" />
-                    </svg>
-                    <h3 className="mt-2 text-sm font-medium text-gray-900">Aucune notification</h3>
-                    <p className="mt-1 text-sm text-gray-500">
-                      Aucune notification de prescription pour le moment.
                     </p>
                   </div>
                 )}
@@ -3042,7 +3121,7 @@ Dr. Dupont`
       {/* Edit Dossier Modal */}
       {modalState.showEditDossierModal && selectedDossierRef.current && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-start md:items-center justify-center z-50 p-2 sm:p-4 overflow-y-auto">
-          <div className="bg-white w-full max-w-full md:max-w-6xl mx-auto rounded-lg shadow-lg max-h-[95vh] overflow-y-auto my-2 md:my-4">
+          <div className="bg-white rounded-lg shadow-xl p-4 sm:p-6 w-full max-w-full md:max-w-6xl mx-auto rounded-lg shadow-lg max-h-[95vh] overflow-y-auto my-2 md:my-4">
             <div className="flex justify-between items-center border-b px-4 py-3 sticky top-0 bg-white z-10">
               <h3 className="text-lg font-medium">
                 Modifier le Dossier {selectedDossierRef.current.numeroDossier || selectedDossierRef.current.numero_dossier || 'N/A'}
