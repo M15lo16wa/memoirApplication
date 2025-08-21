@@ -2,8 +2,8 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 // gestion du profil medecin
-import { getMedecinProfile, logoutMedecin, fetchMedecinDetails, fetchPatientsList, fetchPatientFiles } from "../../services/api/authApi";
-import { getAllConsultations } from "../../services/api/medicalApi";
+import { getMedecinProfile, logoutMedecin, fetchMedecinDetails, fetchPatientsList } from "../../services/api/authApi";
+import { getAllConsultations, getAllDossiersMedical } from "../../services/api/medicalApi";
 
 function MedHeader({ doctor = { nom: "{user?.nom || 'Utilisateur'}", specialite: "[Spécialité]", photo: "https://storage.googleapis.com/workspace-0f70711f-8b4e-4d94-86f1-2a93ccde5887/image/f9ed6aa5-deb1-41fb-9d2a-5f987e9ff42e.png" }, onLogout }) {
   const [user, setUser] = useState(null);
@@ -24,10 +24,21 @@ function MedHeader({ doctor = { nom: "{user?.nom || 'Utilisateur'}", specialite:
       setPatientsCount(patients.length);
       console.log('✅ Nombre de patients récupéré:', patients.length);
       
-      // Récupérer les dossiers patients
-      const dossiers = await fetchPatientFiles();
-      setDossiersCount(dossiers.length);
-      console.log('✅ Nombre de dossiers récupéré:', dossiers.length);
+      // ✅ CORRECTION : Utiliser getAllDossiersMedical de medicalApi au lieu de fetchPatientFiles
+      console.log('🔍 Récupération des dossiers médicaux via getAllDossiersMedical...');
+      const dossiersResponse = await getAllDossiersMedical();
+      console.log('📊 Dossiers médicaux reçus:', dossiersResponse);
+      
+      if (dossiersResponse && dossiersResponse.data && Array.isArray(dossiersResponse.data)) {
+        setDossiersCount(dossiersResponse.data.length);
+        console.log('✅ Nombre de dossiers récupéré:', dossiersResponse.data.length);
+      } else if (dossiersResponse && Array.isArray(dossiersResponse)) {
+        setDossiersCount(dossiersResponse.length);
+        console.log('✅ Nombre de dossiers récupéré (direct):', dossiersResponse.length);
+      } else {
+        console.warn('⚠️ Format de dossiers inattendu:', dossiersResponse);
+        setDossiersCount(0);
+      }
       
       // ✅ CORRECTION : Utiliser getAllConsultations de medicalApi au lieu de fetchConsultations
       console.log('🔍 Récupération des consultations via getAllConsultations...');
