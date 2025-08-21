@@ -793,7 +793,11 @@ const viewDocument = async (filters = {}) => {
         if (filters.date_fin) params.append('date_fin', filters.date_fin);
         
         const queryString = params.toString();
-        const url = `/documents/patient${queryString ? `?${queryString}` : ''}`;
+        const storedPatient = JSON.parse(localStorage.getItem('patient') || '{}');
+        const patientId = filters.patient_id || storedPatient.id_patient || storedPatient.id;
+        const url = patientId
+            ? `/documents/patient/${patientId}${queryString ? `?${queryString}` : ''}`
+            : `/documents/patient${queryString ? `?${queryString}` : ''}`;
         
         const response = await api.get(url);
         

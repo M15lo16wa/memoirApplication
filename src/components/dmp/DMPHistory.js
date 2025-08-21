@@ -39,35 +39,56 @@ function DMPHistory({ patientId = null }) {
   const [hasAccessRequests, setHasAccessRequests] = useState(false);
   const [authorizations, setAuthorizations] = useState([]);
 
-  // Vérifier que l'utilisateur est un patient connecté
+  // Vérifier que l'utilisateur est autorisé (patient ou médecin)
   const checkPatientAuthorization = useMemo(() => {
-    const jwtToken = localStorage.getItem('jwt');
+    const jwtToken = localStorage.getItem('token') || localStorage.getItem('jwt');
     const patientData = localStorage.getItem('patient');
+    const medecinData = localStorage.getItem('medecin');
     
-    if (!jwtToken || !patientData) {
-      console.warn('⚠️ Accès refusé: Utilisateur non connecté en tant que patient');
+    console.log('🔍 DEBUG - DMPHistory - Vérification autorisation:');
+    console.log('  - Token:', jwtToken ? '✅ Présent' : '❌ Absent');
+    console.log('  - Patient data:', patientData ? '✅ Présent' : '❌ Absent');
+    console.log('  - Médecin data:', medecinData ? '✅ Présent' : '❌ Absent');
+    
+    // Vérifier qu'il y a au moins un token et des données utilisateur
+    if (!jwtToken || (!patientData && !medecinData)) {
+      console.warn('⚠️ Accès refusé: Utilisateur non connecté ou données manquantes');
       return false;
     }
     
     try {
-      const patient = JSON.parse(patientData);
-      
-      // Si aucun patientId spécifique n'est demandé, le patient connecté peut voir son propre historique
-      if (!patientId) {
-        console.log('✅ Patient connecté autorisé à consulter son propre historique DMP');
+      // Si c'est un patient connecté
+      if (patientData) {
+        const patient = JSON.parse(patientData);
+        
+        // Si aucun patientId spécifique n'est demandé, le patient connecté peut voir son propre historique
+        if (!patientId) {
+          console.log('✅ Patient connecté autorisé à consulter son propre historique DMP');
+          return true;
+        }
+        
+        // Vérifier que l'utilisateur connecté correspond au patient demandé
+        if (patient.id !== patientId && patient.id_patient !== patientId) {
+          console.warn('⚠️ Accès refusé: Patient tente d\'accéder à l\'historique d\'un autre patient');
+          return false;
+        }
+        
+        console.log('✅ Patient autorisé à consulter son historique DMP');
         return true;
       }
       
-      // Vérifier que l'utilisateur connecté correspond au patient demandé
-      if (patient.id !== patientId && patient.id_patient !== patientId) {
-        console.warn('⚠️ Accès refusé: Tentative d\'accès à l\'historique d\'un autre patient');
-        return false;
+      // Si c'est un médecin connecté
+      if (medecinData) {
+        const medecin = JSON.parse(medecinData);
+        console.log('✅ Médecin autorisé à consulter l\'historique DMP du patient:', medecin.nom, medecin.prenom);
+        console.log('  - ID médecin:', medecin.id_professionnel);
+        console.log('  - Patient demandé:', patientId);
+        return true;
       }
       
-      console.log('✅ Patient autorisé à consulter son historique DMP');
-      return true;
+      return false;
     } catch (error) {
-      console.error('❌ Erreur lors de la vérification des autorisations patient:', error);
+      console.error('❌ Erreur lors de la vérification des autorisations:', error);
       return false;
     }
   }, [patientId]);

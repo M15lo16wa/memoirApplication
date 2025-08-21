@@ -533,7 +533,9 @@ export const getDocumentsPersonnelsDMP = async (patientId = null, filters = {}) 
         if (filters.date_fin) params.append('date_fin', filters.date_fin);
         
         const queryString = params.toString();
-        const url = `/documents/patient${queryString ? `?${queryString}` : ''}`;
+        const url = patientId
+            ? `/documents/patient/${patientId}${queryString ? `?${queryString}` : ''}`
+            : `/documents/patient${queryString ? `?${queryString}` : ''}`;
         
         const response = await dmpApi.get(url);
         

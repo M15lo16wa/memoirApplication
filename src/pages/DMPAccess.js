@@ -151,19 +151,29 @@ function DMPAccess() {
         let isMounted = true;
         const fetchStatus = async () => {
             try {
+                console.log('🔍 DEBUG - Vérification du statut d\'accès pour patient:', patientId);
                 const response = await dmpApi.getAccessStatus(patientId);
+                console.log('🔍 DEBUG - Réponse API getAccessStatus:', response);
+                
                 if (isMounted) {
                     const status = response?.accessStatus || response?.status || 'not_authorized';
+                    console.log('🔍 DEBUG - Statut d\'accès déterminé:', status);
                     setAccessStatus(status);
                     
                     // Si l'accès est déjà autorisé ou actif, rediriger directement vers DMPPatientView
                     if (status === 'authorized' || status === 'active') {
+                        console.log('✅ SUCCESS - Accès autorisé, redirection vers DMPPatientView...');
+                        console.log('  - URL de redirection:', `/dmp-patient-view/${patientId}`);
                         navigate(`/dmp-patient-view/${patientId}`);
                         return;
+                    } else {
+                        console.log('⚠️ WARNING - Statut d\'accès non autorisé:', status);
+                        console.log('  - Statuts autorisés: authorized, active');
+                        console.log('  - Statut actuel:', status);
                     }
                 }
             } catch (error) {
-                console.error("Erreur lors de la récupération du statut d'accès", error);
+                console.error("❌ ERROR - Erreur lors de la récupération du statut d'accès", error);
                 if (isMounted) {
                     setAccessStatus('error');
                 }
@@ -478,6 +488,21 @@ function DMPAccess() {
                                 </button>
                             </div>
                         )}
+                        
+                        {/* Bouton de test pour forcer la redirection */}
+                        <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                            <p className="text-yellow-800 text-sm mb-2">🔧 DEBUG - Test de redirection</p>
+                            <button
+                                onClick={() => {
+                                    console.log('🔧 DEBUG - Test de redirection manuelle vers:', `/dmp-patient-view/${patientId}`);
+                                    navigate(`/dmp-patient-view/${patientId}`);
+                                }}
+                                className="inline-flex items-center px-3 py-1 bg-yellow-600 text-white rounded text-sm hover:bg-yellow-700 transition-colors"
+                            >
+                                Tester Redirection
+                            </button>
+                            <p className="text-yellow-700 text-xs mt-1">Statut actuel: {accessStatus}</p>
+                        </div>
                     </div>
                 )}
                 

@@ -771,6 +771,34 @@ function DossierPatient() {
         isArray: Array.isArray(patientsData),
         length: Array.isArray(patientsData) ? patientsData.length : 'N/A'
       });
+      
+      // Log détaillé de la structure de chaque patient
+      if (Array.isArray(patientsData) && patientsData.length > 0) {
+        console.log('🔍 DEBUG - Structure détaillée des patients:');
+        patientsData.forEach((patient, index) => {
+          console.log(`  Patient ${index + 1} (${patient.prenom} ${patient.nom}):`, {
+            toutes_les_cles: Object.keys(patient),
+            id_patient: patient.id_patient,
+            id: patient.id,
+            patient_id: patient.patient_id,
+            _id: patient._id,
+            numero_patient: patient.numero_patient,
+            numero_dossier: patient.numero_dossier
+          });
+          
+          // Log spécial pour le patient 6
+          if (patient.prenom === 'Patient' && patient.nom === '6' || 
+              patient.prenom === '6' || patient.nom === '6' ||
+              patient.numero_dossier === '6' || patient.numero_patient === '6') {
+            console.log('🎯 DEBUG SPÉCIAL - Patient 6 détecté!');
+            console.log('  - Données complètes:', patient);
+            console.log('  - Tous les champs:', Object.entries(patient));
+            console.log('  - Types des champs:', Object.fromEntries(
+              Object.entries(patient).map(([key, value]) => [key, typeof value])
+            ));
+          }
+        });
+      }
 
       if (!patientsData) {
         console.error('No patient data received:', patientsData);
@@ -789,28 +817,70 @@ function DossierPatient() {
       }
       
       // Map the patients to the expected format
-      const formattedPatients = patientsData.map(patient => ({
-        id: patient.id_patient || 'unknown',
-        name: `${patient.prenom || ''} ${patient.nom || ''}`.trim() || 'Nom inconnu',
-        birth: patient.date_naissance 
-          ? new Date(patient.date_naissance).toLocaleDateString('fr-FR')
-          : 'Non renseigné',
-        status: patient.statut || 'Actif',
-        statusColor: (patient.statut === 'actif' || patient.statut === 'Actif') ? 'green' : 'red',
-        lastConsult: patient.date_derniere_consultation 
-          ? new Date(patient.date_derniere_consultation).toLocaleDateString('fr-FR')
-          : 'Aucune',
-        gender: patient.sexe === 'M' ? 'Homme' : 'Femme',
-        blood: patient.groupe_sanguin || 'Non renseigné',
-        phone: patient.telephone || 'Non renseigné',
-        email: patient.email || 'Non renseigné',
-        address: `${patient.adresse || ''} ${patient.code_postal ? patient.code_postal + ' ' : ''}${patient.ville || ''}`.trim() || 'Non renseigné',
-        numero_dossier: patient.numero_dossier || 'N/A',
-        rawData: patient // Keep the raw data in case we need it
-      }));
+      const formattedPatients = patientsData.map(patient => {
+        const patientId = patient.id_patient || patient.id || patient.patient_id || patient._id || patient.numero_patient || patient.numero_dossier || 'unknown';
+        console.log(`🔍 DEBUG - Patient ${patient.prenom} ${patient.nom}:`, {
+          id_patient: patient.id_patient,
+          id: patient.id,
+          patient_id: patient.patient_id,
+          _id: patient._id,
+          numero_patient: patient.numero_patient,
+          numero_dossier: patient.numero_dossier,
+          final_id: patientId
+        });
+        
+        // Validation que l'ID est valide
+        if (!patientId || patientId === 'unknown' || patientId === 'null' || patientId === 'undefined') {
+          console.error(`❌ ERROR - Patient ${patient.prenom} ${patient.nom} n'a pas d'ID valide:`, patientId);
+          console.error('  - Données complètes du patient:', patient);
+        }
+        
+        return {
+          id: patientId,
+          name: `${patient.prenom || ''} ${patient.nom || ''}`.trim() || 'Nom inconnu',
+          birth: patient.date_naissance 
+            ? new Date(patient.date_naissance).toLocaleDateString('fr-FR')
+            : 'Non renseigné',
+          status: patient.statut || 'Actif',
+          statusColor: (patient.statut === 'actif' || patient.statut === 'Actif') ? 'green' : 'red',
+          lastConsult: patient.date_derniere_consultation 
+            ? new Date(patient.date_derniere_consultation).toLocaleDateString('fr-FR')
+            : 'Aucune',
+          gender: patient.sexe === 'M' ? 'Homme' : 'Femme',
+          blood: patient.groupe_sanguin || 'Non renseigné',
+          phone: patient.telephone || 'Non renseigné',
+          email: patient.email || 'Non renseigné',
+          address: `${patient.adresse || ''} ${patient.code_postal ? patient.code_postal + ' ' : ''}${patient.ville || ''}`.trim() || 'Non renseigné',
+          numero_dossier: patient.numero_dossier || 'N/A',
+          rawData: patient // Keep the raw data in case we need it
+        };
+      });
 
       console.log('Formatted patients:', formattedPatients);
       console.log('Updating dataState with patients:', formattedPatients);
+      
+      // Vérification finale que tous les patients ont des IDs valides
+      const patientsWithValidIds = formattedPatients.filter(patient => {
+        const isValid = patient.id && patient.id !== 'unknown' && patient.id !== 'null' && patient.id !== 'undefined';
+        if (!isValid) {
+          console.error(`❌ ERROR - Patient ${patient.name} a un ID invalide:`, patient.id);
+        }
+        return isValid;
+      });
+      
+      if (patientsWithValidIds.length !== formattedPatients.length) {
+        console.error(`⚠️ WARNING - ${formattedPatients.length - patientsWithValidIds.length} patients ont des IDs invalides`);
+        console.error('Patients avec IDs invalides:', formattedPatients.filter(p => !p.id || p.id === 'unknown' || p.id === 'null' || p.id === 'undefined'));
+      } else {
+        console.log('✅ SUCCESS - Tous les patients ont des IDs valides');
+      }
+      
+      // Résumé final de tous les patients
+      console.log('📋 RÉSUMÉ FINAL - Tous les patients:');
+      formattedPatients.forEach((patient, index) => {
+        console.log(`  ${index + 1}. ${patient.name} - ID: ${patient.id} (${typeof patient.id})`);
+      });
+      
       updateDataState({ patients: formattedPatients });
       
       // Initialiser automatiquement le premier patient comme sélection par défaut
@@ -1787,7 +1857,32 @@ const loadOrdonnancesRecentes = useCallback(async () => {
                           </button>
                           <button 
                             className="text-green-600 hover:text-green-800 p-2 rounded-lg hover:bg-green-50 transition-colors duration-200" 
-                            onClick={() => navigate(`/dmp-access/${p.id}`)}
+                            onClick={() => {
+                              console.log('🔍 DEBUG - Navigation DMP pour patient:', {
+                                patient: p,
+                                patient_id: p.id,
+                                rawData: p.rawData,
+                                nom: p.name,
+                                numero_dossier: p.numero_dossier
+                              });
+                              
+                              // Log spécial pour le patient 6
+                              if (p.name && p.name.includes('6')) {
+                                console.log('🎯 DEBUG SPÉCIAL - Bouton DMP cliqué pour Patient 6!');
+                                console.log('  - ID final:', p.id);
+                                console.log('  - Type ID:', typeof p.id);
+                                console.log('  - Raw data complet:', p.rawData);
+                              }
+                              
+                              if (p.id && p.id !== 'unknown' && p.id !== 'null' && p.id !== 'undefined') {
+                                console.log('✅ SUCCESS - Navigation vers DMP pour patient:', p.name, 'ID:', p.id);
+                                navigate(`/dmp-access/${p.id}`);
+                              } else {
+                                console.error('❌ ERROR - ID patient invalide pour navigation DMP:', p.name, 'ID:', p.id);
+                                console.error('  - Raw data:', p.rawData);
+                                alert(`Impossible d'accéder au DMP pour ${p.name}: ID patient invalide (${p.id})`);
+                              }
+                            }}
                             title="Accès DMP"
                           >
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
