@@ -1833,7 +1833,7 @@ const loadOrdonnancesRecentes = useCallback(async () => {
                       loadResumeAujourdhui();
                     }}
                     className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 flex items-center"
-                    disabled={dataState.loadingState.ordonnances || loadingState.resume}
+                    disabled={loadingState.ordonnances || loadingState.resume}
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -1871,7 +1871,7 @@ const loadOrdonnancesRecentes = useCallback(async () => {
               {/* Ordonnances récentes */}
               <div className="bg-white rounded-lg shadow-md p-6 mb-6">
                 <h3 className="text-lg font-semibold mb-4">📋 Ordonnances Récentes</h3>
-                {dataState.loadingState.ordonnances ? (
+                {loadingState.ordonnances ? (
                   <div className="flex items-center justify-center py-8">
                     <svg className="animate-spin h-8 w-8 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
@@ -2067,17 +2067,17 @@ const loadOrdonnancesRecentes = useCallback(async () => {
                   <button
                     onClick={loadPrescriptions}
                     className="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 flex items-center"
-                    disabled={dataState.loadingState.prescriptions || !selectedPatientForPrescriptionRef.current}
+                    disabled={loadingState.dataState_prescriptions || !selectedPatientForPrescriptionRef.current}
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                     </svg>
-                    {dataState.loadingState.prescriptions ? 'Chargement...' : 'Actualiser'}
+                    {loadingState.dataState_prescriptions ? 'Chargement...' : 'Actualiser'}
                   </button>
                 </div>
               </div>
               
-              {dataState.loadingState.prescriptions ? (
+                              {loadingState.dataState_prescriptions ? (
                 <div className="bg-white rounded-lg shadow-md p-6">
                   <div className="flex items-center justify-center py-8">
                     <svg className="animate-spin h-8 w-8 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -2589,13 +2589,13 @@ Dr. Dupont`
             <div className="flex justify-between items-center border-b px-4 py-3 sticky top-0 bg-white z-10">
               <h3 className="text-lg font-medium">Créer un Dossier Patient</h3>
               <div className="flex items-center space-x-2">
-                {(dataState.loadingState.services || uiState.loading) && (
+                {(loadingState.services || uiState.loading) && (
                   <div className="flex items-center text-sm text-blue-600">
                     <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
-                    {dataState.loadingState.services ? 'Chargement...' : 'Création...'}
+                    {loadingState.services ? 'Chargement...' : 'Création...'}
                   </div>
                 )}
                 <button onClick={closePatientFileModal} className="text-gray-500 hover:text-gray-700" disabled={uiState.loading}>
@@ -2658,10 +2658,10 @@ Dr. Dupont`
                       onChange={handleInputChange} 
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
                       required
-                      disabled={dataState.loadingState.services || uiState.loading}
+                      disabled={loadingState.services || uiState.loading}
                     >
                       <option value="">
-                        {dataState.loadingState.services ? "Chargement des dataState.services..." : "Sélectionnez un service"}
+                        {loadingState.services ? "Chargement des services..." : "Sélectionnez un service"}
                       </option>
                       {Array.isArray(dataState.services) && dataState.services.length > 0 && dataState.services.map(service => {
                         const serviceId = service.id || service.id_service || service.service_id;
@@ -2673,17 +2673,17 @@ Dr. Dupont`
                         );
                       })}
                     </select>
-                    {dataState.loadingState.services && (
+                    {loadingState.services && (
                       <div className="mt-1 text-sm text-blue-600">
                         Chargement des dataState.services...
                       </div>
                     )}
-                    {!dataState.loadingState.services && dataState.services.length === 0 && (
+                    {!loadingState.services && dataState.services.length === 0 && (
                       <div className="mt-1 text-sm text-red-600">
                         Aucun service disponible
                       </div>
                     )}
-                    {!dataState.loadingState.services && dataState.services.length > 0 && (
+                    {!loadingState.services && dataState.services.length > 0 && (
                       <div className="mt-1 text-sm text-green-600">
                         {dataState.services.length} service(s) chargé(s)
                       </div>
