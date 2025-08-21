@@ -24,6 +24,7 @@ import DMPNotification from "../components/ui/DMPNotification";
 import AutorisationsEnAttente from "../components/dmp/AutorisationsEnAttente";
 import DMPHistory from "../components/dmp/DMPHistory";
 import NotificationManager from "../components/ui/NotificationManager";
+import MessagingButton from "../components/messaging/MessagingButton";
 
 // APIs
 import * as dmpApi from "../services/api/dmpApi";
@@ -900,6 +901,18 @@ const HistoriqueMedical = () => {
                         <FaPrint />
                       </button>
                     </div>
+
+                    {/* Bouton de messagerie sécurisée */}
+                    {(prescription.type_prescription === 'ordonnance' || prescription.type_prescription === 'examen') && (
+                      <div className="pt-2 border-t border-gray-200">
+                        <MessagingButton
+                          contextType={prescription.type_prescription}
+                          contextId={prescription.id_prescription || prescription.id}
+                          contextTitle={`${prescription.type_prescription === 'ordonnance' ? 'Ordonnance' : 'Examen'} du ${formatDate(prescription.date_prescription)}`}
+                          className="w-full"
+                        />
+                      </div>
+                    )}
 
                     {/* Boutons spécifiques au QR Code */}
                     {prescription.qrCode && (

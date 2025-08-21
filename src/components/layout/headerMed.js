@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { FaComments, FaBell } from "react-icons/fa";
 
 // gestion du profil medecin
 import { getMedecinProfile, logoutMedecin, fetchMedecinDetails } from "../../services/api/authApi";
@@ -13,12 +14,56 @@ function MedHeader({ doctor = { nom: "{user?.nom || 'Utilisateur'}", specialite:
   const [dossiersCount, setDossiersCount] = useState(0);
   const [consultationsCount, setConsultationsCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [newMessagesCount, setNewMessagesCount] = useState(0);
   const navigate = useNavigate();
+
+  // Fonction pour compter les messages non lus
+  function countUnreadMessages() {
+    try {
+      const medecinData = JSON.parse(localStorage.getItem('medecin') || '{}');
+      const medecinId = medecinData.id_professionnel || medecinData.id;
+      
+      if (!medecinId) {
+        return 0;
+      }
+      
+      let totalUnread = 0;
+      
+      // Parcourir toutes les sessions de messagerie
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('messages_session_')) {
+          const sessionData = JSON.parse(localStorage.getItem(key) || '[]');
+          if (sessionData.length > 0) {
+            const sessionId = key.replace('messages_', '');
+            if (sessionId.includes(`_${medecinId}`)) {
+              // Compter les messages non lus de patients pour ce médecin
+              const unreadCount = sessionData.filter(msg => 
+                !msg.lu && 
+                msg.sender.type === 'patient' && 
+                msg.recipient.id === medecinId
+              ).length;
+              totalUnread += unreadCount;
+            }
+          }
+        }
+      }
+      
+      setNewMessagesCount(totalUnread);
+      return totalUnread;
+    } catch (error) {
+      console.error('Erreur lors du comptage des messages non lus:', error);
+      return 0;
+    }
+  }
 
   // Fonction pour récupérer les données du tableau de bord
   async function fetchDashboardData() {
     try {
       console.log('🔍 Récupération des données du tableau de bord...');
+      
+      // Compter les messages non lus
+      countUnreadMessages();
       
       // ✅ CORRECTION : Utiliser getPatients de patientApi au lieu de fetchPatientsList
       console.log('🔍 Récupération des patients via getPatients...');
@@ -169,6 +214,16 @@ function MedHeader({ doctor = { nom: "{user?.nom || 'Utilisateur'}", specialite:
     
     fetchProfile();
   }, [navigate]);
+
+  // Actualiser le compteur de messages périodiquement
+  useEffect(() => {
+    countUnreadMessages();
+    
+    // Actualiser toutes les 30 secondes
+    const interval = setInterval(countUnreadMessages, 30000);
+    
+    return () => clearInterval(interval);
+  }, [user]);
   const handleLogout = async (e) => {
     e.preventDefault();
     try {
@@ -190,6 +245,9 @@ function MedHeader({ doctor = { nom: "{user?.nom || 'Utilisateur'}", specialite:
   const agenda = () => {
       navigate("/agenda");
     };
+  const messaging = () => {
+      navigate("/medecin#messaging");
+    };
   return (
     <div className="max-w-5xl mx-auto">
       <div className="bg-white rounded-lg shadow-md p-6 mb-8 card">
@@ -208,6 +266,23 @@ function MedHeader({ doctor = { nom: "{user?.nom || 'Utilisateur'}", specialite:
                   alt="Photo de profil du médecin"
                   className="rounded-full h-10 w-10 border-2 border-indigo-200"
                 />
+                
+                {/* Indicateur de messagerie */}
+                <div className="relative">
+                  <button
+                    onClick={messaging}
+                    className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors duration-200"
+                    title="Messagerie patients"
+                  >
+                    <FaComments className="w-5 h-5" />
+                    {newMessagesCount > 0 && (
+                      <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                        {newMessagesCount > 9 ? '9+' : newMessagesCount}
+                      </span>
+                    )}
+                  </button>
+                </div>
+                
                 <button
                   className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-700 transition-colors duration-200 text-sm font-medium"
                   onClick={handleLogout}
@@ -274,6 +349,18 @@ function MedHeader({ doctor = { nom: "{user?.nom || 'Utilisateur'}", specialite:
               <button onClick={consultation} className="bg-indigo-100 text-indigo-800 px-3 py-1 rounded-md text-sm hover:bg-indigo-200 transition-colors duration-200">Nouvelle Consultation</button>
               <button onClick={dossierPatient} className="bg-gray-100 text-gray-800 px-3 py-1 rounded-md text-sm hover:bg-gray-200 transition-colors duration-200">Dossiers Patients</button>
               <button onClick={agenda} className="bg-gray-100 text-gray-800 px-3 py-1 rounded-md text-sm hover:bg-gray-200 transition-colors duration-200">Agenda</button>
+              <button 
+                onClick={messaging} 
+                className="bg-blue-100 text-blue-800 px-3 py-1 rounded-md text-sm hover:bg-blue-200 transition-colors duration-200 relative"
+              >
+                <FaComments className="inline w-3 h-3 mr-1" />
+                Messagerie
+                {newMessagesCount > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center">
+                    {newMessagesCount > 9 ? '9+' : newMessagesCount}
+                  </span>
+                )}
+              </button>
             </div>
           </div>
         </div>
