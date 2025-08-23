@@ -1,196 +1,120 @@
-import { useState, useEffect, useCallback } from 'react';
-import { getStoredPatient } from '../services/api/authApi';
+// src/hooks/useNotifications.js
 
-const useAppointmentNotifications = () => {
+import { useState, useEffect, useCallback } from 'react';
+import messagingService from '../services/api/messagingApi';
+
+/**
+ * Hook pour gérer les notifications en temps réel (nouveaux messages, etc.)
+ * en s'intégrant avec le service de messagerie et les WebSockets.
+ */
+const useNotifications = () => {
+  // Les notifications peuvent être des messages, des alertes, etc.
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
 
-  // Récupérer le patient connecté
-  const getCurrentPatient = useCallback(() => {
-    return getStoredPatient();
+  /**
+   * Charge l'état initial des notifications.
+   * Pour la messagerie, cela signifie charger les conversations avec des messages non lus.
+   */
+  const loadInitialNotifications = useCallback(async () => {
+    try {
+      // Note : Cette fonction n'existe pas encore dans votre service, mais c'est l'approche idéale.
+      // En attendant, on peut se baser sur le rechargement des conversations.
+      // const unreadConvs = await messagingService.getUnreadConversations();
+      
+      // Pour l'instant, on se contente d'initialiser. Le rafraîchissement se fera via WebSocket.
+      console.log('🔔 [useNotifications] Hook initialisé.');
+
+    } catch (error) {
+      console.error('❌ Erreur lors du chargement des notifications initiales:', error);
+    }
   }, []);
 
-  // Charger les notifications existantes
-  const loadNotifications = useCallback(() => {
-    const patient = getCurrentPatient();
-    if (!patient) return;
-
-    const patientId = patient.id_patient || patient.id;
-    const patientRemindersKey = `patient_reminders_${patientId}`;
-    const storedNotifications = JSON.parse(localStorage.getItem(patientRemindersKey) || '[]');
-    
-    // Filtrer les notifications non lues
-    const unreadNotifications = storedNotifications.filter(notification => 
-      !notification.lu && notification.type === 'rendez-vous'
-    );
-    
-    setNotifications(unreadNotifications);
-    setUnreadCount(unreadNotifications.length);
-  }, [getCurrentPatient]);
-
-  // Marquer une notification comme lue
-  const markAsRead = useCallback((notificationId) => {
-    const patient = getCurrentPatient();
-    if (!patient) return;
-
-    const patientId = patient.id_patient || patient.id;
-    const patientRemindersKey = `patient_reminders_${patientId}`;
-    const storedNotifications = JSON.parse(localStorage.getItem(patientRemindersKey) || '[]');
-    
-    const updatedNotifications = storedNotifications.map(notification => 
-      notification.id === notificationId 
-        ? { ...notification, lu: true, date_lecture: new Date().toISOString() }
-        : notification
-    );
-    
-    localStorage.setItem(patientRemindersKey, JSON.stringify(updatedNotifications));
-    loadNotifications();
-  }, [getCurrentPatient, loadNotifications]);
-
-  // Accepter un rendez-vous
-  const acceptAppointment = useCallback((notificationId) => {
-    const patient = getCurrentPatient();
-    if (!patient) return;
-
-    const patientId = patient.id_patient || patient.id;
-    const patientRemindersKey = `patient_reminders_${patientId}`;
-    const storedNotifications = JSON.parse(localStorage.getItem(patientRemindersKey) || '[]');
-    
-    const updatedNotifications = storedNotifications.map(notification => 
-      notification.id === notificationId 
-        ? { 
-            ...notification, 
-            lu: true, 
-            statut: 'accepte',
-            date_reponse: new Date().toISOString(),
-            reponse: 'accepte'
-          }
-        : notification
-    );
-    
-    localStorage.setItem(patientRemindersKey, JSON.stringify(updatedNotifications));
-    loadNotifications();
-    
-    // Ici, vous pourriez appeler une API pour confirmer l'acceptation
-    console.log('✅ Rendez-vous accepté:', notificationId);
-  }, [getCurrentPatient, loadNotifications]);
-
-  // Décliner un rendez-vous
-  const declineAppointment = useCallback((notificationId) => {
-    const patient = getCurrentPatient();
-    if (!patient) return;
-
-    const patientId = patient.id_patient || patient.id;
-    const patientRemindersKey = `patient_reminders_${patientId}`;
-    const storedNotifications = JSON.parse(localStorage.getItem(patientRemindersKey) || '[]');
-    
-    const updatedNotifications = storedNotifications.map(notification => 
-      notification.id === notificationId 
-        ? { 
-            ...notification, 
-            lu: true, 
-            statut: 'decline',
-            date_reponse: new Date().toISOString(),
-            reponse: 'decline'
-          }
-        : notification
-    );
-    
-    localStorage.setItem(patientRemindersKey, JSON.stringify(updatedNotifications));
-    loadNotifications();
-    
-    // Ici, vous pourriez appeler une API pour confirmer le refus
-    console.log('❌ Rendez-vous décliné:', notificationId);
-  }, [getCurrentPatient, loadNotifications]);
-
-  // Supprimer une notification
-  const removeNotification = useCallback((notificationId) => {
-    const patient = getCurrentPatient();
-    if (!patient) return;
-
-    const patientId = patient.id_patient || patient.id;
-    const patientRemindersKey = `patient_reminders_${patientId}`;
-    const storedNotifications = JSON.parse(localStorage.getItem(patientRemindersKey) || '[]');
-    
-    const updatedNotifications = storedNotifications.filter(notification => 
-      notification.id !== notificationId
-    );
-    
-    localStorage.setItem(patientRemindersKey, JSON.stringify(updatedNotifications));
-    loadNotifications();
-  }, [getCurrentPatient, loadNotifications]);
-
-  // Marquer toutes les notifications comme lues
-  const markAllAsRead = useCallback(() => {
-    const patient = getCurrentPatient();
-    if (!patient) return;
-
-    const patientId = patient.id_patient || patient.id;
-    const patientRemindersKey = `patient_reminders_${patientId}`;
-    const storedNotifications = JSON.parse(localStorage.getItem(patientRemindersKey) || '[]');
-    
-    const updatedNotifications = storedNotifications.map(notification => 
-      notification.type === 'rendez-vous' 
-        ? { ...notification, lu: true, date_lecture: new Date().toISOString() }
-        : notification
-    );
-    
-    localStorage.setItem(patientRemindersKey, JSON.stringify(updatedNotifications));
-    loadNotifications();
-  }, [getCurrentPatient, loadNotifications]);
-
-  // Écouter les changements dans le localStorage (pour les notifications en temps réel)
+  // Effet principal pour l'initialisation et l'écoute des événements WebSocket
   useEffect(() => {
-    const handleStorageChange = (e) => {
-      if (e.key && e.key.startsWith('patient_reminders_')) {
-        loadNotifications();
-      }
+    // 1. Charger l'état initial au montage du hook
+    loadInitialNotifications();
+
+    // 2. Définir le gestionnaire pour les nouveaux messages reçus via WebSocket
+    const handleNewMessage = (newMessage) => {
+      console.log('🔔 [useNotifications] Nouveau message reçu, création d\'une notification.');
+      
+      const newNotification = {
+        id: newMessage.id || `notif_${Date.now()}`,
+        type: 'nouveau_message',
+        titre: `Nouveau message de ${newMessage.sender?.name || 'Utilisateur'}`,
+        message: newMessage.content,
+        timestamp: newMessage.timestamp,
+        isRead: false,
+        priorite: 'haute',
+        data: newMessage // Contient toutes les infos du message original
+      };
+
+      // Ajoute la nouvelle notification en haut de la liste
+      setNotifications(prev => [newNotification, ...prev]);
     };
 
-    window.addEventListener('storage', handleStorageChange);
-    
-    // Charger les notifications au montage du composant
-    loadNotifications();
-    
-    // Vérifier les nouvelles notifications toutes les 30 secondes
-    const interval = setInterval(loadNotifications, 30000);
-    
+    // 3. S'abonner aux nouveaux messages via notre service centralisé
+    const unsubscribe = messagingService.onNewMessage(handleNewMessage);
+
+    // 4. Nettoyer l'abonnement quand le composant qui utilise le hook est démonté
     return () => {
-      window.removeEventListener('storage', handleStorageChange);
-      clearInterval(interval);
+      unsubscribe();
     };
-  }, [loadNotifications]);
+  }, [loadInitialNotifications]);
 
-  // Obtenir les notifications par priorité
-  const getNotificationsByPriority = useCallback(() => {
-    const urgent = notifications.filter(n => n.priorite === 'haute');
-    const normal = notifications.filter(n => n.priorite === 'moyenne');
-    const low = notifications.filter(n => n.priorite === 'basse');
-    
-    return { urgent, normal, low };
+  // Mettre à jour le compteur de messages non lus à chaque changement des notifications
+  useEffect(() => {
+    const count = notifications.filter(n => !n.isRead).length;
+    setUnreadCount(count);
   }, [notifications]);
 
-  // Obtenir les notifications par type
-  const getNotificationsByType = useCallback(() => {
-    const appointments = notifications.filter(n => n.type === 'rendez-vous');
-    const reminders = notifications.filter(n => n.type === 'rappel');
-    const alerts = notifications.filter(n => n.type === 'alerte');
-    
-    return { appointments, reminders, alerts };
-  }, [notifications]);
+  /**
+   * Marque une notification spécifique comme lue.
+   */
+  const markAsRead = useCallback((notificationId) => {
+    setNotifications(prev =>
+      prev.map(n =>
+        n.id === notificationId ? { ...n, isRead: true } : n
+      )
+    );
+    // Dans une application réelle, on appellerait ici une API:
+    // messagingService.markNotificationAsRead(notificationId);
+  }, []);
+
+  /**
+   * Marque toutes les notifications comme lues.
+   */
+  const markAllAsRead = useCallback(() => {
+    setNotifications(prev =>
+      prev.map(n => ({ ...n, isRead: true }))
+    );
+  }, []);
+
+  /**
+   * Supprime une notification de la liste.
+   */
+  const removeNotification = useCallback((notificationId) => {
+    setNotifications(prev =>
+      prev.filter(n => n.id !== notificationId)
+    );
+  }, []);
+  
+  /**
+   * Vide toutes les notifications.
+   */
+  const clearAll = useCallback(() => {
+    setNotifications([]);
+  }, []);
 
   return {
     notifications,
     unreadCount,
-    loadNotifications,
     markAsRead,
-    acceptAppointment,
-    declineAppointment,
-    removeNotification,
     markAllAsRead,
-    getNotificationsByPriority,
-    getNotificationsByType
+    removeNotification,
+    clearAll,
   };
 };
 
-export default useAppointmentNotifications;
+export default useNotifications;

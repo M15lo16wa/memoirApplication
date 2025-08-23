@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from "react";
 import MedHeader from "../components/layout/headerMed";
-import MedecinMessaging from "../components/messaging/MedecinMessaging";
+import SecureMessaging from "../components/messaging/SecureMessaging";
 import { ProtectedMedecinRoute } from "../services/api/protectedRoute";
-import { FaComments, FaCalendarAlt, FaUserInjured, FaChartBar, FaSearch, FaSpinner, FaBell } from "react-icons/fa";
+import { FaComments, FaCalendarAlt, FaUserInjured, FaChartBar, FaSearch, FaSpinner, FaBell, FaUser } from "react-icons/fa";
 import medecinApi from "../services/api/medecinApi";
 
 function Medecin() {
@@ -20,6 +20,9 @@ function Medecin() {
     const [agenda, setAgenda] = useState([]);
     const [loading, setLoading] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
+    
+    // État pour la messagerie sécurisée
+    const [showSecureMessaging, setShowSecureMessaging] = useState(false);
     
     // Détecter le hash dans l'URL pour ouvrir directement la messagerie
     useEffect(() => {
@@ -101,12 +104,119 @@ function Medecin() {
         }
     };
 
+    // Ouvrir la messagerie sécurisée
+    const handleOpenSecureMessaging = () => {
+        setShowSecureMessaging(true);
+    };
+
+    // Fermer la messagerie sécurisée
+    const handleCloseSecureMessaging = () => {
+        setShowSecureMessaging(false);
+    };
+
     const renderContent = () => {
         switch (activeSection) {
             case 'messaging':
                 return (
                     <div className="h-[calc(100vh-200px)]">
-                        <MedecinMessaging />
+                        <div className="bg-white rounded-lg shadow-lg h-full flex flex-col">
+                            {/* Header de la messagerie */}
+                            <div className="p-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50">
+                                <div className="flex items-center space-x-3">
+                                    <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                                        <FaComments className="w-5 h-5 text-blue-600" />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-lg font-semibold text-gray-900">Messagerie Sécurisée</h3>
+                                        <p className="text-sm text-gray-600">Messages du patient en attente de réponse</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Liste des messages du patient */}
+                            <div className="flex-1 p-4 overflow-y-auto">
+                                <div className="space-y-3">
+                                    {/* Message 1 */}
+                                    <div 
+                                        className="p-4 bg-white border border-gray-200 rounded-lg cursor-pointer hover:bg-blue-50 hover:border-blue-300 transition-colors"
+                                        onClick={() => setShowSecureMessaging(true)}
+                                    >
+                                        <div className="flex items-start space-x-3">
+                                            <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                                                <FaUser className="w-5 h-5 text-blue-600" />
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center justify-between">
+                                                    <h4 className="font-medium text-gray-900">Patient</h4>
+                                                    <span className="text-xs text-gray-500">00:34:19</span>
+                                                </div>
+                                                <p className="text-sm text-gray-600 mt-1">bonsoir docteur</p>
+                                                <div className="mt-2">
+                                                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                                                        En attente de réponse
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Message 2 */}
+                                    <div 
+                                        className="p-4 bg-white border border-gray-200 rounded-lg cursor-pointer hover:bg-blue-50 hover:border-blue-300 transition-colors"
+                                        onClick={() => setShowSecureMessaging(true)}
+                                    >
+                                        <div className="flex items-start space-x-3">
+                                            <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                                                <FaUser className="w-5 h-5 text-blue-600" />
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center justify-between">
+                                                    <h4 className="font-medium text-gray-900">Patient</h4>
+                                                    <span className="text-xs text-gray-500">00:38:06</span>
+                                                </div>
+                                                <p className="text-sm text-gray-600 mt-1">bonsoir</p>
+                                                <div className="mt-2">
+                                                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                                                        En attente de réponse
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Message 3 */}
+                                    <div 
+                                        className="p-4 bg-white border border-gray-200 rounded-lg cursor-pointer hover:bg-blue-50 hover:border-blue-300 transition-colors"
+                                        onClick={() => setShowSecureMessaging(true)}
+                                    >
+                                        <div className="flex items-start space-x-3">
+                                            <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                                                <FaUser className="w-5 h-5 text-blue-600" />
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center justify-between">
+                                                    <h4 className="font-medium text-gray-900">Patient</h4>
+                                                    <span className="text-xs text-gray-500">00:42:11</span>
+                                                </div>
+                                                <p className="text-sm text-gray-600 mt-1">bonsoir docteur il est 0h</p>
+                                                <div className="mt-2">
+                                                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                                                        En attente de réponse
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Instructions */}
+                                <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                                    <p className="text-sm text-blue-800 text-center">
+                                        💬 Cliquez sur un message pour l'ouvrir et y répondre
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 );
             case 'patients':
@@ -440,6 +550,16 @@ function Medecin() {
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
                     {renderContent()}
                 </div>
+
+                {/* Modal de messagerie sécurisée */}
+                {showSecureMessaging && (
+                    <SecureMessaging
+                        contextType="ordonnance"
+                        contextId="15"
+                        isOpen={showSecureMessaging}
+                        onClose={handleCloseSecureMessaging}
+                    />
+                )}
             </div>
         </ProtectedMedecinRoute>
     );
