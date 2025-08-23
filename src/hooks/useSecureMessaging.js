@@ -3,46 +3,53 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import messagingService from '../services/api/messagingApi';
 
-const useSecureMessaging = (contextType, contextId, initialMedecinInfo) => {
+const useSecureMessaging = (contextType, contextId) => {
   const [messages, setMessages] = useState([]);
   const [conversationId, setConversationId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const currentUserRef = useRef(messagingService.getCurrentUserFromToken());
 
-  // Charger l'historique initial des messages
   useEffect(() => {
-    if (!contextType || !contextId) return;
+    // Sécurité : Ne rien faire si l'ID n'est pas valide
+    if (!contextId) {
+        setLoading(false);
+        setError("Aucun identifiant de conversation n'a été fourni.");
+        return;
+    }
 
-    const fetchHistory = async () => {
+    const fetchMessages = async () => {
       try {
         setLoading(true);
         setError(null);
-        const history = await messagingService.getMessageHistory(contextType, contextId);
+        console.log(`🔄 [useSecureMessaging] Chargement des messages pour la conversation #${contextId}`);
 
-        if (history.conversation) {
-            const convId = history.conversation.id || history.conversation.id_conversation;
-            setConversationId(convId);
-            setMessages(history.messages || []);
-            messagingService.joinConversation(convId);
+        // === CORRECTION CLÉ ===
+        // On appelle la fonction qui charge les messages par l'ID de la conversation.
+        const result = await messagingService.getConversationMessages(contextId);
+
+        if (result && result.conversation) {
+            setConversationId(result.conversation.id);
+            setMessages(result.messages || []);
+            messagingService.joinConversation(result.conversation.id);
         } else {
-            setMessages([]);
+            throw new Error("La conversation n'a pas pu être chargée.");
         }
       } catch (err) {
+        console.error("❌ [useSecureMessaging] Erreur lors du chargement des messages:", err);
         setError(err.message);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchHistory();
-  }, [contextType, contextId]);
+    fetchMessages();
+  }, [contextId]); // Le hook ne dépend que de l'ID de la conversation
 
   // S'abonner aux nouveaux messages en temps réel via WebSocket
   useEffect(() => {
     if (!conversationId) return;
     const handleNewMessage = (newMessage) => {
-      // Le backend envoie l'ID de conv dans la propriété `conversation_id` ou `conversationId`
       const msgConvId = newMessage.conversation_id || newMessage.conversationId;
       if (Number(msgConvId) === Number(conversationId)) {
         setMessages(prevMessages => {
@@ -55,24 +62,15 @@ const useSecureMessaging = (contextType, contextId, initialMedecinInfo) => {
     return unsubscribe;
   }, [conversationId]);
 
-
-  // Fonction pour envoyer un message
+  // Fonction pour envoyer un message (inchangée, mais confirmée correcte)
   const sendMessage = useCallback(async (content) => {
     const currentUser = currentUserRef.current;
-
-    // === CORRECTION CLÉ : VÉRIFICATION DE SÉCURITÉ ===
     if (!currentUser) {
-        const errorMessage = "Erreur: Utilisateur non authentifié. Impossible d'envoyer le message.";
-        console.error(`❌ [useSecureMessaging] ${errorMessage}`);
-        setError(errorMessage); // Met à jour l'état pour afficher l'erreur dans l'UI
-        return; // Arrête l'exécution pour éviter le crash
+        const errorMessage = "Erreur: Utilisateur non authentifié.";
+        setError(errorMessage);
+        return;
     }
-    // ===============================================
-
-    if (!content.trim() || !conversationId) {
-      console.error("❌ Envoi impossible : contenu vide ou ID de conversation manquant.");
-      return;
-    }
+    if (!content.trim() || !conversationId) return;
     
     const tempMessage = {
       id: `temp_${Date.now()}`,
@@ -85,16 +83,10 @@ const useSecureMessaging = (contextType, contextId, initialMedecinInfo) => {
     setMessages(prev => [...prev, tempMessage]);
 
     try {
-      const messageData = {
-        contenu: content.trim(),
-        type_message: 'texte',
-      };
-      
+      const messageData = { contenu: content.trim(), type_message: 'texte' };
       const sentMessage = await messagingService.sendMessageToConversation(conversationId, messageData);
       setMessages(prev => prev.map(msg => (msg.id === tempMessage.id ? sentMessage : msg)));
-    
     } catch (err) {
-      console.error("❌ [useSecureMessaging] Erreur lors de l'envoi du message:", err);
       setMessages(prev => prev.map(msg => (msg.id === tempMessage.id ? { ...tempMessage, status: 'error' } : msg)));
     }
   }, [conversationId]);

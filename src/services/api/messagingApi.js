@@ -214,13 +214,31 @@ class MessagingService {
             messages: this.normalizeMessages(response.data.data.messages || [])
         };
       }
-       return { conversation: null, messages: [], pagination: null };
+      return { conversation: null, messages: [], pagination: null };
     } catch (error) {
       throw this.handleApiError(error, `récupération de l'historique ${contextType}`);
     }
   }
   
   // ===== NORMALISATION ET UTILITAIRES (inchangés) =====
+
+  // normalizeConversations(apiConversations) {
+  //   if (!Array.isArray(apiConversations)) return [];
+  //   return apiConversations.map(conv => ({
+  //     id: conv.id_conversation,
+  //     titre: conv.titre,
+  //     lastActivity: conv.date_modification,
+  //     patient: conv.patient || { id: 'unknown', nom: 'Patient', prenom: 'Inconnu' },
+  //     medecin: conv.medecin || { id: 'unknown', nom: 'Médecin', prenom: 'Inconnu' },
+  //     lastMessage: conv.dernier_message ? {
+  //       content: conv.dernier_message.contenu,
+  //       timestamp: conv.dernier_message.date_envoi,
+  //       sender: { type: conv.dernier_message.expediteur_type }
+  //     } : null,
+  //     contextType: this.extractContextFromTitle(conv.titre),
+  //     contextId: this.extractContextIdFromTitle(conv.titre),
+  //   }));
+  // }
 
   normalizeConversations(apiConversations) {
     if (!Array.isArray(apiConversations)) return [];
@@ -235,11 +253,11 @@ class MessagingService {
         timestamp: conv.dernier_message.date_envoi,
         sender: { type: conv.dernier_message.expediteur_type }
       } : null,
-      contextType: this.extractContextFromTitle(conv.titre),
-      contextId: this.extractContextIdFromTitle(conv.titre),
+      contextType: 'conversation', 
+      contextId: conv.id_conversation, // On utilise l'ID direct de la conversation.
     }));
   }
-
+  
   normalizeMessages(apiMessages) {
     if (!Array.isArray(apiMessages)) return [];
     return apiMessages.map(msg => ({
