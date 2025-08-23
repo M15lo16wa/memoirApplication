@@ -460,36 +460,8 @@ function DMPHistory({ patientId = null }) {
       return 'Patient inconnu';
     }
     
-    // Noms de test basés sur l'ID pour éviter "Patient ID: 5"
-    const testNames = {
-      1: 'Jean Dupont',
-      2: 'Marie Martin',
-      3: 'Pierre Durand',
-      4: 'Sophie Bernard',
-      5: 'MOLOWA ESSONGA', // Nom spécifique pour le patient 5
-      6: 'Claire Petit',
-      7: 'Lucas Moreau',
-      8: 'Emma Leroy',
-      9: 'Hugo Roux',
-      10: 'Léa David'
-    };
-    
-    // Si on a un nom de test, l'utiliser
-    if (testNames[patientId]) {
-      console.log('✅ Nom de test trouvé pour ID', patientId, ':', testNames[patientId]);
-      return testNames[patientId];
-    }
-    
-    // Sinon, générer un nom générique
-    const names = ['Martin', 'Bernard', 'Dubois', 'Thomas', 'Robert', 'Richard', 'Petit', 'Durand', 'Leroy', 'Moreau'];
-    const firstNames = ['Jean', 'Pierre', 'Michel', 'Philippe', 'Alain', 'Nicolas', 'Laurent', 'Gérard', 'Christian', 'Daniel'];
-    
-    const randomName = names[patientId % names.length];
-    const randomFirstName = firstNames[patientId % firstNames.length];
-    const generatedName = `${randomFirstName} ${randomName}`;
-    
-    console.log('✅ Nom généré pour ID', patientId, ':', generatedName);
-    return generatedName;
+    // Retourner un nom générique basé sur l'ID (plus de noms hardcodés)
+    return `Patient #${patientId}`;
   };
 
   // Fonction pour récupérer les informations du patient avec fallback

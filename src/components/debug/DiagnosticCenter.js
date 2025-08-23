@@ -5,6 +5,9 @@ import TestNavigationDebug from '../test/TestNavigationDebug';
 import Test2FARouteFix from '../test/Test2FARouteFix';
 import ApiCallsMonitor from '../diagnostic/ApiCallsMonitor';
 import TokenCleanupTester from './TokenCleanupTester';
+import NotificationTester from './NotificationTester';
+import NotificationSimulator from './NotificationSimulator';
+
 
 const DiagnosticCenter = () => {
     const [activeTool, setActiveTool] = useState('overview');
@@ -14,6 +17,9 @@ const DiagnosticCenter = () => {
         { id: 'auth-debugger', name: '🔍 Debugger d\'Authentification', component: <AuthenticationDebugger /> },
         { id: 'disconnection-monitor', name: '🚨 Moniteur de Déconnexion', component: <DisconnectionMonitor /> },
         { id: 'token-cleanup-tester', name: '🧹 Testeur de Nettoyage des Tokens', component: <TokenCleanupTester /> },
+        { id: 'notification-tester', name: '📧 Testeur de Notifications', component: <NotificationTester /> },
+        { id: 'notification-simulator', name: '🚀 Simulateur de Notifications', component: <NotificationSimulator /> },
+
         { id: 'navigation-test', name: '🧪 Test de Navigation', component: <TestNavigationDebug /> },
         { id: '2fa-route-test', name: '🔧 Test de Correction 2FA', component: <Test2FARouteFix /> },
         { id: 'api-calls-monitor', name: '🔍 Surveillance API', component: <ApiCallsMonitor /> },
@@ -102,6 +108,25 @@ const DiagnosticCenter = () => {
                     </button>
                 </div>
 
+                <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4">
+                    <h3 className="text-lg font-semibold text-indigo-800 mb-3">📧 Testeur de Notifications</h3>
+                    <p className="text-indigo-700 mb-3">
+                        Diagnostique les problèmes de notification du médecin lors de l'envoi de messages par les patients.
+                    </p>
+                    <ul className="text-sm text-indigo-600 space-y-1">
+                        <li>• Test complet du processus de notification</li>
+                        <li>• Vérification de l'envoi API et localStorage</li>
+                        <li>• Diagnostic des erreurs de notification</li>
+                        <li>• Test avec le médecin ID 79</li>
+                    </ul>
+                    <button
+                        onClick={() => setActiveTool('notification-tester')}
+                        className="mt-3 px-4 py-2 bg-indigo-500 text-white rounded hover:bg-indigo-600"
+                    >
+                        Ouvrir le Testeur
+                    </button>
+                </div>
+
                 <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
                     <h3 className="text-lg font-semibold text-purple-800 mb-3">📋 Instructions de Diagnostic</h3>
                     <p className="text-purple-700 mb-3">
@@ -135,24 +160,32 @@ const DiagnosticCenter = () => {
                     </button>
                 </div>
 
-                <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
-                    <h3 className="text-lg font-semibold text-purple-800 mb-3">🔍 Surveillance API</h3>
-                    <p className="text-purple-700 mb-3">
-                        Moniteur temps réel des appels API pour détecter les routes dépréciées et problèmes.
-                    </p>
-                    <ul className="text-sm text-purple-600 space-y-1">
-                        <li>• Détection automatique des routes dépréciées</li>
-                        <li>• Surveillance en temps réel des appels 2FA</li>
-                        <li>• Capture et analyse des erreurs API</li>
-                        <li>• Stack trace pour identifier la source des appels</li>
-                    </ul>
-                    <button
-                        onClick={() => setActiveTool('api-calls-monitor')}
-                        className="mt-3 px-4 py-2 bg-purple-500 text-white rounded hover:bg-purple-600"
-                    >
-                        Ouvrir la Surveillance
-                    </button>
-                </div>
+                                 <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                     <h3 className="text-lg font-semibold text-purple-800 mb-3">🔍 Surveillance API</h3>
+                     <p className="text-purple-700 mb-3">
+                         Moniteur temps réel des appels API pour détecter les routes dépréciées et problèmes.
+                     </p>
+                     <ul className="text-sm text-purple-600 space-y-1">
+                         <li>• Détection automatique des routes dépréciées</li>
+                         <li>• Surveillance en temps réel des appels 2FA</li>
+                         <li>• Capture et analyse des erreurs API</li>
+                         <li>• Stack trace pour identifier la source des appels</li>
+                     </ul>
+                     <button
+                         onClick={() => setActiveTool('api-calls-monitor')}
+                         className="mt-3 px-4 py-2 bg-purple-500 text-white rounded hover:bg-purple-600"
+                     >
+                         Ouvrir la Surveillance
+                     </button>
+                 </div>
+
+
+
+
+
+
+
+
             </div>
 
             <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
@@ -236,7 +269,13 @@ const DiagnosticCenter = () => {
             {activeTool === 'overview' && renderOverview()}
             {activeTool === 'auth-debugger' && <AuthenticationDebugger />}
             {activeTool === 'disconnection-monitor' && <DisconnectionMonitor />}
+            {activeTool === 'token-cleanup-tester' && <TokenCleanupTester />}
+            {activeTool === 'notification-tester' && <NotificationTester />}
+            {activeTool === 'notification-simulator' && <NotificationSimulator />}
+
             {activeTool === 'navigation-test' && <TestNavigationDebug />}
+            {activeTool === '2fa-route-test' && <Test2FARouteFix />}
+            {activeTool === 'api-calls-monitor' && <ApiCallsMonitor />}
         </div>
     );
 };

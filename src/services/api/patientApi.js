@@ -52,7 +52,7 @@ api.interceptors.request.use(
 // 👥 FONCTIONS PATIENT - GESTION DES DONNÉES PERSONNELLES
 // ============================================================================
 
-// 1-) Affichage de tous les patients (lecture seule)
+// 1-) Affichage de tous les patients (lecture seule) - FONCTION ADMINISTRATIVE
 export const getPatients = async () => {
     try {
         // Essayer d'abord l'endpoint spécifique pour les patients
@@ -130,6 +130,84 @@ export const getPatients = async () => {
         
     } catch (error) {
         console.error('Service patients non disponible:', error.message);
+        return [];
+    }
+};
+
+// 1b-) Récupération des patients d'un médecin spécifique (FONCTION SÉCURISÉE)
+export const getPatientsByMedecin = async (medecinId) => {
+    try {
+        console.log('🔍 [patientApi] Récupération des patients du médecin:', medecinId);
+        
+        // Endpoint spécifique pour récupérer les patients d'un médecin
+        const response = await api.get(`/medecin/${medecinId}/patients`);
+        
+        if (!response || !response.data) {
+            console.error('❌ [patientApi] Réponse API invalide pour les patients du médecin');
+            return [];
+        }
+        
+        // Format standard de l'API
+        if (response.data.status === 'success' && response.data.data && Array.isArray(response.data.data)) {
+            console.log('✅ [patientApi] Patients du médecin récupérés:', response.data.data.length);
+            return response.data.data;
+        }
+        
+        // Format alternatif
+        if (response.data.status === 'success' && response.data.data && response.data.data.patients && Array.isArray(response.data.data.patients)) {
+            console.log('✅ [patientApi] Patients du médecin récupérés (format alternatif):', response.data.data.patients.length);
+            return response.data.data.patients;
+        }
+        
+        // Fallback : essayer de récupérer via les consultations
+        console.log('🔄 [patientApi] Tentative de récupération via les consultations...');
+        const consultationsResponse = await api.get(`/medecin/${medecinId}/consultations`);
+        
+        if (consultationsResponse && consultationsResponse.data && consultationsResponse.data.status === 'success') {
+            const consultations = consultationsResponse.data.data || [];
+            const patientsMap = new Map();
+            
+            consultations.forEach(consultation => {
+                if (consultation.patient && consultation.patient.id_patient) {
+                    const patientId = consultation.patient.id_patient;
+                    if (!patientsMap.has(patientId)) {
+                        patientsMap.set(patientId, {
+                            id: patientId,
+                            id_patient: patientId,
+                            nom: consultation.patient.nom || '',
+                            prenom: consultation.patient.prenom || '',
+                            date_naissance: consultation.patient.date_naissance || null,
+                            sexe: consultation.patient.sexe || null,
+                            telephone: consultation.patient.telephone || null,
+                            email: consultation.patient.email || null,
+                            statut: 'Actif',
+                            // Informations de la consultation
+                            derniere_consultation: consultation.date_consultation,
+                            type_consultation: consultation.type_consultation
+                        });
+                    }
+                }
+            });
+            
+            const patients = Array.from(patientsMap.values());
+            console.log('✅ [patientApi] Patients extraits des consultations:', patients.length);
+            return patients;
+        }
+        
+        console.warn('⚠️ [patientApi] Aucun patient trouvé pour le médecin:', medecinId);
+        return [];
+        
+    } catch (error) {
+        console.error('❌ [patientApi] Erreur lors de la récupération des patients du médecin:', error);
+        
+        // En cas d'erreur, retourner une liste vide mais log l'erreur
+        if (error.response) {
+            console.error('❌ [patientApi] Détails de l\'erreur:', {
+                status: error.response.status,
+                message: error.response.data?.message || 'Erreur inconnue'
+            });
+        }
+        
         return [];
     }
 };
@@ -251,6 +329,10 @@ export const getPrescriptionsByPatient = async (patientId, options = {}) => {
         if (options.limit && options.limit > 0 && options.limit <= 100) {
             queryParams.append('limit', options.limit.toString());
         }
+        
+        // 🔑 PARAMÈTRE CRUCIAL : Inclure les informations du médecin
+        queryParams.append('include_medecin', 'true');
+        queryParams.append('include_redacteur', 'true');
 
         // Construction de l'URL avec paramètres
         const url = `/prescription/patient/${patientId}${queryParams.toString() ? '?' + queryParams.toString() : ''}`;
@@ -327,7 +409,7 @@ export const getPrescriptionsByPatient = async (patientId, options = {}) => {
     }
 };
 
-// 9-) Récupération de toutes les prescriptions d'un patient (avec pagination automatique)
+// 9-) Récupération de toutes les prescriptions d'un patient AVEC informations du médecin
 export const getAllPrescriptionsByPatient = async (patientId, options = {}) => {
     try {
         const allPrescriptions = [];
@@ -341,7 +423,9 @@ export const getAllPrescriptionsByPatient = async (patientId, options = {}) => {
             const result = await getPrescriptionsByPatient(patientId, {
                 ...options,
                 page,
-                limit: 100 // Maximum autorisé par l'API
+                limit: 100, // Maximum autorisé par l'API
+                include_medecin: true, // 🔑 FORCER l'inclusion des infos médecin
+                include_redacteur: true // 🔑 FORCER l'inclusion des infos rédacteur
             });
             
             if (result.success && result.prescriptions && result.prescriptions.length > 0) {
@@ -581,6 +665,7 @@ export const getPrescriptionCount = (apiResponse) => {
 const patientApi = {
     // Gestion des patients
     getPatients,
+    getPatientsByMedecin,
     getPatient,
     createPatient,
     updatePatient,

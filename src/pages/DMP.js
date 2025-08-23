@@ -10,7 +10,7 @@ import {
 
 // Routes et protection
 import { ProtectedPatientRoute } from "../services/api/protectedRoute";
-import { logoutPatient, getStoredPatient } from "../services/api/authApi";
+import { logoutAll, getStoredPatient } from "../services/api/authApi";
 
 // Hooks personnalisés
 import { useDMP } from "../hooks/useDMP";
@@ -35,7 +35,7 @@ import { uploadDocument } from "../services/api/medicalApi";
 import Validate2FA from "../components/2fa/Validate2FA";
 
 // Composant HistoriqueMedical qui utilise les fonctions de patientApi
-const HistoriqueMedical = () => {
+const HistoriqueMedical = ({ patientProfile }) => {
   const [prescriptions, setPrescriptions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -79,7 +79,242 @@ const HistoriqueMedical = () => {
       if (result.success) {
         setPrescriptions(result.prescriptions || []);
         setStats(result.stats);
-        console.log(' Historique médical chargé:', result.prescriptions.length, 'prescriptions');
+        console.log('✅ Historique médical chargé:', result.prescriptions.length, 'prescriptions');
+        
+        // 🔍 DEBUG : Vérifier la structure des prescriptions et des infos médecin
+        if (result.prescriptions && result.prescriptions.length > 0) {
+          console.log('🔍 [DMP] Structure de la première prescription:', result.prescriptions[0]);
+          console.log('🔍 [DMP] Propriétés disponibles:', Object.keys(result.prescriptions[0]));
+          
+          // Vérifier les informations médecin
+          const firstPrescription = result.prescriptions[0];
+          console.log('🔍 [DMP] Informations médecin:', {
+            medecin: firstPrescription.medecin,
+            redacteur: firstPrescription.redacteur,
+            hasMedecin: !!firstPrescription.medecin,
+            hasRedacteur: !!firstPrescription.redacteur,
+            medecinKeys: firstPrescription.medecin ? Object.keys(firstPrescription.medecin) : [],
+            redacteurKeys: firstPrescription.redacteur ? Object.keys(firstPrescription.redacteur) : []
+          });
+          
+          // Vérifier les IDs disponibles
+          if (firstPrescription.medecin) {
+            console.log('🔍 [DMP] ID médecin disponibles:', {
+              id: firstPrescription.medecin.id,
+              id_professionnel: firstPrescription.medecin.id_professionnel,
+              id_medecin: firstPrescription.medecin.id_medecin
+            });
+          }
+          
+          if (firstPrescription.redacteur) {
+            console.log('🔍 [DMP] ID rédacteur disponibles:', {
+              id: firstPrescription.redacteur.id,
+              id_professionnel: firstPrescription.redacteur.id_professionnel,
+              id_medecin: firstPrescription.redacteur.id_medecin
+            });
+          }
+          
+          // 🔧 CORRECTION : Normaliser les informations médecin pour la messagerie
+          const normalizedPrescriptions = result.prescriptions.map(prescription => {
+            let medecinInfo = null;
+            
+            // Identifiant de la prescription (priorité aux différents formats possibles)
+            const prescriptionId = prescription.id_prescription || prescription.id || prescription.prescription_id;
+            
+            // 🔍 DEBUG : Afficher toutes les propriétés disponibles pour le médecin
+            console.log('🔍 [DMP] Propriétés médecin disponibles pour prescription', prescriptionId, ':', {
+              medecin: prescription.medecin,
+              redacteur: prescription.redacteur,
+              medecin_id: prescription.medecin_id,
+              redacteur_id: prescription.redacteur_id,
+              prescripteur_id: prescription.prescripteur_id,
+              medecin_prescripteur: prescription.medecin_prescripteur,
+              // Vérifier toutes les propriétés qui pourraient contenir l'ID du médecin
+              allKeys: Object.keys(prescription).filter(key => 
+                key.toLowerCase().includes('medecin') || 
+                key.toLowerCase().includes('redacteur') || 
+                key.toLowerCase().includes('prescripteur')
+              )
+            });
+            
+            // Priorité 1: Utiliser prescription.medecin (structure complète)
+            if (prescription.medecin && (prescription.medecin.id || prescription.medecin.id_professionnel || prescription.medecin.id_medecin)) {
+              const medecinId = prescription.medecin.id || prescription.medecin.id_professionnel || prescription.medecin.id_medecin;
+              medecinInfo = {
+                id: medecinId,
+                id_professionnel: medecinId,
+                id_medecin: medecinId,
+                nom: prescription.medecin.nom || 'Médecin',
+                prenom: prescription.medecin.prenom || 'Inconnu',
+                specialite: prescription.medecin.specialite || 'Généraliste',
+                prescriptionId: prescriptionId,
+                prescriptionType: prescription.type_prescription || 'ordonnance'
+              };
+              console.log('✅ [DMP] Médecin trouvé via prescription.medecin:', medecinInfo);
+            }
+            // Priorité 2: Utiliser prescription.redacteur (structure complète)
+            else if (prescription.redacteur && (prescription.redacteur.id || prescription.redacteur.id_professionnel || prescription.redacteur.id_medecin)) {
+              const medecinId = prescription.redacteur.id || prescription.redacteur.id_professionnel || prescription.redacteur.id_medecin;
+              medecinInfo = {
+                id: medecinId,
+                id_professionnel: medecinId,
+                id_medecin: medecinId,
+                nom: prescription.redacteur.nom || 'Médecin',
+                prenom: prescription.redacteur.prenom || 'Inconnu',
+                specialite: prescription.redacteur.specialite || 'Généraliste',
+                prescriptionId: prescriptionId,
+                prescriptionType: prescription.type_prescription || 'ordonnance'
+              };
+              console.log('✅ [DMP] Médecin trouvé via prescription.redacteur:', medecinInfo);
+            }
+            // Priorité 3: Utiliser prescription.medecin_id (ID simple)
+            else if (prescription.medecin_id) {
+              medecinInfo = {
+                id: prescription.medecin_id,
+                id_professionnel: prescription.medecin_id,
+                id_medecin: prescription.medecin_id,
+                nom: 'Médecin',
+                prenom: 'Prescripteur',
+                specialite: 'Généraliste',
+                prescriptionId: prescriptionId,
+                prescriptionType: prescription.type_prescription || 'ordonnance'
+              };
+              console.log('✅ [DMP] Médecin trouvé via prescription.medecin_id:', medecinInfo);
+            }
+            // Priorité 4: Utiliser prescription.redacteur_id (ID simple)
+            else if (prescription.redacteur_id) {
+              medecinInfo = {
+                id: prescription.redacteur_id,
+                id_professionnel: prescription.redacteur_id,
+                id_medecin: prescription.redacteur_id,
+                nom: 'Médecin',
+                prenom: 'Rédacteur',
+                specialite: 'Généraliste',
+                prescriptionId: prescriptionId,
+                prescriptionType: prescription.type_prescription || 'ordonnance'
+              };
+              console.log('✅ [DMP] Médecin trouvé via prescription.redacteur_id:', medecinInfo);
+            }
+            // Priorité 5: Utiliser prescription.prescripteur_id (ID simple)
+            else if (prescription.prescripteur_id) {
+              medecinInfo = {
+                id: prescription.prescripteur_id,
+                id_professionnel: prescription.prescripteur_id,
+                id_medecin: prescription.prescripteur_id,
+                nom: 'Médecin',
+                prenom: 'Prescripteur',
+                specialite: 'Généraliste',
+                prescriptionId: prescriptionId,
+                prescriptionType: prescription.type_prescription || 'ordonnance'
+              };
+              console.log('✅ [DMP] Médecin trouvé via prescription.prescripteur_id:', medecinInfo);
+            }
+            // Priorité 6: Rechercher dans toutes les propriétés qui pourraient contenir l'ID du médecin
+            else {
+              const possibleMedecinKeys = Object.keys(prescription).filter(key => 
+                key.toLowerCase().includes('medecin') && 
+                prescription[key] && 
+                (typeof prescription[key] === 'number' || (typeof prescription[key] === 'string' && !isNaN(prescription[key])))
+              );
+              
+              if (possibleMedecinKeys.length > 0) {
+                const medecinId = prescription[possibleMedecinKeys[0]];
+                medecinInfo = {
+                  id: medecinId,
+                  id_professionnel: medecinId,
+                  id_medecin: medecinId,
+                  nom: 'Médecin',
+                  prenom: 'Prescripteur',
+                  specialite: 'Généraliste',
+                  prescriptionId: prescriptionId,
+                  prescriptionType: prescription.type_prescription || 'ordonnance'
+                };
+                console.log('✅ [DMP] Médecin trouvé via propriété alternative:', possibleMedecinKeys[0], medecinInfo);
+              } else {
+                console.warn('⚠️ [DMP] Aucune information médecin trouvée pour la prescription:', prescriptionId);
+              }
+            }
+            
+            return {
+              ...prescription,
+              medecinInfo: medecinInfo
+            };
+          });
+          
+          setPrescriptions(normalizedPrescriptions);
+          console.log('✅ Prescriptions normalisées avec informations médecin:', normalizedPrescriptions.length);
+          
+          // Vérifier qu'au moins une prescription a des informations médecin
+          const prescriptionsWithMedecin = normalizedPrescriptions.filter(p => p.medecinInfo);
+          if (prescriptionsWithMedecin.length === 0) {
+            console.warn('⚠️ [DMP] Aucune prescription avec informations médecin trouvée');
+            console.warn('⚠️ [DMP] Cela peut empêcher la messagerie de fonctionner correctement');
+            
+            // 🔧 FALLBACK : Essayer de récupérer les informations médecin depuis l'API
+            console.log('🔄 [DMP] Tentative de récupération des informations médecin depuis l\'API...');
+            try {
+              // Essayer de récupérer les informations du médecin depuis l'API de messagerie
+              const messagingApi = await import('../../services/api/messagingApi');
+              const messagingService = messagingApi.default;
+              
+              // Pour chaque prescription sans médecin, essayer de récupérer les infos
+              for (const prescription of normalizedPrescriptions) {
+                const prescriptionId = prescription.id_prescription || prescription.id || prescription.prescription_id;
+                
+                // Essayer de récupérer les informations du médecin depuis l'API
+                try {
+                  const medecinInfo = await messagingService.getUserInfo(prescription.medecin_id || prescription.redacteur_id, 'medecin');
+                  if (medecinInfo) {
+                    prescription.medecinInfo = {
+                      id: medecinInfo.id,
+                      id_professionnel: medecinInfo.id,
+                      id_medecin: medecinInfo.id,
+                      nom: medecinInfo.nom || 'Médecin',
+                      prenom: medecinInfo.prenom || 'Inconnu',
+                      specialite: medecinInfo.specialite || 'Généraliste',
+                      prescriptionId: prescriptionId,
+                      prescriptionType: prescription.type_prescription || 'ordonnance'
+                    };
+                    console.log('✅ [DMP] Informations médecin récupérées depuis l\'API pour prescription:', prescriptionId);
+                  }
+                } catch (error) {
+                  console.warn('⚠️ [DMP] Impossible de récupérer les infos médecin pour prescription:', prescriptionId, error.message);
+                }
+              }
+              
+              // Mettre à jour la liste des prescriptions avec médecin
+              const updatedPrescriptionsWithMedecin = normalizedPrescriptions.filter(p => p.medecinInfo);
+              if (updatedPrescriptionsWithMedecin.length > 0) {
+                console.log('✅ [DMP] Après fallback API:', updatedPrescriptionsWithMedecin.length, 'prescriptions avec médecin');
+              }
+            } catch (error) {
+              console.error('❌ [DMP] Erreur lors du fallback API pour les informations médecin:', error);
+            }
+          } else {
+            console.log('✅ [DMP] Prescriptions avec médecin:', prescriptionsWithMedecin.length, '/', normalizedPrescriptions.length);
+            
+            // Vérifier que les prescriptions ont bien tous les éléments nécessaires
+            prescriptionsWithMedecin.forEach((prescription, index) => {
+              const validation = {
+                prescriptionId: !!prescription.medecinInfo.prescriptionId,
+                medecinId: !!prescription.medecinInfo.id,
+                prescriptionType: !!prescription.medecinInfo.prescriptionType,
+                complete: !!(prescription.medecinInfo.prescriptionId && prescription.medecinInfo.id && prescription.medecinInfo.prescriptionType)
+              };
+              
+              if (validation.complete) {
+                console.log(`✅ [DMP] Prescription ${index + 1} complète:`, {
+                  prescriptionId: prescription.medecinInfo.prescriptionId,
+                  medecinId: prescription.medecinInfo.id,
+                  type: prescription.medecinInfo.prescriptionType
+                });
+              } else {
+                console.warn(`⚠️ [DMP] Prescription ${index + 1} incomplète:`, validation);
+              }
+            });
+          }
+        }
+
       } else {
         throw new Error(result.message || 'Erreur lors du chargement des prescriptions');
       }
@@ -459,17 +694,7 @@ const HistoriqueMedical = () => {
             {prescriptions.map((prescription, index) => (
               <div
                 key={index}
-                className="border rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer group focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
-                onClick={() => handlePrescriptionClick(prescription)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    handlePrescriptionClick(prescription);
-                  }
-                }}
-                tabIndex={0}
-                role="button"
-                aria-label={`Voir les détails de la prescription ${prescription.type_prescription} du ${formatDate(prescription.date_prescription)}`}
+                className="border rounded-lg p-4 hover:shadow-md transition-shadow group focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
               >
                 <div className="flex justify-between items-start">
                   {/* Checkbox de sélection */}
@@ -485,51 +710,66 @@ const HistoriqueMedical = () => {
                     />
                   </div>
                   <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
-                      {getTypeIcon(prescription.type_prescription)}
-                      <div>
-                        <h3 className="font-medium text-gray-900 group-hover:text-blue-600 transition-colors">
-                          {prescription.type_prescription === 'ordonnance' ? 'Ordonnance médicale' :
-                            prescription.type_prescription === 'examen' ? 'Demande d\'examen' :
-                              prescription.type_prescription === 'consultation' ? 'Consultation' :
-                                prescription.type_prescription}
-                          <span className="ml-2 text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <svg className="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                            </svg>
-                          </span>
-                          {/* Badge pour indiquer qu'il y a des détails */}
-                          {(prescription.nom_commercial || prescription.principe_actif || prescription.dosage || prescription.medicaments || prescription.examens) && (
-                            <span className="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                              <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    {/* Zone cliquable pour les détails - SÉPARÉE des actions */}
+                    <div 
+                      className="cursor-pointer hover:bg-blue-50 p-3 rounded-lg transition-colors"
+                      onClick={() => handlePrescriptionClick(prescription)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          handlePrescriptionClick(prescription);
+                        }
+                      }}
+                      tabIndex={0}
+                      role="button"
+                      aria-label={`Voir les détails de la prescription ${prescription.type_prescription} du ${formatDate(prescription.date_prescription)}`}
+                    >
+                      <div className="flex items-center gap-3 mb-2">
+                        {getTypeIcon(prescription.type_prescription)}
+                        <div>
+                          <h3 className="font-medium text-gray-900 group-hover:text-blue-600 transition-colors">
+                            {prescription.type_prescription === 'ordonnance' ? 'Ordonnance médicale' :
+                              prescription.type_prescription === 'examen' ? 'Demande d\'examen' :
+                                prescription.type_prescription === 'consultation' ? 'Consultation' :
+                                  prescription.type_prescription}
+                            <span className="ml-2 text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <svg className="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                               </svg>
-                              Détails
                             </span>
-                          )}
+                            {/* Badge pour indiquer qu'il y a des détails */}
+                            {(prescription.nom_commercial || prescription.principe_actif || prescription.dosage || prescription.medicaments || prescription.examens) && (
+                              <span className="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                </svg>
+                                Détails
+                              </span>
+                            )}
 
-                          {/* Badge pour indiquer qu'il y a un QR Code */}
-                          {prescription.qrCode && (
-                            <span className="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                              <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V6a1 1 0 00-1-1H5a1 1 0 00-1 1v1a1 1 0 001 1zm12 0h2a1 1 0 001-1V6a1 1 0 00-1-1h-2a1 1 0 00-1 1v1a1 1 0 001 1zM5 20h2a1 1 0 001-1v-1a1 1 0 00-1-1H5a1 1 0 00-1 1v1a1 1 0 001 1z" />
-                              </svg>
-                              QR Code
-                            </span>
-                          )}
-                        </h3>
-                        <p className="text-sm text-gray-600">
-                          Prescrit le {formatDate(prescription.date_prescription)}
-                        </p>
-                        {prescription.prescriptionNumber && (
-                          <p className="text-xs text-gray-500 font-mono">
-                            N° {prescription.prescriptionNumber}
+                            {/* Badge pour indiquer qu'il y a un QR Code */}
+                            {prescription.qrCode && (
+                              <span className="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                                <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V6a1 1 0 00-1-1H5a1 1 0 00-1 1v1a1 1 0 001 1zm12 0h2a1 1 0 001-1v-1a1 1 0 00-1-1H5a1 1 0 00-1 1v1a1 1 0 001 1z" />
+                                </svg>
+                                QR Code
+                              </span>
+                            )}
+                          </h3>
+                          <p className="text-sm text-gray-600">
+                            Prescrit le {formatDate(prescription.date_prescription)}
                           </p>
-                        )}
-                        <p className="text-xs text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity mt-1">
-                          Cliquez pour voir les détails
-                        </p>
+                          {prescription.prescriptionNumber && (
+                            <p className="text-xs text-gray-500 font-mono">
+                              N° {prescription.prescriptionNumber}
+                            </p>
+                          )}
+                          <p className="text-xs text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity mt-1">
+                            Cliquez pour voir les détails
+                          </p>
+                        </div>
                       </div>
                     </div>
 
@@ -867,18 +1107,17 @@ const HistoriqueMedical = () => {
                     </div>
                   </div>
 
-                  <div className="flex flex-col space-y-2 ml-4" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex flex-col space-y-2 ml-4">
                     {/* Boutons d'action principaux */}
                     <div className="flex space-x-2">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (prescription.type_prescription === 'ordonnance') {
-                            handleGeneratePrescriptionPDF(prescription);
-                          } else {
-                            handleGeneratePrescriptionPDF(prescription);
-                          }
-                        }}
+                                              <button
+                          onClick={() => {
+                            if (prescription.type_prescription === 'ordonnance') {
+                              handleGeneratePrescriptionPDF(prescription);
+                            } else {
+                              handleGeneratePrescriptionPDF(prescription);
+                            }
+                          }}
                         disabled={isGenerating}
                         className="text-blue-600 hover:text-blue-800 p-2 rounded hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed"
                         title="Télécharger en PDF"
@@ -886,8 +1125,7 @@ const HistoriqueMedical = () => {
                         <FaDownload />
                       </button>
                       <button
-                        onClick={(e) => {
-                          e.stopPropagation();
+                        onClick={() => {
                           if (prescription.type_prescription === 'ordonnance') {
                             handlePrintPrescriptionPDF(prescription);
                           } else {
@@ -910,6 +1148,9 @@ const HistoriqueMedical = () => {
                           contextId={prescription.id_prescription || prescription.id}
                           contextTitle={`${prescription.type_prescription === 'ordonnance' ? 'Ordonnance' : 'Examen'} du ${formatDate(prescription.date_prescription)}`}
                           className="w-full"
+                          medecinInfo={prescription.medecinInfo}
+                          currentUserName={`${patientProfile?.prenom || ''} ${patientProfile?.nom || ''}`.trim() || 'Patient'}
+                          currentUserRole="patient"
                         />
                       </div>
                     )}
@@ -920,8 +1161,7 @@ const HistoriqueMedical = () => {
                         <button
                           className="text-purple-600 hover:text-purple-800 p-2 rounded hover:bg-purple-50 text-xs"
                           title="Télécharger QR Code"
-                          onClick={(e) => {
-                            e.stopPropagation();
+                          onClick={() => {
                             const link = document.createElement('a');
                             link.href = prescription.qrCode;
                             link.download = `QR_${prescription.prescriptionNumber || 'prescription'}.png`;
@@ -1600,7 +1840,7 @@ const DMP = () => {
 
   const handleLogout = useCallback(async () => {
     try {
-      await logoutPatient();
+      await logoutAll();
       navigate('/connexion', {
         state: { message: 'Vous avez été déconnecté avec succès' }
       });
@@ -2518,7 +2758,9 @@ const DMP = () => {
 
         {/* Historique Médical */}
         {activeTab === 'historique' && (
-          <HistoriqueMedical />
+          <HistoriqueMedical 
+            patientProfile={patientProfile}
+          />
         )}
 
         {/* Droits d'Accès */}
