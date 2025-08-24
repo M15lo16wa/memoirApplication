@@ -7,7 +7,7 @@ import { getMedecinProfile, logoutAll, fetchMedecinDetails } from "../../service
 import { getAllConsultations, getAllDossiersMedical } from "../../services/api/medicalApi";
 import { getPatients } from "../../services/api/patientApi";
 
-function MedHeader({ doctor = { nom: "{user?.nom || 'Utilisateur'}", specialite: "[Spécialité]", photo: "https://storage.googleapis.com/workspace-0f70711f-8b4e-4d94-86f1-2a93ccde5887/image/f9ed6aa5-deb1-41fb-9d2a-5f987e9ff42e.png" }, onLogout }) {
+function MedHeader({ doctor = { nom: "{user?.nom || 'Utilisateur'}", specialite: "[Spécialité]", photo: "" }, onLogout }) {
   const [user, setUser] = useState(null);
   const [role, setRole] = useState("");
   const [patientsCount, setPatientsCount] = useState(0);

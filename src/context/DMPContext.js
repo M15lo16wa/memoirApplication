@@ -602,3 +602,5 @@ export const useDMP = () => {
     }
     return context;
 }; 
+
+export default DMPContext;

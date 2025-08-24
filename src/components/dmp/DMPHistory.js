@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { getDMPAccessHistory, getPatientInfo, getPatientAuthorizations } from '../../services/api/dmpApi';
-import { useDMP } from '../../context/DMPContext';
+import { useDMP } from '../../hooks/useDMP';
 import { use2FA } from '../../hooks/use2FA';
 
 // Protection 2FA pour l'accès aux dossiers patients

@@ -6,11 +6,8 @@ import { createDossierMedical, getAllDossiersMedical, getDossierMedical, closeDo
 import { getPatients, getServices } from "../services/api/patientApi";
 import { isAuthenticated, isMedecinAuthenticated, isPatientAuthenticated, getMedecinProfile } from "../services/api/authApi";
 
-import { useDMP } from "../context/DMPContext";
-
 function DossierPatient() {
   const navigate = useNavigate();
-  const { state: dmpState } = useDMP();
 
   // États consolidés
   const [authState, setAuthState] = useState({

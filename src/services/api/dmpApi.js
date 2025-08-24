@@ -592,43 +592,107 @@ export const uploadDocumentDMP = async (patientId, documentData) => {
 // Utiliser les nouveaux endpoints auto-mesures dédiés
 export const getAutoMesuresDMP = async (patientId = null, type = null) => {
     console.log('🔍 getAutoMesuresDMP - FONCTION APPELÉE avec patientId:', patientId, 'et type:', type);
-    
-    let url;
-    if (patientId) {
+    try {
+        let url;
+    	if (patientId) {
         // ✅ Utiliser le nouvel endpoint auto-mesures dédié
-        url = `/patients/${patientId}/dmp/auto-mesures`;
-    } else {
-        // ✅ Récupérer toutes les auto-mesures
-        url = '/patients/dmp/auto-mesures';
-    }
+        url = `/patient/auto-mesures/${patientId}`;
+    	} else {
+        	// ✅ Récupérer toutes les auto-mesures
+        	url = `/patient/auto-mesures/${patientId}`;
+    	}
     
-    console.log('🔍 getAutoMesuresDMP - URL appelée:', url);
+    	console.log('🔍 getAutoMesuresDMP - URL appelée:', url);
     
-    const response = await dmpApi.get(url);
-    console.log('🔍 getAutoMesuresDMP - Réponse complète de l\'API:', response);
+    	const response = await dmpApi.get(url);
+    	console.log('🔍 getAutoMesuresDMP - Réponse complète de l\'API:', response);
     
-    // Les auto-mesures sont maintenant directement dans la réponse
-    let autoMesures = response.data.data || response.data || [];
-    console.log('🔍 getAutoMesuresDMP - Auto-mesures trouvées:', autoMesures);
+    	// Les auto-mesures sont maintenant directement dans la réponse
+    	let autoMesures = response.data.data || response.data || [];
+    	console.log('🔍 getAutoMesuresDMP - Auto-mesures trouvées:', autoMesures);
+    	if (type) {
+        	autoMesures = autoMesures.filter(mesure => 
+            	mesure.type_mesure === type || 
+            	mesure.type === type
+        	);
+        	console.log('🔍 getAutoMesuresDMP - Auto-mesures filtrées par type:', type, autoMesures);
+    	}
     
-    if (type) {
-        autoMesures = autoMesures.filter(mesure => 
-            mesure.type_mesure === type || 
-            mesure.type === type
-        );
-        console.log('🔍 getAutoMesuresDMP - Auto-mesures filtrées par type:', type, autoMesures);
-    }
-    
-    const result = { data: autoMesures };
-    console.log('🔍 getAutoMesuresDMP - Résultat final:', result);
-    return result;
+    	const result = { data: autoMesures };
+    	console.log('🔍 getAutoMesuresDMP - Résultat final:', result);
+return result;
+}catch(error){
+	console.error ( 'Erreur lors de la recuperation des auto-mesures DMP:', error);
 };
+
+};
+
+// export const getAutoMesuresDMP = async (patientId = null, type = null) => {
+//     console.log('🔍 getAutoMesuresDMP - FONCTION APPELÉE avec patientId:', patientId, 'et type:', type);
+    
+//     try {
+//         let url;
+//         if (patientId) {
+//             // ✅ Utiliser la route existante du dossier médical
+//             url = `/dossierMedical/patient/${patientId}/complet`;
+//         } else {
+//             // ✅ Récupérer le dossier du patient connecté
+//             const patient = getStoredPatient();
+//             if (!patient?.id_patient) {
+//                 throw new Error('Aucun patient connecté trouvé');
+//             }
+//             url = `/dossierMedical/patient/${patient.id_patient}/complet`;
+//         }
+        
+//         console.log('🔍 getAutoMesuresDMP - URL appelée:', url);
+        
+//         const response = await dmpApi.get(url);
+//         console.log('🔍 getAutoMesuresDMP - Réponse complète de l\'API:', response);
+        
+//         // Extraire les auto-mesures du dossier médical complet
+//         let autoMesures = [];
+//         if (response.data && response.data.data) {
+//             const dossierData = response.data.data;
+            
+//             // Essayer différents chemins possibles pour les auto-mesures
+//             if (dossierData.autoMesures && Array.isArray(dossierData.autoMesures)) {
+//                 autoMesures = dossierData.autoMesures;
+//             } else if (dossierData.mesures && Array.isArray(dossierData.mesures)) {
+//                 autoMesures = dossierData.mesures;
+//             } else if (dossierData.auto_mesures && Array.isArray(dossierData.auto_mesures)) {
+//                 autoMesures = dossierData.auto_mesures;
+//             } else if (dossierData.mesures_auto && Array.isArray(dossierData.mesures_auto)) {
+//                 autoMesures = dossierData.mesures_auto;
+//             }
+            
+//             console.log('🔍 getAutoMesuresDMP - Auto-mesures extraites du dossier:', autoMesures);
+//         }
+        
+//         if (type) {
+//             autoMesures = autoMesures.filter(mesure => 
+//                 mesure.type_mesure === type || 
+//                 mesure.type === type
+//             );
+//             console.log('🔍 getAutoMesuresDMP - Auto-mesures filtrées par type:', type, autoMesures);
+//         }
+        
+//         const result = { data: autoMesures };
+//         console.log('🔍 getAutoMesuresDMP - Résultat final:', result);
+//         return result;
+        
+//     } catch (error) {
+//         console.error('❌ Erreur lors de la récupération des auto-mesures DMP:', error);
+        
+//         // Retourner un tableau vide en cas d'erreur pour éviter le crash
+//         return { data: [] };
+//     }
+// };
 
 // --- Nouvelles Fonctionnalités Disponibles ---
 
 // Créer une nouvelle auto-mesure
 export const createAutoMesureDMP = async (autoMesureData) => {
-    const url = '/patients/dmp/auto-mesures';
+    const url = '/patient/auto-mesures';
     console.log('🔍 createAutoMesureDMP - Création auto-mesure:', autoMesureData);
     
     const response = await dmpApi.post(url, autoMesureData);
@@ -906,6 +970,7 @@ export const getDureeRestante = async (autorisationId) => {
 
 // Exporter toutes les fonctions pour une utilisation facile
 const dmpApiExports = {
+    // gestion des acces au DMP
     getPendingAccessRequests,
     respondToAccessRequest,
     getPatientAuthorizations,
@@ -916,6 +981,7 @@ const dmpApiExports = {
     getSecureDossierForMedecin,
     getSentAccessRequests,
     getMedecinAccessRequests,
+    // gestion des acces patient
     getPatientSentAccessRequests,
     getPatientAccessStatus,
     getPatientInfo, // Ajout de la nouvelle fonction
