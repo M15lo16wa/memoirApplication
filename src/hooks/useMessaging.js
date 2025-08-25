@@ -7,28 +7,43 @@ const useMessaging = () => {
   const [isConnected, setIsConnected] = useState(messagingService.isConnected);
 
   useEffect(() => {
-    // S'assurer que la connexion est tentée au montage si nécessaire
+    // S'assurer que la connexion WebSocket est établie
     if (!messagingService.isConnected) {
-        messagingService.connectWebSocket();
+      messagingService.connectWebSocket();
     }
-    
-    const handleConnectionChange = () => {
-      setIsConnected(messagingService.isConnected);
-    };
 
-    // Cet écouteur est hypothétique, à implémenter dans le service si besoin.
-    // Pour l'instant, on se base sur l'état interne du service.
-    // messagingService.onConnectionChange(handleConnectionChange);
+    // S'abonner aux changements d'état de connexion
+    const unsubscribe = messagingService.onConnectionChange((connected) => {
+      setIsConnected(connected);
+    });
 
-    const interval = setInterval(handleConnectionChange, 2000); // Vérifie l'état toutes les 2s
+    // Mettre à jour l'état initial
+    setIsConnected(messagingService.isConnected);
 
     return () => {
-      clearInterval(interval);
-      // messagingService.offConnectionChange(handleConnectionChange);
+      unsubscribe();
     };
   }, []);
 
-  return { isConnected };
+  // Fonctions utiles pour la gestion des conversations
+  const joinConversation = (conversationId) => {
+    messagingService.joinConversation(conversationId);
+  };
+
+  const leaveConversation = (conversationId) => {
+    messagingService.leaveConversation(conversationId);
+  };
+
+  const subscribeToMessages = (callback) => {
+    return messagingService.onNewMessage(callback);
+  };
+
+  return { 
+    isConnected,
+    joinConversation,
+    leaveConversation,
+    subscribeToMessages
+  };
 };
 
 export default useMessaging;

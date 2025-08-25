@@ -25,6 +25,7 @@ import AutorisationsEnAttente from "../components/dmp/AutorisationsEnAttente";
 import DMPHistory from "../components/dmp/DMPHistory";
 import NotificationManager from "../components/ui/NotificationManager";
 import MessagingButton from "../components/messaging/MessagingButton";
+import PatientMessagingTest from "../components/messaging/PatientMessagingTest";
 
 // APIs
 import * as dmpApi from "../services/api/dmpApi";
@@ -3587,6 +3588,9 @@ const DMP = () => {
           message="Vérification 2FA requise pour accéder aux dossiers patients"
         />
       )}
+
+      {/* Composant de test WebSocket côté patient */}
+      <PatientMessagingTest />
 
     </div>
   );

@@ -33,8 +33,6 @@ api.interceptors.request.use(
     (error) => Promise.reject(error)
 );
 
-// SUPPRIMÉE : La fonction autonome est retirée d'ici. La logique est maintenant DANS la classe.
-
 /**
  * Service de messagerie unifié (API REST + WebSocket)
  */
@@ -43,18 +41,16 @@ class MessagingService {
     this.socket = null;
     this.isConnected = false;
     this.messageCallbacks = new Set();
+    this.connectionCallbacks = new Set();
   }
 
   // ===== GESTION WEBSOCKET ET UTILISATEUR =====
 
   /**
-   * CORRIGÉE : C'est maintenant la seule et unique version de la fonction.
    * Décode le token JWT pour obtenir les infos de l'utilisateur.
-   * Cette méthode est publique pour que les hooks puissent l'utiliser.
    */
   getCurrentUserFromToken() {
     try {
-        // On utilise bien la version robuste qui cherche dans tous les tokens.
         const candidates = [
             localStorage.getItem('originalJWT'),
             localStorage.getItem('firstConnectionToken'),
@@ -86,7 +82,6 @@ class MessagingService {
       return;
     }
 
-    // Récupère le premier token valide pour l'authentification WebSocket
     const token = [
         localStorage.getItem('originalJWT'),
         localStorage.getItem('firstConnectionToken'),
@@ -119,8 +114,8 @@ class MessagingService {
     this.socket.on('connect', () => {
       this.isConnected = true;
       console.log(`✅ [messagingApi] WebSocket connecté avec l'ID: ${this.socket.id}`);
+      this.notifyConnectionChange();
       
-      // L'appel `this.getCurrentUserFromToken()` appelle maintenant la bonne méthode de classe.
       const user = this.getCurrentUserFromToken();
       if (user) {
         this.socket.emit('authenticate', {
@@ -131,18 +126,31 @@ class MessagingService {
       }
     });
     
-    this.socket.on('authenticated', (data) => console.log(`✅ [messagingApi] WebSocket authentifié:`, data.message));
+    this.socket.on('authenticated', (data) => {
+      console.log(`✅ [messagingApi] WebSocket authentifié:`, data.message);
+    });
+    
     this.socket.on('disconnect', (reason) => {
       this.isConnected = false;
       console.warn(`🔌 [messagingApi] WebSocket déconnecté: ${reason}`);
+      this.notifyConnectionChange();
     });
-    this.socket.on('connect_error', (error) => console.error('❌ [messagingApi] Erreur de connexion WebSocket:', error.message));
+    
+    this.socket.on('connect_error', (error) => {
+      console.error('❌ [messagingApi] Erreur de connexion WebSocket:', error.message);
+      this.isConnected = false;
+      this.notifyConnectionChange();
+    });
+    
     this.socket.on('new_message', (data) => {
       console.log('📨 [messagingApi] Nouveau message reçu via WebSocket:', data);
       const normalizedMessage = this.normalizeMessages([data.message])[0];
       this.messageCallbacks.forEach(callback => callback(normalizedMessage));
     });
-    this.socket.on('error', (error) => console.error('❌ [messagingApi] Erreur du serveur WebSocket:', error.message));
+    
+    this.socket.on('error', (error) => {
+      console.error('❌ [messagingApi] Erreur du serveur WebSocket:', error.message);
+    });
   }
   
   onNewMessage(callback) {
@@ -150,19 +158,38 @@ class MessagingService {
     return () => this.messageCallbacks.delete(callback);
   }
 
+  onConnectionChange(callback) {
+    this.connectionCallbacks.add(callback);
+    return () => this.connectionCallbacks.delete(callback);
+  }
+
+  notifyConnectionChange() {
+    this.connectionCallbacks.forEach(callback => callback(this.isConnected));
+  }
+
   joinConversation(conversationId) {
-    if (this.isConnected) {
+    if (this.isConnected && conversationId) {
       this.socket.emit('join_conversation', conversationId);
+      console.log(`🔗 [messagingApi] Rejoint la conversation ${conversationId}`);
+    }
+  }
+
+  leaveConversation(conversationId) {
+    if (this.isConnected && conversationId) {
+      this.socket.emit('leave_conversation', conversationId);
+      console.log(`🔗 [messagingApi] Quitté la conversation ${conversationId}`);
     }
   }
 
   disconnectWebSocket() {
     if (this.socket) {
       this.socket.disconnect();
+      this.isConnected = false;
+      this.notifyConnectionChange();
     }
   }
 
-  // ===== MÉTHODES API REST (inchangées) =====
+  // ===== MÉTHODES API REST =====
 
   async getMedecinConversations(medecinId) {
     try {
@@ -177,6 +204,10 @@ class MessagingService {
   }
 
   async getConversationMessages(conversationId) {
+    if (!conversationId) {
+      throw new Error('ID de conversation manquant');
+    }
+
     try {
       const response = await api.get(`/messaging/conversation/${conversationId}/messages`);
       if (response.data.status === 'success') {
@@ -193,6 +224,10 @@ class MessagingService {
   }
 
   async sendMessageToConversation(conversationId, messageData) {
+    if (!conversationId) {
+      throw new Error('ID de conversation manquant');
+    }
+
     try {
       const response = await api.post(`/messaging/conversation/${conversationId}/message`, messageData);
       if (response.data.status === 'success') {
@@ -200,14 +235,24 @@ class MessagingService {
       }
       return response.data;
     } catch (error) {
-      console.error("❌ [messagingApi] L'envoi du message a échoué. Cause probable : erreur serveur (500).", error);
+      console.error("❌ [messagingApi] L'envoi du message a échoué.", error);
       throw this.handleApiError(error, 'envoi du message');
     }
   }
 
   async getMessageHistory(contextType, contextId) {
     try {
-      const response = await api.get(`/messaging/history/${contextType}/${contextId}`);
+      let response;
+      
+      if (contextType === 'ordonnance') {
+        response = await api.get(`/messaging/history/ordonnance/${contextId}`);
+      } else if (contextType === 'consultation') {
+        response = await api.get(`/messaging/history/consultation/${contextId}`);
+      } else {
+        // Fallback vers l'ancienne route générique si elle existe
+        response = await api.get(`/messaging/history/${contextType}/${contextId}`);
+      }
+      
       if (response.data.status === 'success') {
         return {
             ...response.data.data,
@@ -219,31 +264,196 @@ class MessagingService {
       throw this.handleApiError(error, `récupération de l'historique ${contextType}`);
     }
   }
-  
-  // ===== NORMALISATION ET UTILITAIRES (inchangés) =====
 
-  // normalizeConversations(apiConversations) {
-  //   if (!Array.isArray(apiConversations)) return [];
-  //   return apiConversations.map(conv => ({
-  //     id: conv.id_conversation,
-  //     titre: conv.titre,
-  //     lastActivity: conv.date_modification,
-  //     patient: conv.patient || { id: 'unknown', nom: 'Patient', prenom: 'Inconnu' },
-  //     medecin: conv.medecin || { id: 'unknown', nom: 'Médecin', prenom: 'Inconnu' },
-  //     lastMessage: conv.dernier_message ? {
-  //       content: conv.dernier_message.contenu,
-  //       timestamp: conv.dernier_message.date_envoi,
-  //       sender: { type: conv.dernier_message.expediteur_type }
-  //     } : null,
-  //     contextType: this.extractContextFromTitle(conv.titre),
-  //     contextId: this.extractContextIdFromTitle(conv.titre),
-  //   }));
+  // async findOrCreateConversationForContext(contextType, contextId) {
+  //   try {
+  //     // Pour l'ordonnance, utiliser la route spécifique d'historique
+  //     if (contextType === 'ordonnance') {
+  //       const response = await api.get(`/messaging/history/ordonnance/${contextId}`);
+  //       if (response.data.status === 'success') {
+  //         const data = response.data.data;
+  //         if (data.conversation) {
+  //           return data.conversation;
+  //         } else {
+  //           // Créer une nouvelle conversation pour cette ordonnance
+  //           return await this.createConversationForOrdonnance(contextId);
+  //         }
+  //       }
+  //     }
+      
+  //     // Pour les consultations
+  //     if (contextType === 'consultation') {
+  //       const response = await api.get(`/messaging/history/consultation/${contextId}`);
+  //       if (response.data.status === 'success') {
+  //         const data = response.data.data;
+  //         if (data.conversation) {
+  //           return data.conversation;
+  //         } else {
+  //           // Créer une nouvelle conversation pour cette consultation
+  //           return await this.createConversationForConsultation(contextId);
+  //         }
+  //       }
+  //     }
+      
+  //     throw new Error(`Type de contexte non supporté: ${contextType}`);
+  //   } catch (error) {
+  //     throw this.handleApiError(error, 'création/recherche de conversation');
+  //   }
   // }
+  async findOrCreateConversationForContext(contextType, contextId, medecinInfo) {
+    if (!contextType || !contextId) {
+        throw new Error("Le type de contexte et l'ID sont requis.");
+    }
+    
+    try {
+        // Étape 1 : Essayer de récupérer la conversation existante.
+        console.log(`[messagingApi] Recherche d'une conversation pour ${contextType} #${contextId}`);
+        const response = await api.get(`/messaging/history/${contextType}/${contextId}`);
+        const data = response.data.data;
+
+        if (data && data.conversation) {
+            console.log(`[messagingApi] Conversation existante trouvée : ID ${data.conversation.id}`);
+            return { id_conversation: data.conversation.id || data.conversation.id_conversation };
+        }
+
+        console.log(`[messagingApi] Aucune conversation liée trouvée. Création en cours...`);
+        return await this.createConversationForContext(contextType, contextId, medecinInfo);
+
+    } catch (error) {
+        // Étape 2 : Gérer les erreurs.
+        if (error.response && (error.response.status === 404 || error.response.status === 400)) {
+            // Un 404 est normal ici, cela signifie qu'il faut créer la conversation.
+            console.log(`[messagingApi] L'historique n'existe pas (404). Création d'une nouvelle conversation.`);
+            return await this.createConversationForContext(contextType, contextId, medecinInfo);
+        }
+        
+        // Toutes les autres erreurs (comme le 400 "ID invalide") sont des erreurs réelles.
+        console.error(`[messagingApi] Erreur inattendue lors de la recherche de la conversation.`);
+        throw this.handleApiError(error, `recherche de conversation pour ${contextType}`);
+    }
+  }
+
+   /**
+   * AMÉLIORATION : Fonction unifiée pour la création de conversation.
+   */
+  async createConversationForContext(contextType, contextId, medecinInfo) {
+    try {
+        const titre = `${contextType.charAt(0).toUpperCase() + contextType.slice(1)} #${contextId}`;
+        
+        const response = await api.post(`/messaging/conversation`, {
+            titre: titre,
+            type_conversation: 'patient_medecin',
+            contexte_type: contextType,
+            contexte_id: contextId,
+            medecin_id: medecinInfo?.id,
+            patient_id: this.getCurrentUserFromToken()?.id,
+        });
+      
+        if (response.data.status === 'success') {
+            console.log(`[messagingApi] Conversation créée avec succès : ID ${response.data.data.conversation.id}`);
+            return { id_conversation: response.data.data.conversation.id };
+        }
+        throw new Error('La création de la conversation a échoué via l\'API.');
+    } catch (error) {
+        throw this.handleApiError(error, `création de conversation pour ${contextType}`);
+    }
+  }
+
+
+
+  async createConversationForOrdonnance(ordonnanceId) {
+    try {
+      const response = await api.post(`/messaging/conversation`, {
+        titre: `Ordonnance #${ordonnanceId}`,
+        type_conversation: 'patient_medecin',
+        participants: [] // Les participants seront déterminés côté backend
+      });
+      
+      if (response.data.status === 'success') {
+        return response.data.data.conversation;
+      }
+      throw new Error('Impossible de créer la conversation');
+    } catch (error) {
+      throw this.handleApiError(error, 'création de conversation pour ordonnance');
+    }
+  }
+
+  async createConversationForConsultation(consultationId) {
+    try {
+      const response = await api.post(`/messaging/conversation`, {
+        titre: `Consultation #${consultationId}`,
+        type_conversation: 'patient_medecin',
+        participants: [] // Les participants seront déterminés côté backend
+      });
+      
+      if (response.data.status === 'success') {
+        return response.data.data.conversation;
+      }
+      throw new Error('Impossible de créer la conversation');
+    } catch (error) {
+      throw this.handleApiError(error, 'création de conversation pour consultation');
+    }
+  }
+  
+  async getNewMessages(conversationId, since, limit = 50) {
+    try {
+      const response = await api.get(`/messaging/conversation/${conversationId}/new-messages`, {
+        params: { since, limit }
+      });
+      
+      if (response.data.status === 'success') {
+        return this.normalizeMessages(response.data.data.messages || []);
+      }
+      return [];
+    } catch (error) {
+      throw this.handleApiError(error, 'récupération des nouveaux messages');
+    }
+  }
+
+  async getConversationsWithUnreadMessages() {
+    try {
+      const response = await api.get('/messaging/conversations/unread');
+      if (response.data.status === 'success') {
+        return this.normalizeConversations(response.data.data.conversations || []);
+      }
+      return [];
+    } catch (error) {
+      throw this.handleApiError(error, 'récupération des conversations non lues');
+    }
+  }
+
+  async getConversationParticipants(conversationId) {
+    try {
+      const response = await api.get(`/messaging/conversation/${conversationId}/participants`);
+      if (response.data.status === 'success') {
+        return response.data.data.participants || [];
+      }
+      return [];
+    } catch (error) {
+      throw this.handleApiError(error, 'récupération des participants');
+    }
+  }
+
+  async getMessagingPermissions(ordonnanceId, patientId) {
+    try {
+      const response = await api.get(`/messaging/permissions/${ordonnanceId}/patient/${patientId}`);
+      if (response.data.status === 'success') {
+        return response.data.data;
+      }
+      return null;
+    } catch (error) {
+      throw this.handleApiError(error, 'vérification des permissions');
+    }
+  }
+
+  
+
+  // ===== NORMALISATION ET UTILITAIRES =====
 
   normalizeConversations(apiConversations) {
     if (!Array.isArray(apiConversations)) return [];
     return apiConversations.map(conv => ({
-      id: conv.id_conversation,
+      id: conv.id,
       titre: conv.titre,
       lastActivity: conv.date_modification,
       patient: conv.patient || { id: 'unknown', nom: 'Patient', prenom: 'Inconnu' },
@@ -253,8 +463,8 @@ class MessagingService {
         timestamp: conv.dernier_message.date_envoi,
         sender: { type: conv.dernier_message.expediteur_type }
       } : null,
-      contextType: 'conversation', 
-      contextId: conv.id_conversation, // On utilise l'ID direct de la conversation.
+      contextType: this.extractContextFromTitle(conv.titre),
+      contextId: this.extractContextIdFromTitle(conv.titre),
     }));
   }
   
@@ -265,7 +475,12 @@ class MessagingService {
       content: msg.contenu,
       timestamp: msg.date_envoi,
       status: msg.statut === 'envoyé' ? 'sent' : msg.statut,
-      expediteur_info: msg.expediteur_info || { id: msg.expediteur_id, type: msg.expediteur_type, nom: 'Inconnu' },
+      conversation_id: msg.id_conversation,
+      expediteur_info: msg.expediteur_info || { 
+        id: msg.expediteur_id, 
+        type: msg.expediteur_type, 
+        nom: 'Inconnu' 
+      },
       sender: {
         id: msg.expediteur_info?.id || msg.expediteur_id,
         type: msg.expediteur_info?.type || msg.expediteur_type,

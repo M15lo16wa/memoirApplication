@@ -47,8 +47,21 @@ const MedecinApiTester = () => {
         throw new Error('Aucun médecin connecté');
       }
       const medecinId = medecin.id_professionnel || medecin.id;
-      // Utiliser une ordonnance de test
-      return await messagingService.testRouteCompatibility(15);
+      // Utiliser une ordonnance de test dynamique ou la première disponible
+      try {
+        // Essayer de récupérer une ordonnance réelle du médecin
+        const ordonnances = await messagingService.getMedecinConversations(medecinId);
+        if (ordonnances && ordonnances.length > 0) {
+          const firstOrdonnance = ordonnances[0];
+          return await messagingService.testRouteCompatibility(firstOrdonnance.contextId || firstOrdonnance.id);
+        } else {
+          // Fallback : utiliser un ID de test générique
+          return await messagingService.testRouteCompatibility('test_route');
+        }
+      } catch (error) {
+        console.warn('Utilisation d\'un ID de test générique pour la compatibilité des routes');
+        return await messagingService.testRouteCompatibility('test_route');
+      }
     };
     
     const testSimulatedConversations = async () => {
