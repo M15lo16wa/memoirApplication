@@ -15,6 +15,10 @@ import FicheInscription from './pages/ficheInscription';
 import DMPPatientView from './pages/DMPPatientView';
 import Agenda from './pages/agenda';
 
+// messagerie
+import ChatMessage from './messaging/components/chatMessage';
+
+
 
 // protection des routes
 import { 
@@ -55,9 +59,10 @@ function App() {
       
       {/* Routes publiques */}
       <Route path='/fiche-inscription' element={<FicheInscription/>}/>
+      {/* Nouvelle route pour la messagerie */}
+      <Route path="/chat-message" element={<ChatMessage />} />
     </Routes>
   );
 }
 
 export default App;
-

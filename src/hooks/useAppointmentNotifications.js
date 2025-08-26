@@ -1,7 +1,7 @@
 // src/hooks/useNotifications.js
 
 import { useState, useEffect, useCallback } from 'react';
-import messagingService from '../services/api/messagingApi';
+
 
 /**
  * Hook pour gérer les notifications en temps réel (nouveaux messages, etc.)
@@ -18,13 +18,7 @@ const useNotifications = () => {
    */
   const loadInitialNotifications = useCallback(async () => {
     try {
-      // Note : Cette fonction n'existe pas encore dans votre service, mais c'est l'approche idéale.
-      // En attendant, on peut se baser sur le rechargement des conversations.
-      // const unreadConvs = await messagingService.getUnreadConversations();
-      
-      // Pour l'instant, on se contente d'initialiser. Le rafraîchissement se fera via WebSocket.
       console.log('🔔 [useNotifications] Hook initialisé.');
-
     } catch (error) {
       console.error('❌ Erreur lors du chargement des notifications initiales:', error);
     }
@@ -54,12 +48,12 @@ const useNotifications = () => {
       setNotifications(prev => [newNotification, ...prev]);
     };
 
-    // 3. S'abonner aux nouveaux messages via notre service centralisé
-    const unsubscribe = messagingService.onNewMessage(handleNewMessage);
+    // 3. Gestionnaire de nouveaux messages (à implémenter selon vos besoins)
+    // const unsubscribe = handleNewMessage;
 
-    // 4. Nettoyer l'abonnement quand le composant qui utilise le hook est démonté
+    // 4. Nettoyage
     return () => {
-      unsubscribe();
+      // Nettoyage des abonnements si nécessaire
     };
   }, [loadInitialNotifications]);
 
@@ -79,7 +73,7 @@ const useNotifications = () => {
       )
     );
     // Dans une application réelle, on appellerait ici une API:
-    // messagingService.markNotificationAsRead(notificationId);
+    // TODO: Implémenter l'API de marquage des notifications
   }, []);
 
   /**

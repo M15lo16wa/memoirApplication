@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
   FaUser, FaFileMedical, FaShieldAlt,
@@ -12,7 +12,7 @@ import {
 import { ProtectedPatientRoute } from "../services/api/protectedRoute";
 import { logoutAll, getStoredPatient } from "../services/api/authApi";
 
-// Hooks personnaliss
+// Hooks personnalisés
 import { useDMP } from "../hooks/useDMP";
 import { usePDFGenerator } from "../hooks/usePDFGenerator";
 import { use2FA } from "../hooks/use2FA";
@@ -50,7 +50,7 @@ const HistoriqueMedical = ({ patientProfile }) => {
   const [selectedPrescriptionsForPDF, setSelectedPrescriptionsForPDF] = useState([]);
   const [showPDFSelectionModal, setShowPDFSelectionModal] = useState(false);
 
-  // Hook pour la gnration de PDF
+  // Hook pour la génération de PDF
   const {
     isGenerating,
     downloadPrescriptionPDF,
@@ -66,7 +66,7 @@ const HistoriqueMedical = ({ patientProfile }) => {
       setLoading(true);
       setError(null);
 
-      // Rcuprer l'ID du patient connect
+      // Récupérer l'ID du patient connecté
       const storedPatient = getStoredPatient();
       const currentPatientId = storedPatient?.id_patient || storedPatient?.id;
 
@@ -82,16 +82,16 @@ const HistoriqueMedical = ({ patientProfile }) => {
       if (result.success) {
         setPrescriptions(result.prescriptions || []);
         setStats(result.stats);
-        console.log(' Historique mdical charg:', result.prescriptions.length, 'prescriptions');
+        console.log('✅ Historique médical chargé:', result.prescriptions.length, 'prescriptions');
         
-        //  DEBUG : Vrifier la structure des prescriptions et des infos mdecin
+        // 🔍 DEBUG : Vérifier la structure des prescriptions et des infos médecin
         if (result.prescriptions && result.prescriptions.length > 0) {
-          console.log(' [DMP] Structure de la premire prescription:', result.prescriptions[0]);
-          console.log(' [DMP] Proprits disponibles:', Object.keys(result.prescriptions[0]));
+          console.log('🔍 [DMP] Structure de la première prescription:', result.prescriptions[0]);
+          console.log('🔍 [DMP] Propriétés disponibles:', Object.keys(result.prescriptions[0]));
           
-          // Vrifier les informations mdecin
+          // Vérifier les informations médecin
           const firstPrescription = result.prescriptions[0];
-          console.log(' [DMP] Informations mdecin:', {
+          console.log('🔍 [DMP] Informations médecin:', {
             medecin: firstPrescription.medecin,
             redacteur: firstPrescription.redacteur,
             hasMedecin: !!firstPrescription.medecin,
@@ -100,9 +100,9 @@ const HistoriqueMedical = ({ patientProfile }) => {
             redacteurKeys: firstPrescription.redacteur ? Object.keys(firstPrescription.redacteur) : []
           });
           
-          // Vrifier les IDs disponibles
+          // Vérifier les IDs disponibles
           if (firstPrescription.medecin) {
-            console.log(' [DMP] ID mdecin disponibles:', {
+            console.log('🔍 [DMP] ID médecin disponibles:', {
               id: firstPrescription.medecin.id,
               id_professionnel: firstPrescription.medecin.id_professionnel,
               id_medecin: firstPrescription.medecin.id_medecin
@@ -110,31 +110,29 @@ const HistoriqueMedical = ({ patientProfile }) => {
           }
           
           if (firstPrescription.redacteur) {
-            console.log(' [DMP] ID rdacteur disponibles:', {
+            console.log('🔍 [DMP] ID rédacteur disponibles:', {
               id: firstPrescription.redacteur.id,
               id_professionnel: firstPrescription.redacteur.id_professionnel,
               id_medecin: firstPrescription.redacteur.id_medecin
             });
           }
           
-          //  CORRECTION : Normaliser les informations mdecin pour la messagerie
+          // 🔧 CORRECTION : Normaliser les informations médecin pour la messagerie
           const normalizedPrescriptions = result.prescriptions.map(prescription => {
             let medecinInfo = null;
             
-            // Identifiant de la prescription (priorit aux diffrents formats possibles)
-            const prescriptionId = prescription.id_prescription || prescription.id || 
-prescription.prescription_id;
+            // Identifiant de la prescription (priorité aux différents formats possibles)
+            const prescriptionId = prescription.id_prescription || prescription.id || prescription.prescription_id;
             
-            //  DEBUG : Afficher toutes les proprits disponibles pour le mdecin
-            console.log(' [DMP] Proprits mdecin disponibles pour prescription', 
-prescriptionId, ':', {
+            // 🔍 DEBUG : Afficher toutes les propriétés disponibles pour le médecin
+            console.log('🔍 [DMP] Propriétés médecin disponibles pour prescription', prescriptionId, ':', {
               medecin: prescription.medecin,
               redacteur: prescription.redacteur,
               medecin_id: prescription.medecin_id,
               redacteur_id: prescription.redacteur_id,
               prescripteur_id: prescription.prescripteur_id,
               medecin_prescripteur: prescription.medecin_prescripteur,
-              // Vrifier toutes les proprits qui pourraient contenir l'ID du mdecin
+              // Vérifier toutes les propriétés qui pourraient contenir l'ID du médecin
               allKeys: Object.keys(prescription).filter(key => 
                 key.toLowerCase().includes('medecin') || 
                 key.toLowerCase().includes('redacteur') || 
@@ -142,89 +140,84 @@ prescriptionId, ':', {
               )
             });
             
-            // Priorit 1: Utiliser prescription.medecin (structure complte)
-            if (prescription.medecin && (prescription.medecin.id || 
-prescription.medecin.id_professionnel || prescription.medecin.id_medecin)) {
-              const medecinId = prescription.medecin.id || prescription.medecin.id_professionnel || 
-prescription.medecin.id_medecin;
+            // Priorité 1: Utiliser prescription.medecin (structure complète)
+            if (prescription.medecin && (prescription.medecin.id || prescription.medecin.id_professionnel || prescription.medecin.id_medecin)) {
+              const medecinId = prescription.medecin.id || prescription.medecin.id_professionnel || prescription.medecin.id_medecin;
               medecinInfo = {
                 id: medecinId,
                 id_professionnel: medecinId,
                 id_medecin: medecinId,
-                nom: prescription.medecin.nom || 'Mdecin',
+                nom: prescription.medecin.nom || 'Médecin',
                 prenom: prescription.medecin.prenom || 'Inconnu',
-                specialite: prescription.medecin.specialite || 'Gnraliste',
+                specialite: prescription.medecin.specialite || 'Généraliste',
                 prescriptionId: prescriptionId,
                 prescriptionType: prescription.type_prescription || 'ordonnance'
               };
-              console.log(' [DMP] Mdecin trouv via prescription.medecin:', medecinInfo);
+              console.log('✅ [DMP] Médecin trouvé via prescription.medecin:', medecinInfo);
             }
-            // Priorit 2: Utiliser prescription.redacteur (structure complte)
-            else if (prescription.redacteur && (prescription.redacteur.id || 
-prescription.redacteur.id_professionnel || prescription.redacteur.id_medecin)) {
-              const medecinId = prescription.redacteur.id || prescription.redacteur.id_professionnel 
-|| prescription.redacteur.id_medecin;
+            // Priorité 2: Utiliser prescription.redacteur (structure complète)
+            else if (prescription.redacteur && (prescription.redacteur.id || prescription.redacteur.id_professionnel || prescription.redacteur.id_medecin)) {
+              const medecinId = prescription.redacteur.id || prescription.redacteur.id_professionnel || prescription.redacteur.id_medecin;
               medecinInfo = {
                 id: medecinId,
                 id_professionnel: medecinId,
                 id_medecin: medecinId,
-                nom: prescription.redacteur.nom || 'Mdecin',
+                nom: prescription.redacteur.nom || 'Médecin',
                 prenom: prescription.redacteur.prenom || 'Inconnu',
-                specialite: prescription.redacteur.specialite || 'Gnraliste',
+                specialite: prescription.redacteur.specialite || 'Généraliste',
                 prescriptionId: prescriptionId,
                 prescriptionType: prescription.type_prescription || 'ordonnance'
               };
-              console.log(' [DMP] Mdecin trouv via prescription.redacteur:', medecinInfo);
+              console.log('✅ [DMP] Médecin trouvé via prescription.redacteur:', medecinInfo);
             }
-            // Priorit 3: Utiliser prescription.medecin_id (ID simple)
+            // Priorité 3: Utiliser prescription.medecin_id (ID simple)
             else if (prescription.medecin_id) {
               medecinInfo = {
                 id: prescription.medecin_id,
                 id_professionnel: prescription.medecin_id,
                 id_medecin: prescription.medecin_id,
-                nom: 'Mdecin',
+                nom: 'Médecin',
                 prenom: 'Prescripteur',
-                specialite: 'Gnraliste',
+                specialite: 'Généraliste',
                 prescriptionId: prescriptionId,
                 prescriptionType: prescription.type_prescription || 'ordonnance'
               };
-              console.log(' [DMP] Mdecin trouv via prescription.medecin_id:', medecinInfo);
+              console.log('✅ [DMP] Médecin trouvé via prescription.medecin_id:', medecinInfo);
             }
-            // Priorit 4: Utiliser prescription.redacteur_id (ID simple)
+            // Priorité 4: Utiliser prescription.redacteur_id (ID simple)
             else if (prescription.redacteur_id) {
               medecinInfo = {
                 id: prescription.redacteur_id,
                 id_professionnel: prescription.redacteur_id,
                 id_medecin: prescription.redacteur_id,
-                nom: 'Mdecin',
-                prenom: 'Rdacteur',
-                specialite: 'Gnraliste',
+                nom: 'Médecin',
+                prenom: 'Rédacteur',
+                specialite: 'Généraliste',
                 prescriptionId: prescriptionId,
                 prescriptionType: prescription.type_prescription || 'ordonnance'
               };
-              console.log(' [DMP] Mdecin trouv via prescription.redacteur_id:', medecinInfo);
+              console.log('✅ [DMP] Médecin trouvé via prescription.redacteur_id:', medecinInfo);
             }
-            // Priorit 5: Utiliser prescription.prescripteur_id (ID simple)
+            // Priorité 5: Utiliser prescription.prescripteur_id (ID simple)
             else if (prescription.prescripteur_id) {
               medecinInfo = {
                 id: prescription.prescripteur_id,
                 id_professionnel: prescription.prescripteur_id,
                 id_medecin: prescription.prescripteur_id,
-                nom: 'Mdecin',
+                nom: 'Médecin',
                 prenom: 'Prescripteur',
-                specialite: 'Gnraliste',
+                specialite: 'Généraliste',
                 prescriptionId: prescriptionId,
                 prescriptionType: prescription.type_prescription || 'ordonnance'
               };
-              console.log(' [DMP] Mdecin trouv via prescription.prescripteur_id:', medecinInfo);
+              console.log('✅ [DMP] Médecin trouvé via prescription.prescripteur_id:', medecinInfo);
             }
-            // Priorit 6: Rechercher dans toutes les proprits qui pourraient contenir l'ID du mdecin
+            // Priorité 6: Rechercher dans toutes les propriétés qui pourraient contenir l'ID du médecin
             else {
               const possibleMedecinKeys = Object.keys(prescription).filter(key => 
                 key.toLowerCase().includes('medecin') && 
                 prescription[key] && 
-                (typeof prescription[key] === 'number' || (typeof prescription[key] === 'string' && 
-!isNaN(prescription[key])))
+                (typeof prescription[key] === 'number' || (typeof prescription[key] === 'string' && !isNaN(prescription[key])))
               );
               
               if (possibleMedecinKeys.length > 0) {
@@ -233,15 +226,15 @@ prescription.redacteur.id_professionnel || prescription.redacteur.id_medecin)) {
                   id: medecinId,
                   id_professionnel: medecinId,
                   id_medecin: medecinId,
-                  nom: 'Mdecin',
+                  nom: 'Médecin',
                   prenom: 'Prescripteur',
-                  specialite: 'Gnraliste',
+                  specialite: 'Généraliste',
                   prescriptionId: prescriptionId,
                   prescriptionType: prescription.type_prescription || 'ordonnance'
                 };
-                console.log(' [DMP] Mdecin trouv via proprit alternative:', possibleMedecinKeys[0], medecinInfo);
+                console.log('✅ [DMP] Médecin trouvé via propriété alternative:', possibleMedecinKeys[0], medecinInfo);
               } else {
-                console.warn(' [DMP] Aucune information mdecin trouve pour la prescription:', prescriptionId);
+                console.warn('⚠️ [DMP] Aucune information médecin trouvée pour la prescription:', prescriptionId);
               }
             }
             
@@ -252,81 +245,74 @@ prescription.redacteur.id_professionnel || prescription.redacteur.id_medecin)) {
           });
           
           setPrescriptions(normalizedPrescriptions);
-          console.log(' Prescriptions normalises avec informations mdecin:', normalizedPrescriptions.length);
+          console.log('✅ Prescriptions normalisées avec informations médecin:', normalizedPrescriptions.length);
           
-          // Vrifier qu'au moins une prescription a des informations mdecin
+          // Vérifier qu'au moins une prescription a des informations médecin
           const prescriptionsWithMedecin = normalizedPrescriptions.filter(p => p.medecinInfo);
           if (prescriptionsWithMedecin.length === 0) {
-            console.warn(' [DMP] Aucune prescription avec informations mdecin trouve');
-            console.warn(' [DMP] Cela peut empcher la messagerie de fonctionner correctement');
+            console.warn('⚠️ [DMP] Aucune prescription avec informations médecin trouvée');
+            console.warn('⚠️ [DMP] Cela peut empêcher la messagerie de fonctionner correctement');
             
-            //  FALLBACK : Essayer de rcuprer les informations mdecin depuis l'API
-            console.log(" [DMP] Tentative de rcupration des informations mdecin depuis l'API...");
+            // 🔧 FALLBACK : Essayer de récupérer les informations médecin depuis l'API
+            console.log('🔄 [DMP] Tentative de récupération des informations médecin depuis l\'API...');
             try {
-              // Essayer de rcuprer les informations du mdecin depuis l'API de messagerie
+              // Essayer de récupérer les informations du médecin depuis l'API de messagerie
               const messagingApi = await import('../../services/api/messagingApi');
               const messagingService = messagingApi.default;
               
-              // Pour chaque prescription sans mdecin, essayer de rcuprer les infos
+              // Pour chaque prescription sans médecin, essayer de récupérer les infos
               for (const prescription of normalizedPrescriptions) {
-                const prescriptionId = prescription.id_prescription || prescription.id || 
-prescription.prescription_id;
+                const prescriptionId = prescription.id_prescription || prescription.id || prescription.prescription_id;
                 
-                // Essayer de rcuprer les informations du mdecin depuis l'API
+                // Essayer de récupérer les informations du médecin depuis l'API
                 try {
-                  const medecinInfo = await messagingService.getUserInfo(prescription.medecin_id || 
-prescription.redacteur_id, 'medecin');
+                  const medecinInfo = await messagingService.getUserInfo(prescription.medecin_id || prescription.redacteur_id, 'medecin');
                   if (medecinInfo) {
                     prescription.medecinInfo = {
                       id: medecinInfo.id,
                       id_professionnel: medecinInfo.id,
                       id_medecin: medecinInfo.id,
-                      nom: medecinInfo.nom || 'Mdecin',
+                      nom: medecinInfo.nom || 'Médecin',
                       prenom: medecinInfo.prenom || 'Inconnu',
-                      specialite: medecinInfo.specialite || 'Gnraliste',
+                      specialite: medecinInfo.specialite || 'Généraliste',
                       prescriptionId: prescriptionId,
                       prescriptionType: prescription.type_prescription || 'ordonnance'
                     };
-                    console.log(" [DMP] Informations mdecin rcupres depuis l'API pour prescription:", prescriptionId);
+                    console.log('✅ [DMP] Informations médecin récupérées depuis l\'API pour prescription:', prescriptionId);
                   }
                 } catch (error) {
-                  console.warn(" [DMP] Impossible de rcuprer les infos mdecin pour prescription:", prescriptionId, error.message);
+                  console.warn('⚠️ [DMP] Impossible de récupérer les infos médecin pour prescription:', prescriptionId, error.message);
                 }
               }
               
-              // Mettre  jour la liste des prescriptions avec mdecin
-              const updatedPrescriptionsWithMedecin = normalizedPrescriptions.filter(p => 
-p.medecinInfo);
+              // Mettre à jour la liste des prescriptions avec médecin
+              const updatedPrescriptionsWithMedecin = normalizedPrescriptions.filter(p => p.medecinInfo);
               if (updatedPrescriptionsWithMedecin.length > 0) {
-                console.log(' [DMP] Aprs fallback API:', updatedPrescriptionsWithMedecin.length, 
-'prescriptions avec mdecin');
+                console.log('✅ [DMP] Après fallback API:', updatedPrescriptionsWithMedecin.length, 'prescriptions avec médecin');
               }
             } catch (error) {
-              console.error(' [DMP] Erreur lors du fallback API pour les informations mdecin:', 
-error);
+              console.error('❌ [DMP] Erreur lors du fallback API pour les informations médecin:', error);
             }
           } else {
-            console.log(' [DMP] Prescriptions avec mdecin:', prescriptionsWithMedecin.length, 
-'/', normalizedPrescriptions.length);
+            console.log('✅ [DMP] Prescriptions avec médecin:', prescriptionsWithMedecin.length, '/', normalizedPrescriptions.length);
             
-            // Vrifier que les prescriptions ont bien tous les lments ncessaires
+            // Vérifier que les prescriptions ont bien tous les éléments nécessaires
             prescriptionsWithMedecin.forEach((prescription, index) => {
               const validation = {
                 prescriptionId: !!prescription.medecinInfo.prescriptionId,
                 medecinId: !!prescription.medecinInfo.id,
                 prescriptionType: !!prescription.medecinInfo.prescriptionType,
-                complete: !!(prescription.medecinInfo.prescriptionId && prescription.medecinInfo.id 
-&& prescription.medecinInfo.prescriptionType)
+                complete: !!(prescription.medecinInfo.prescriptionId && prescription.medecinInfo.id && prescription.medecinInfo.prescriptionType)
               };
               
               if (validation.complete) {
-                console.log(` [DMP] Prescription ${index + 1} complte:`, {
+                console.log(`✅ [DMP] Prescription ${index + 1} complète:`, {
                   prescriptionId: prescription.medecinInfo.prescriptionId,
                   medecinId: prescription.medecinInfo.id,
                   type: prescription.medecinInfo.prescriptionType
                 });
               } else {
-                console.warn(` [DMP] Prescription ${index + 1} incomplte:`, validation);
+                console.warn(`⚠️ [DMP] Prescription ${index + 1} incomplète:`, validation);
               }
             });
           }
@@ -337,7 +323,7 @@ error);
       }
 
     } catch (error) {
-      console.error('Erreur lors du chargement de l\'historique mdical:', error);
+      console.error('Erreur lors du chargement de l\'historique médical:', error);
       setError(error.message);
     } finally {
       setLoading(false);
@@ -446,7 +432,7 @@ error);
 
   const openPDFSelectionModal = () => {
     if (selectedPrescriptionsForPDF.length === 0) {
-      alert('Veuillez slectionner au moins une prescription pour gnrer le PDF');
+      alert('Veuillez sélectionner au moins une prescription pour générer le PDF');
       return;
     }
     setShowPDFSelectionModal(true);
@@ -457,15 +443,15 @@ error);
     setSelectedPrescriptionsForPDF([]);
   };
 
-  // Fonctions pour la gnration de PDF
+  // Fonctions pour la génération de PDF
   const handleGeneratePrescriptionPDF = async (prescription) => {
     try {
       setLoading(true);
       await downloadPrescriptionPDF(prescription);
-      alert('PDF tlcharg avec succs !');
+      alert('PDF téléchargé avec succès !');
     } catch (error) {
-      console.error('Erreur lors de la gnration du PDF:', error);
-      alert('Erreur lors de la gnration du PDF: ' + error.message);
+      console.error('Erreur lors de la génération du PDF:', error);
+      alert('Erreur lors de la génération du PDF: ' + error.message);
     } finally {
       setLoading(false);
     }
@@ -475,7 +461,7 @@ error);
     try {
       setLoading(true);
       await printPrescriptionPDF(prescription);
-      alert('Impression lance avec succs !');
+      alert('Impression lancée avec succès !');
     } catch (error) {
       console.error('Erreur lors de l\'impression:', error);
       alert('Erreur lors de l\'impression: ' + error.message);
@@ -490,16 +476,16 @@ error);
         // Une seule prescription, utiliser la fonction existante
         await downloadPrescriptionPDF(selectedPrescriptionsForPDF[0]);
       } else {
-        // Plusieurs prescriptions, gnrer un PDF combin
-        // Pour l'instant, on gnre un PDF par prescription
+        // Plusieurs prescriptions, générer un PDF combiné
+        // Pour l'instant, on génère un PDF par prescription
         for (const prescription of selectedPrescriptionsForPDF) {
           await downloadPrescriptionPDF(prescription);
         }
       }
       closePDFSelectionModal();
     } catch (error) {
-      console.error('Erreur lors de la gnration du PDF:', error);
-      alert('Erreur lors de la gnration du PDF');
+      console.error('Erreur lors de la génération du PDF:', error);
+      alert('Erreur lors de la génération du PDF');
     }
   };
 
@@ -523,16 +509,16 @@ error);
 
   const handleGenerateMedicalHistoryPDF = async () => {
     try {
-      alert('Fonctionnalit d\'historique mdical PDF en cours de dveloppement');
+      alert('Fonctionnalité d\'historique médical PDF en cours de développement');
     } catch (error) {
-      console.error('Erreur lors de la gnration de l\'historique PDF:', error);
-      alert('Erreur lors de la gnration de l\'historique PDF');
+      console.error('Erreur lors de la génération de l\'historique PDF:', error);
+      alert('Erreur lors de la génération de l\'historique PDF');
     }
   };
 
   const handlePrintMedicalHistoryPDF = async () => {
     try {
-      alert('Fonctionnalit d\'impression d\'historique mdical PDF en cours de dveloppement');
+      alert('Fonctionnalité d\'impression d\'historique médical PDF en cours de développement');
     } catch (error) {
       console.error('Erreur lors de l\'impression de l\'historique:', error);
       alert('Erreur lors de l\'impression de l\'historique');
@@ -549,7 +535,7 @@ error);
 
     if (showPrescriptionModal) {
       document.addEventListener('keydown', handleEscapeKey);
-      // Empcher le scroll du body quand le modal est ouvert
+      // Empêcher le scroll du body quand le modal est ouvert
       document.body.style.overflow = 'hidden';
     }
 
@@ -563,8 +549,8 @@ error);
     return (
       <div className="bg-white rounded-lg shadow">
         <div className="p-6 border-b">
-          <h2 className="text-xl font-semibold">Historique mdical</h2>
-          <p className="text-gray-600">Consultez votre historique mdical complet</p>
+          <h2 className="text-xl font-semibold">Historique médical</h2>
+          <p className="text-gray-600">Consultez votre historique médical complet</p>
         </div>
         <div className="p-6">
           <div className="flex justify-center items-center py-8">
@@ -579,8 +565,8 @@ error);
     return (
       <div className="bg-white rounded-lg shadow">
         <div className="p-6 border-b">
-          <h2 className="text-xl font-semibold">Historique mdical</h2>
-          <p className="text-gray-600">Consultez votre historique mdical complet</p>
+          <h2 className="text-xl font-semibold">Historique médical</h2>
+          <p className="text-gray-600">Consultez votre historique médical complet</p>
         </div>
         <div className="p-6">
           <div className="text-center py-8">
@@ -593,7 +579,7 @@ error);
               onClick={loadPatientData}
               className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
             >
-              Ressayer
+              Réessayer
             </button>
           </div>
         </div>
@@ -606,8 +592,8 @@ error);
       <div className="p-6 border-b">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h2 className="text-xl font-semibold">Historique mdical</h2>
-            <p className="text-gray-600">Consultez votre historique mdical complet</p>
+            <h2 className="text-xl font-semibold">Historique médical</h2>
+            <p className="text-gray-600">Consultez votre historique médical complet</p>
             {stats && (
               <p className="text-sm text-gray-500 mt-1">
                 {stats.totalPrescriptions} prescription(s) au total
@@ -620,8 +606,7 @@ error);
             {stats && (
               <div className="flex flex-wrap gap-2">
                 {stats.parType && Object.entries(stats.parType).map(([type, count]) => (
-                  <span key={type} className="px-3 py-1 bg-blue-100 text-blue-800 text-xs 
-rounded-full">
+                  <span key={type} className="px-3 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
                     {type}: {count}
                   </span>
                 ))}
@@ -633,32 +618,29 @@ rounded-full">
               <button
                 onClick={handleGenerateMedicalHistoryPDF}
                 disabled={isGenerating || prescriptions.length === 0}
-                className="flex items-center px-3 py-2 bg-blue-600 text-white text-sm font-medium 
-rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                title="Gnrer l'historique mdical en PDF"
+                className="flex items-center px-3 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                title="Générer l'historique médical en PDF"
               >
                 <FaDownload className="w-4 h-4 mr-2" />
-                {isGenerating ? 'Gnration...' : 'PDF'}
+                {isGenerating ? 'Génération...' : 'PDF'}
               </button>
               <button
                 onClick={handlePrintMedicalHistoryPDF}
                 disabled={isGenerating || prescriptions.length === 0}
-                className="flex items-center px-3 py-2 bg-green-600 text-white text-sm font-medium 
-rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                title="Imprimer l'historique mdical"
+                className="flex items-center px-3 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                title="Imprimer l'historique médical"
               >
                 <FaPrint className="w-4 h-4 mr-2" />
-                {isGenerating ? 'Prparation...' : 'Imprimer'}
+                {isGenerating ? 'Préparation...' : 'Imprimer'}
               </button>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Filtres et slection PDF */}
+      {/* Filtres et sélection PDF */}
       <div className="p-4 border-b bg-gray-50">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 
-mb-4">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
           <div className="flex flex-wrap gap-2">
             {[
               { key: 'all', label: 'Toutes', count: prescriptions.length },
@@ -669,42 +651,40 @@ mb-4">
               <button
                 key={filter.key}
                 onClick={() => handleFilterChange(filter.key)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeFilter 
-=== filter.key
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeFilter === filter.key
                     ? 'bg-blue-600 text-white'
                     : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
                   }`}
               >
                 {filter.label}
-                <span className="ml-2 bg-opacity-20 bg-black text-inherit px-2 py-1 rounded-full 
-text-xs">
+                <span className="ml-2 bg-opacity-20 bg-black text-inherit px-2 py-1 rounded-full text-xs">
                   {filter.count}
                 </span>
               </button>
             ))}
           </div>
 
-          {/* Boutons de slection PDF */}
+          {/* Boutons de sélection PDF */}
           <div className="flex items-center gap-3 pt-3 border-t border-gray-200">
-            <span className="text-sm text-gray-600">Slectionner pour PDF :</span>
+            <span className="text-sm text-gray-600">Sélectionner pour PDF :</span>
             <button
               onClick={() => setSelectedPrescriptionsForPDF(prescriptions)}
               className="px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
             >
-              Tout slectionner
+              Tout sélectionner
             </button>
             <button
               onClick={() => setSelectedPrescriptionsForPDF([])}
               className="px-3 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
             >
-              Dslectionner
+              Désélectionner
             </button>
             {selectedPrescriptionsForPDF.length > 0 && (
               <button
                 onClick={openPDFSelectionModal}
                 className="px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700"
               >
-                Gnrer PDF ({selectedPrescriptionsForPDF.length})
+                Générer PDF ({selectedPrescriptionsForPDF.length})
               </button>
             )}
           </div>
@@ -717,26 +697,23 @@ text-xs">
             {prescriptions.map((prescription, index) => (
               <div
                 key={index}
-                className="border rounded-lg p-4 hover:shadow-md transition-shadow group 
-focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
+                className="border rounded-lg p-4 hover:shadow-md transition-shadow group focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
               >
                 <div className="flex justify-between items-start">
-                  {/* Checkbox de slection */}
+                  {/* Checkbox de sélection */}
                   <div className="flex items-center mr-3">
                     <input
                       type="checkbox"
-                      checked={selectedPrescriptionsForPDF.some(p => p.id_prescription === 
-prescription.id_prescription)}
+                      checked={selectedPrescriptionsForPDF.some(p => p.id_prescription === prescription.id_prescription)}
                       onChange={(e) => {
                         e.stopPropagation();
                         togglePrescriptionSelection(prescription);
                       }}
-                      className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded 
-focus:ring-blue-500 focus:ring-2"
+                      className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
                     />
                   </div>
                   <div className="flex-1">
-                    {/* Zone cliquable pour les dtails - SPARE des actions */}
+                    {/* Zone cliquable pour les détails - SÉPARÉE des actions */}
                     <div 
                       className="cursor-pointer hover:bg-blue-50 p-3 rounded-lg transition-colors"
                       onClick={() => handlePrescriptionClick(prescription)}
@@ -748,54 +725,37 @@ focus:ring-blue-500 focus:ring-2"
                       }}
                       tabIndex={0}
                       role="button"
-                      aria-label={`Voir les dtails de la prescription 
-${prescription.type_prescription} du ${formatDate(prescription.date_prescription)}`}
+                      aria-label={`Voir les détails de la prescription ${prescription.type_prescription} du ${formatDate(prescription.date_prescription)}`}
                     >
                       <div className="flex items-center gap-3 mb-2">
                         {getTypeIcon(prescription.type_prescription)}
                         <div>
-                          <h3 className="font-medium text-gray-900 group-hover:text-blue-600 
-transition-colors">
-                            {prescription.type_prescription === 'ordonnance' ? 'Ordonnance mdicale' 
-:
+                          <h3 className="font-medium text-gray-900 group-hover:text-blue-600 transition-colors">
+                            {prescription.type_prescription === 'ordonnance' ? 'Ordonnance médicale' :
                               prescription.type_prescription === 'examen' ? 'Demande d\'examen' :
                                 prescription.type_prescription === 'consultation' ? 'Consultation' :
                                   prescription.type_prescription}
-                            <span className="ml-2 text-blue-500 opacity-0 group-hover:opacity-100 
-transition-opacity">
-                              <svg className="w-4 h-4 inline" fill="none" stroke="currentColor" 
-viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 
-0-8.268-2.943-9.542-7z" />
+                            <span className="ml-2 text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <svg className="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                               </svg>
                             </span>
-                            {/* Badge pour indiquer qu'il y a des dtails */}
-                            {(prescription.nom_commercial || prescription.principe_actif || 
-prescription.dosage || prescription.medicaments || prescription.examens) && (
-                              <span className="ml-2 inline-flex items-center px-2 py-1 rounded-full 
-text-xs font-medium bg-green-100 text-green-800">
-                                <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" 
-viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-d="M5 13l4 4L19 7" />
+                            {/* Badge pour indiquer qu'il y a des détails */}
+                            {(prescription.nom_commercial || prescription.principe_actif || prescription.dosage || prescription.medicaments || prescription.examens) && (
+                              <span className="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                                 </svg>
-                                Dtails
+                                Détails
                               </span>
                             )}
 
                             {/* Badge pour indiquer qu'il y a un QR Code */}
                             {prescription.qrCode && (
-                              <span className="ml-2 inline-flex items-center px-2 py-1 rounded-full 
-text-xs font-medium bg-purple-100 text-purple-800">
-                                <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" 
-viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V6a1 1 
-0 00-1-1H5a1 1 0 00-1 1v1a1 1 0 001 1zm12 0h2a1 1 0 001-1v-1a1 1 0 00-1-1H5a1 1 0 00-1 1v1a1 1 0 001 
-1z" />
+                              <span className="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                                <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V6a1 1 0 00-1-1H5a1 1 0 00-1 1v1a1 1 0 001 1zm12 0h2a1 1 0 001-1v-1a1 1 0 00-1-1H5a1 1 0 00-1 1v1a1 1 0 001 1z" />
                                 </svg>
                                 QR Code
                               </span>
@@ -806,12 +766,11 @@ d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 
                           </p>
                           {prescription.prescriptionNumber && (
                             <p className="text-xs text-gray-500 font-mono">
-                              N {prescription.prescriptionNumber}
+                              N° {prescription.prescriptionNumber}
                             </p>
                           )}
-                          <p className="text-xs text-blue-500 opacity-0 group-hover:opacity-100 
-transition-opacity mt-1">
-                            Cliquez pour voir les dtails
+                          <p className="text-xs text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity mt-1">
+                            Cliquez pour voir les détails
                           </p>
                         </div>
                       </div>
@@ -822,31 +781,23 @@ transition-opacity mt-1">
                       <p className="text-sm text-gray-700 mb-3">{prescription.description}</p>
                     )}
 
-                    {/* Dtails spcifiques selon le type de prescription */}
+                    {/* Détails spécifiques selon le type de prescription */}
                     {prescription.type_prescription === 'ordonnance' && (
                       <div className="mb-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                        <h4 className="text-sm font-semibold text-blue-900 mb-2">Dtails de 
-l'ordonnance</h4>
-                        {(prescription.nom_commercial || prescription.principe_actif || 
-prescription.dosage || prescription.frequence || prescription.voie_administration || 
-prescription.quantite || prescription.posologie || prescription.contre_indications || 
-prescription.effets_indesirables) ? (
+                        <h4 className="text-sm font-semibold text-blue-900 mb-2">Détails de l'ordonnance</h4>
+                        {(prescription.nom_commercial || prescription.principe_actif || prescription.dosage || prescription.frequence || prescription.voie_administration || prescription.quantite || prescription.posologie || prescription.contre_indications || prescription.effets_indesirables) ? (
                           <>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                               {prescription.nom_commercial && (
                                 <div className="flex items-center gap-2">
-                                  <span className="text-xs font-medium text-blue-700">Mdicament 
-:</span>
-                                  <span className="text-sm text-blue-900 
-font-medium">{prescription.nom_commercial}</span>
+                                  <span className="text-xs font-medium text-blue-700">Médicament :</span>
+                                  <span className="text-sm text-blue-900 font-medium">{prescription.nom_commercial}</span>
                                 </div>
                               )}
                               {prescription.principe_actif && (
                                 <div className="flex items-center gap-2">
-                                  <span className="text-xs font-medium text-blue-700">Principe actif 
-:</span>
-                                  <span className="text-sm 
-text-blue-900">{prescription.principe_actif}</span>
+                                  <span className="text-xs font-medium text-blue-700">Principe actif :</span>
+                                  <span className="text-sm text-blue-900">{prescription.principe_actif}</span>
                                 </div>
                               )}
                               {prescription.dosage && (
@@ -857,88 +808,71 @@ text-blue-900">{prescription.principe_actif}</span>
                               )}
                               {prescription.frequence && (
                                 <div className="flex items-center gap-2">
-                                  <span className="text-xs font-medium text-blue-700">Frquence 
-:</span>
-                                  <span className="text-sm 
-text-blue-900">{prescription.frequence}</span>
+                                  <span className="text-xs font-medium text-blue-700">Fréquence :</span>
+                                  <span className="text-sm text-blue-900">{prescription.frequence}</span>
                                 </div>
                               )}
                               {prescription.voie_administration && (
                                 <div className="flex items-center gap-2">
                                   <span className="text-xs font-medium text-blue-700">Voie :</span>
-                                  <span className="text-sm 
-text-blue-900">{prescription.voie_administration}</span>
+                                  <span className="text-sm text-blue-900">{prescription.voie_administration}</span>
                                 </div>
                               )}
                               {prescription.quantite && prescription.unite && (
                                 <div className="flex items-center gap-2">
-                                  <span className="text-xs font-medium text-blue-700">Quantit 
-:</span>
-                                  <span className="text-sm text-blue-900">{prescription.quantite} 
-{prescription.unite}</span>
+                                  <span className="text-xs font-medium text-blue-700">Quantité :</span>
+                                  <span className="text-sm text-blue-900">{prescription.quantite} {prescription.unite}</span>
                                 </div>
                               )}
 
                               {prescription.forme_pharmaceutique && (
                                 <div className="flex items-center gap-2">
                                   <span className="text-xs font-medium text-blue-700">Forme :</span>
-                                  <span className="text-sm 
-text-blue-900">{prescription.forme_pharmaceutique}</span>
+                                  <span className="text-sm text-blue-900">{prescription.forme_pharmaceutique}</span>
                                 </div>
                               )}
 
                               {prescription.code_cip && (
                                 <div className="flex items-center gap-2">
-                                  <span className="text-xs font-medium text-blue-700">Code CIP 
-:</span>
-                                  <span className="text-sm text-blue-900 
-font-mono">{prescription.code_cip}</span>
+                                  <span className="text-xs font-medium text-blue-700">Code CIP :</span>
+                                  <span className="text-sm text-blue-900 font-mono">{prescription.code_cip}</span>
                                 </div>
                               )}
 
                               {prescription.atc && (
                                 <div className="flex items-center gap-2">
-                                  <span className="text-xs font-medium text-blue-700">Code ATC 
-:</span>
-                                  <span className="text-sm text-blue-900 
-font-mono">{prescription.atc}</span>
+                                  <span className="text-xs font-medium text-blue-700">Code ATC :</span>
+                                  <span className="text-sm text-blue-900 font-mono">{prescription.atc}</span>
                                 </div>
                               )}
                             </div>
                             {prescription.posologie && (
                               <div className="mt-2 pt-2 border-t border-blue-200">
                                 <span className="text-xs font-medium text-blue-700">Posologie :</span>
-                                <span className="text-sm text-blue-900 
-ml-2">{prescription.posologie}</span>
+                                <span className="text-sm text-blue-900 ml-2">{prescription.posologie}</span>
                               </div>
                             )}
                             {prescription.contre_indications && (
                               <div className="mt-2 pt-2 border-t border-blue-200">
-                                <span className="text-xs font-medium text-red-700">Contre-indications 
-:</span>
-                                <span className="text-sm text-red-800 
-ml-2">{prescription.contre_indications}</span>
+                                <span className="text-xs font-medium text-red-700">Contre-indications :</span>
+                                <span className="text-sm text-red-800 ml-2">{prescription.contre_indications}</span>
                               </div>
                             )}
                             {prescription.effets_indesirables && (
                               <div className="mt-2 pt-2 border-t border-blue-200">
-                                <span className="text-xs font-medium text-orange-700">Effets 
-indsirables :</span>
-                                <span className="text-sm text-orange-800 
-ml-2">{prescription.effets_indesirables}</span>
+                                <span className="text-xs font-medium text-orange-700">Effets indésirables :</span>
+                                <span className="text-sm text-orange-800 ml-2">{prescription.effets_indesirables}</span>
                               </div>
                             )}
 
                             {/* QR Code et informations de traitement */}
-                            {(prescription.qrCode || prescription.duree_traitement || 
-prescription.renouvelable !== null) && (
+                            {(prescription.qrCode || prescription.duree_traitement || prescription.renouvelable !== null) && (
                               <div className="mt-3 pt-3 border-t border-blue-200">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                   {/* QR Code */}
                                   {prescription.qrCode && (
                                     <div className="flex flex-col items-center">
-                                      <span className="text-xs font-medium text-blue-700 mb-2">QR 
-Code</span>
+                                      <span className="text-xs font-medium text-blue-700 mb-2">QR Code</span>
                                       <img
                                         src={prescription.qrCode}
                                         alt="QR Code de la prescription"
@@ -952,18 +886,14 @@ Code</span>
                                   <div className="space-y-2">
                                     {prescription.duree_traitement && (
                                       <div className="flex items-center gap-2">
-                                        <span className="text-xs font-medium text-blue-700">Dure 
-:</span>
-                                        <span className="text-sm 
-text-blue-900">{prescription.duree_traitement}</span>
+                                        <span className="text-xs font-medium text-blue-700">Durée :</span>
+                                        <span className="text-sm text-blue-900">{prescription.duree_traitement}</span>
                                       </div>
                                     )}
                                     {prescription.renouvelable !== null && (
                                       <div className="flex items-center gap-2">
-                                        <span className="text-xs font-medium 
-text-blue-700">Renouvelable :</span>
-                                        <span className={`text-xs px-2 py-1 rounded-full 
-${prescription.renouvelable
+                                        <span className="text-xs font-medium text-blue-700">Renouvelable :</span>
+                                        <span className={`text-xs px-2 py-1 rounded-full ${prescription.renouvelable
                                             ? 'bg-green-100 text-green-800'
                                             : 'bg-red-100 text-red-800'
                                           }`}>
@@ -973,11 +903,9 @@ ${prescription.renouvelable
                                     )}
                                     {prescription.nb_renouvellements > 0 && (
                                       <div className="flex items-center gap-2">
-                                        <span className="text-xs font-medium 
-text-blue-700">Renouvellements :</span>
+                                        <span className="text-xs font-medium text-blue-700">Renouvellements :</span>
                                         <span className="text-sm text-blue-900">
-                                          
-{prescription.renouvellements_effectues}/{prescription.nb_renouvellements}
+                                          {prescription.renouvellements_effectues}/{prescription.nb_renouvellements}
                                         </span>
                                       </div>
                                     )}
@@ -987,26 +915,23 @@ text-blue-700">Renouvellements :</span>
                             )}
                           </>
                         ) : (
-                          <p className="text-sm text-blue-600 italic">Aucun dtail spcifique 
-disponible pour cette ordonnance</p>
+                          <p className="text-sm text-blue-600 italic">Aucun détail spécifique disponible pour cette ordonnance</p>
                         )}
                       </div>
                     )}
 
-                    {/* Mdicaments (pour les prescriptions avec structure medicaments) */}
+                    {/* Médicaments (pour les prescriptions avec structure medicaments) */}
                     {prescription.medicaments && prescription.medicaments.length > 0 ? (
                       <div className="mb-3">
-                        <p className="text-xs font-medium text-gray-600 mb-2">Mdicaments prescrits 
-:</p>
+                        <p className="text-xs font-medium text-gray-600 mb-2">Médicaments prescrits :</p>
                         <div className="space-y-2">
                           {prescription.medicaments.map((med, idx) => (
                             <div key={idx} className="p-2 bg-blue-50 rounded border border-blue-200">
                               <div className="flex items-center justify-between">
                                 <span className="text-sm font-medium text-blue-900">{med.nom}</span>
                                 {med.quantite && (
-                                  <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 
-rounded-full">
-                                    Qt: {med.quantite}
+                                  <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                                    Qté: {med.quantite}
                                   </span>
                                 )}
                               </div>
@@ -1017,7 +942,7 @@ rounded-full">
                               )}
                               {med.duree && (
                                 <p className="text-xs text-blue-700 mt-1">
-                                  <span className="font-medium">Dure :</span> {med.duree}
+                                  <span className="font-medium">Durée :</span> {med.duree}
                                 </p>
                               )}
                               {med.instructions && (
@@ -1031,24 +956,21 @@ rounded-full">
                       </div>
                     ) : prescription.type_prescription === 'ordonnance' && (
                       <div className="mb-3 p-2 bg-gray-50 rounded border border-gray-200">
-                        <p className="text-xs text-gray-500 italic">Aucun mdicament spcifique 
-list</p>
+                        <p className="text-xs text-gray-500 italic">Aucun médicament spécifique listé</p>
                       </div>
                     )}
 
                     {/* Examens (pour les prescriptions avec structure examens) */}
                     {prescription.examens && prescription.examens.length > 0 ? (
                       <div className="mb-3">
-                        <p className="text-xs font-medium text-gray-600 mb-2">Examens demands :</p>
+                        <p className="text-xs font-medium text-gray-600 mb-2">Examens demandés :</p>
                         <div className="space-y-2">
                           {prescription.examens.map((exam, idx) => (
-                            <div key={idx} className="p-2 bg-green-50 rounded border 
-border-green-200">
+                            <div key={idx} className="p-2 bg-green-50 rounded border border-green-200">
                               <div className="flex items-center justify-between">
                                 <span className="text-sm font-medium text-green-900">{exam.nom}</span>
                                 {exam.urgence && (
-                                  <span className={`text-xs px-2 py-1 rounded-full ${exam.urgence === 
-'urgent'
+                                  <span className={`text-xs px-2 py-1 rounded-full ${exam.urgence === 'urgent'
                                       ? 'bg-red-100 text-red-800'
                                       : 'bg-green-100 text-green-800'
                                     }`}>
@@ -1068,8 +990,7 @@ border-green-200">
                               )}
                               {exam.preparation && (
                                 <p className="text-xs text-green-600 mt-1">
-                                  <span className="font-medium">Prparation :</span> 
-{exam.preparation}
+                                  <span className="font-medium">Préparation :</span> {exam.preparation}
                                 </p>
                               )}
                             </div>
@@ -1078,54 +999,49 @@ border-green-200">
                       </div>
                     ) : prescription.type_prescription === 'examen' && (
                       <div className="mb-3 p-2 bg-gray-50 rounded border border-gray-200">
-                        <p className="text-xs text-gray-500 italic">Aucun examen spcifique 
-list</p>
+                        <p className="text-xs text-gray-500 italic">Aucun examen spécifique listé</p>
                       </div>
                     )}
 
-                    {/* Informations complmentaires */}
+                    {/* Informations complémentaires */}
                     <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {/* Premire colonne - Statut et dates */}
+                        {/* Première colonne - Statut et dates */}
                         <div className="space-y-2">
                           <div className="flex items-center gap-2">
                             <span className="text-xs font-medium text-gray-600">Statut :</span>
-                            <span className={`px-2 py-1 rounded-full text-xs font-medium 
-${getStatusColor(prescription.statut)}`}>
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(prescription.statut)}`}>
                               {prescription.statut || 'Statut inconnu'}
                             </span>
                           </div>
 
                           {prescription.date_debut && (
                             <div className="flex items-center gap-2">
-                              <span className="text-xs font-medium text-gray-600">Dbut :</span>
-                              <span className="text-xs 
-text-gray-900">{formatDate(prescription.date_debut)}</span>
+                              <span className="text-xs font-medium text-gray-600">Début :</span>
+                              <span className="text-xs text-gray-900">{formatDate(prescription.date_debut)}</span>
                             </div>
                           )}
 
                           {prescription.date_fin && (
                             <div className="flex items-center gap-2">
                               <span className="text-xs font-medium text-gray-600">Fin :</span>
-                              <span className="text-xs 
-text-gray-900">{formatDate(prescription.date_fin)}</span>
+                              <span className="text-xs text-gray-900">{formatDate(prescription.date_fin)}</span>
                             </div>
                           )}
 
                           {prescription.date_arret && (
                             <div className="flex items-center gap-2">
-                              <span className="text-xs font-medium text-gray-600">Arrt :</span>
-                              <span className="text-xs 
-text-gray-900">{formatDate(prescription.date_arret)}</span>
+                              <span className="text-xs font-medium text-gray-600">Arrêt :</span>
+                              <span className="text-xs text-gray-900">{formatDate(prescription.date_arret)}</span>
                             </div>
                           )}
                         </div>
 
-                        {/* Deuxime colonne - Mdecin et tablissement */}
+                        {/* Deuxième colonne - Médecin et établissement */}
                         <div className="space-y-2">
                           {prescription.medecin && (
                             <div className="flex items-center gap-2">
-                              <span className="text-xs font-medium text-gray-600">Mdecin :</span>
+                              <span className="text-xs font-medium text-gray-600">Médecin :</span>
                               <span className="text-xs text-gray-900">
                                 Dr. {prescription.medecin.prenom} {prescription.medecin.nom}
                               </span>
@@ -1135,25 +1051,21 @@ text-gray-900">{formatDate(prescription.date_arret)}</span>
                           {prescription.redacteur && (
                             <div className="space-y-1">
                               <div className="flex items-center gap-2">
-                                <span className="text-xs font-medium text-gray-600">Rdacteur 
-:</span>
+                                <span className="text-xs font-medium text-gray-600">Rédacteur :</span>
                                 <span className="text-xs text-gray-900">
-                                  Dr. {prescription.redacteur.nom_complet || 
-`${prescription.redacteur.prenom || ''} ${prescription.redacteur.nom || ''}`.trim() || 'N/A'}
+                                  Dr. {prescription.redacteur.nom_complet || `${prescription.redacteur.prenom || ''} ${prescription.redacteur.nom || ''}`.trim() || 'N/A'}
                                 </span>
                               </div>
                               {prescription.redacteur.specialite && (
                                 <div className="flex items-center gap-2 ml-4">
-                                  <span className="text-xs text-gray-500">Spcialit :</span>
-                                  <span className="text-xs 
-text-gray-700">{prescription.redacteur.specialite}</span>
+                                  <span className="text-xs text-gray-500">Spécialité :</span>
+                                  <span className="text-xs text-gray-700">{prescription.redacteur.specialite}</span>
                                 </div>
                               )}
                               {prescription.redacteur.numero_adeli && (
                                 <div className="flex items-center gap-2 ml-4">
-                                  <span className="text-xs text-gray-500">N ADELI :</span>
-                                  <span className="text-xs text-gray-700 
-font-mono">{prescription.redacteur.numero_adeli}</span>
+                                  <span className="text-xs text-gray-500">N° ADELI :</span>
+                                  <span className="text-xs text-gray-700 font-mono">{prescription.redacteur.numero_adeli}</span>
                                 </div>
                               )}
                             </div>
@@ -1161,41 +1073,33 @@ font-mono">{prescription.redacteur.numero_adeli}</span>
 
                           {prescription.etablissement && (
                             <div className="flex items-center gap-2">
-                              <span className="text-xs font-medium text-gray-600">tablissement 
-:</span>
-                              <span className="text-xs 
-text-gray-900">{prescription.etablissement}</span>
+                              <span className="text-xs font-medium text-gray-600">Établissement :</span>
+                              <span className="text-xs text-gray-900">{prescription.etablissement}</span>
                             </div>
                           )}
                         </div>
                       </div>
 
-                      {/* Informations supplmentaires */}
-                      {(prescription.instructions_speciales || prescription.pharmacieDelivrance || 
-prescription.signatureElectronique) && (
+                      {/* Informations supplémentaires */}
+                      {(prescription.instructions_speciales || prescription.pharmacieDelivrance || prescription.signatureElectronique) && (
                         <div className="mt-3 pt-3 border-t border-gray-200 space-y-2">
                           {prescription.instructions_speciales && (
                             <div className="flex items-start gap-2">
-                              <span className="text-xs font-medium text-gray-600">Instructions 
-spciales :</span>
-                              <span className="text-xs 
-text-gray-900">{prescription.instructions_speciales}</span>
+                              <span className="text-xs font-medium text-gray-600">Instructions spéciales :</span>
+                              <span className="text-xs text-gray-900">{prescription.instructions_speciales}</span>
                             </div>
                           )}
 
                           {prescription.pharmacieDelivrance && (
                             <div className="flex items-center gap-2">
-                              <span className="text-xs font-medium text-gray-600">Pharmacie de 
-dlivrance :</span>
-                              <span className="text-xs 
-text-gray-900">{prescription.pharmacieDelivrance}</span>
+                              <span className="text-xs font-medium text-gray-600">Pharmacie de délivrance :</span>
+                              <span className="text-xs text-gray-900">{prescription.pharmacieDelivrance}</span>
                             </div>
                           )}
 
                           {prescription.signatureElectronique && (
                             <div className="flex items-center gap-2">
-                              <span className="text-xs font-medium text-gray-600">Signature 
-lectronique :</span>
+                              <span className="text-xs font-medium text-gray-600">Signature électronique :</span>
                               <span className="text-xs text-gray-500 font-mono truncate">
                                 {prescription.signatureElectronique.substring(0, 20)}...
                               </span>
@@ -1218,9 +1122,8 @@ lectronique :</span>
                             }
                           }}
                         disabled={isGenerating}
-                        className="text-blue-600 hover:text-blue-800 p-2 rounded hover:bg-blue-50 
-disabled:opacity-50 disabled:cursor-not-allowed"
-                        title="Tlcharger en PDF"
+                        className="text-blue-600 hover:text-blue-800 p-2 rounded hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Télécharger en PDF"
                       >
                         <FaDownload />
                       </button>
@@ -1233,69 +1136,56 @@ disabled:opacity-50 disabled:cursor-not-allowed"
                           }
                         }}
                         disabled={isGenerating}
-                        className="text-green-600 hover:text-green-800 p-2 rounded hover:bg-green-50 
-disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="text-green-600 hover:text-green-800 p-2 rounded hover:bg-green-50 disabled:opacity-50 disabled:cursor-not-allowed"
                         title="Imprimer"
                       >
                         <FaPrint />
                       </button>
                     </div>
 
-                    {/* Bouton de messagerie scurise */}
-                    {(prescription.type_prescription === 'ordonnance' || 
-prescription.type_prescription === 'examen') && (
+                    {/* Bouton de messagerie sécurisée */}
+                    {(prescription.type_prescription === 'ordonnance' || prescription.type_prescription === 'examen') && (
                       <div className="pt-2 border-t border-gray-200">
                         <MessagingButton
                           contextType={prescription.type_prescription}
                           contextId={prescription.id_prescription || prescription.id}
-                          contextTitle={`${prescription.type_prescription === 'ordonnance' ? 
-'Ordonnance' : 'Examen'} du ${formatDate(prescription.date_prescription)}`}
+                          contextTitle={`${prescription.type_prescription === 'ordonnance' ? 'Ordonnance' : 'Examen'} du ${formatDate(prescription.date_prescription)}`}
                           className="w-full"
                           medecinInfo={prescription.medecinInfo}
-                          currentUserName={`${patientProfile?.prenom || ''} ${patientProfile?.nom || 
-''}`.trim() || 'Patient'}
+                          currentUserName={`${patientProfile?.prenom || ''} ${patientProfile?.nom || ''}`.trim() || 'Patient'}
                           currentUserRole="patient"
                         />
                       </div>
                     )}
 
-                    {/* Boutons spcifiques au QR Code */}
+                    {/* Boutons spécifiques au QR Code */}
                     {prescription.qrCode && (
                       <div className="flex space-x-2 pt-2 border-t border-gray-200">
                         <button
-                          className="text-purple-600 hover:text-purple-800 p-2 rounded 
-hover:bg-purple-50 text-xs"
-                          title="Tlcharger QR Code"
+                          className="text-purple-600 hover:text-purple-800 p-2 rounded hover:bg-purple-50 text-xs"
+                          title="Télécharger QR Code"
                           onClick={() => {
                             const link = document.createElement('a');
                             link.href = prescription.qrCode;
-                            link.download = `QR_${prescription.prescriptionNumber || 
-'prescription'}.png`;
+                            link.download = `QR_${prescription.prescriptionNumber || 'prescription'}.png`;
                             link.click();
                           }}
                         >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 
-24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 
-4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V6a1 1 0 
-00-1-1H5a1 1 0 00-1 1v1a1 1 0 001 1zm12 0h2a1 1 0 001-1V6a1 1 0 00-1-1h-2a1 1 0 00-1 1v1a1 1 0 001 
-1zM5 20h2a1 1 0 001-1v-1a1 1 0 00-1-1H5a1 1 0 00-1 1v1a1 1 0 001 1z" />
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V6a1 1 0 00-1-1H5a1 1 0 00-1 1v1a1 1 0 001 1zm12 0h2a1 1 0 001-1V6a1 1 0 00-1-1h-2a1 1 0 00-1 1v1a1 1 0 001 1zM5 20h2a1 1 0 001-1v-1a1 1 0 00-1-1H5a1 1 0 00-1 1v1a1 1 0 001 1z" />
                           </svg>
                         </button>
                         <button
-                          className="text-indigo-600 hover:text-indigo-800 p-2 rounded 
-hover:bg-indigo-50 text-xs"
+                          className="text-indigo-600 hover:text-indigo-800 p-2 rounded hover:bg-indigo-50 text-xs"
                           title="Voir QR Code en grand"
                           onClick={(e) => {
                             e.stopPropagation();
-                            // Ouvrir le QR code dans une nouvelle fentre
+                            // Ouvrir le QR code dans une nouvelle fenêtre
                             window.open(prescription.qrCode, '_blank');
                           }}
                         >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 
-24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 
-21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
                           </svg>
                         </button>
                       </div>
@@ -1309,19 +1199,19 @@ hover:bg-indigo-50 text-xs"
           <div className="text-center py-8">
             <FaFileMedical className="text-4xl text-gray-400 mx-auto mb-4" />
             <p className="text-gray-500 text-lg font-medium mb-2">
-              Aucune prescription trouve
+              Aucune prescription trouvée
             </p>
             <p className="text-gray-400">
               {activeFilter === 'all'
-                ? 'Vous n\'avez pas encore de prescriptions dans votre historique mdical.'
-                : `Aucune prescription de type "${activeFilter}" trouve.`
+                ? 'Vous n\'avez pas encore de prescriptions dans votre historique médical.'
+                : `Aucune prescription de type "${activeFilter}" trouvée.`
               }
             </p>
           </div>
         )}
       </div>
 
-      {/* Modal pour afficher les dtails de la prescription */}
+      {/* Modal pour afficher les détails de la prescription */}
       {showPrescriptionModal && selectedPrescription && (
         <div
           className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
@@ -1337,8 +1227,7 @@ hover:bg-indigo-50 text-xs"
                 {getTypeIcon(selectedPrescription.type_prescription)}
                 <div>
                   <h3 className="text-xl font-semibold text-gray-900">
-                    {selectedPrescription.type_prescription === 'ordonnance' ? 'Ordonnance mdicale' 
-:
+                    {selectedPrescription.type_prescription === 'ordonnance' ? 'Ordonnance médicale' :
                       selectedPrescription.type_prescription === 'examen' ? 'Demande d\'examen' :
                         selectedPrescription.type_prescription === 'consultation' ? 'Consultation' :
                           selectedPrescription.type_prescription}
@@ -1353,8 +1242,7 @@ hover:bg-indigo-50 text-xs"
                 className="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-100"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 
-6l12 12" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
@@ -1371,10 +1259,10 @@ hover:bg-indigo-50 text-xs"
                 </div>
               )}
 
-              {/* Mdicaments */}
+              {/* Médicaments */}
               {selectedPrescription.medicaments && selectedPrescription.medicaments.length > 0 && (
                 <div className="mb-6">
-                  <h4 className="text-lg font-medium text-gray-900 mb-3">Mdicaments prescrits</h4>
+                  <h4 className="text-lg font-medium text-gray-900 mb-3">Médicaments prescrits</h4>
                   <div className="space-y-3">
                     {selectedPrescription.medicaments.map((med, idx) => (
                       <div key={idx} className="bg-blue-50 p-4 rounded-lg border border-blue-200">
@@ -1388,14 +1276,13 @@ hover:bg-indigo-50 text-xs"
                             )}
                             {med.duree && (
                               <p className="text-blue-700 text-sm mt-1">
-                                <span className="font-medium">Dure :</span> {med.duree}
+                                <span className="font-medium">Durée :</span> {med.duree}
                               </p>
                             )}
                           </div>
                           {med.quantite && (
-                            <span className="bg-blue-100 text-blue-800 text-xs font-medium px-3 py-1 
-rounded-full">
-                              Qt: {med.quantite}
+                            <span className="bg-blue-100 text-blue-800 text-xs font-medium px-3 py-1 rounded-full">
+                              Qté: {med.quantite}
                             </span>
                           )}
                         </div>
@@ -1413,7 +1300,7 @@ rounded-full">
               {/* Examens */}
               {selectedPrescription.examens && selectedPrescription.examens.length > 0 && (
                 <div className="mb-6">
-                  <h4 className="text-lg font-medium text-gray-900 mb-3">Examens demands</h4>
+                  <h4 className="text-lg font-medium text-gray-900 mb-3">Examens demandés</h4>
                   <div className="space-y-3">
                     {selectedPrescription.examens.map((exam, idx) => (
                       <div key={idx} className="bg-green-50 p-4 rounded-lg border border-green-200">
@@ -1427,8 +1314,7 @@ rounded-full">
                             )}
                           </div>
                           {exam.urgence && (
-                            <span className="bg-green-100 text-green-800 text-xs font-medium px-3 
-py-1 rounded-full">
+                            <span className="bg-green-100 text-green-800 text-xs font-medium px-3 py-1 rounded-full">
                               {exam.urgence === 'urgent' ? 'URGENT' : exam.urgence}
                             </span>
                           )}
@@ -1440,7 +1326,7 @@ py-1 rounded-full">
                         )}
                         {exam.preparation && (
                           <p className="text-green-600 text-sm mt-2">
-                            <span className="font-medium">Prparation :</span> {exam.preparation}
+                            <span className="font-medium">Préparation :</span> {exam.preparation}
                           </p>
                         )}
                       </div>
@@ -1449,22 +1335,21 @@ py-1 rounded-full">
                 </div>
               )}
 
-              {/* Informations complmentaires */}
+              {/* Informations complémentaires */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Statut et mdecin */}
+                {/* Statut et médecin */}
                 <div className="bg-gray-50 p-4 rounded-lg">
-                  <h4 className="text-lg font-medium text-gray-900 mb-3">Informations gnrales</h4>
+                  <h4 className="text-lg font-medium text-gray-900 mb-3">Informations générales</h4>
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <span className="text-gray-600">Statut :</span>
-                      <span className={`px-3 py-1 rounded-full text-sm font-medium 
-${getStatusColor(selectedPrescription.statut)}`}>
+                      <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(selectedPrescription.statut)}`}>
                         {selectedPrescription.statut || 'Statut inconnu'}
                       </span>
                     </div>
                     {selectedPrescription.medecin && (
                       <div className="flex items-center justify-between">
-                        <span className="text-gray-600">Mdecin :</span>
+                        <span className="text-gray-600">Médecin :</span>
                         <span className="text-gray-900 font-medium">
                           Dr. {selectedPrescription.medecin.prenom} {selectedPrescription.medecin.nom}
                         </span>
@@ -1472,7 +1357,7 @@ ${getStatusColor(selectedPrescription.statut)}`}>
                     )}
                     {selectedPrescription.etablissement && (
                       <div className="flex items-center justify-between">
-                        <span className="text-gray-600">tablissement :</span>
+                        <span className="text-gray-600">Établissement :</span>
                         <span className="text-gray-900 font-medium">
                           {selectedPrescription.etablissement}
                         </span>
@@ -1481,9 +1366,9 @@ ${getStatusColor(selectedPrescription.statut)}`}>
                   </div>
                 </div>
 
-                {/* Dates et validit */}
+                {/* Dates et validité */}
                 <div className="bg-gray-50 p-4 rounded-lg">
-                  <h4 className="text-lg font-medium text-gray-900 mb-3">Dates et validit</h4>
+                  <h4 className="text-lg font-medium text-gray-900 mb-3">Dates et validité</h4>
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <span className="text-gray-600">Date de prescription :</span>
@@ -1493,7 +1378,7 @@ ${getStatusColor(selectedPrescription.statut)}`}>
                     </div>
                     {selectedPrescription.date_debut && (
                       <div className="flex items-center justify-between">
-                        <span className="text-gray-600">Date de dbut :</span>
+                        <span className="text-gray-600">Date de début :</span>
                         <span className="text-gray-900 font-medium">
                           {formatDate(selectedPrescription.date_debut)}
                         </span>
@@ -1509,7 +1394,7 @@ ${getStatusColor(selectedPrescription.statut)}`}>
                     )}
                     {selectedPrescription.validite && (
                       <div className="flex items-center justify-between">
-                        <span className="text-gray-600">Validit :</span>
+                        <span className="text-gray-600">Validité :</span>
                         <span className="text-gray-900 font-medium">
                           {selectedPrescription.validite}
                         </span>
@@ -1523,8 +1408,7 @@ ${getStatusColor(selectedPrescription.statut)}`}>
               <div className="flex justify-end gap-3 mt-6 pt-6 border-t">
                 <button
                   onClick={closePrescriptionModal}
-                  className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 
-transition-colors"
+                  className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
                 >
                   Fermer
                 </button>
@@ -1537,12 +1421,11 @@ transition-colors"
                     }
                   }}
                   disabled={isGenerating}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 
-disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
-                  title="Tlcharger en PDF"
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                  title="Télécharger en PDF"
                 >
                   <FaDownload />
-                  {isGenerating ? 'Gnration...' : 'Tlcharger'}
+                  {isGenerating ? 'Génération...' : 'Télécharger'}
                 </button>
                 <button
                   onClick={() => {
@@ -1553,12 +1436,11 @@ disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-cen
                     }
                   }}
                   disabled={isGenerating}
-                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 
-disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
                   title="Imprimer"
                 >
                   <FaPrint />
-                  {isGenerating ? 'Prparation...' : 'Imprimer'}
+                  {isGenerating ? 'Préparation...' : 'Imprimer'}
                 </button>
               </div>
             </div>
@@ -1566,7 +1448,7 @@ disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-cen
         </div>
       )}
 
-      {/* Modal de slection PDF */}
+      {/* Modal de sélection PDF */}
       {showPDFSelectionModal && (
         <div
           className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
@@ -1580,10 +1462,10 @@ disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-cen
             <div className="flex justify-between items-center p-6 border-b">
               <div>
                 <h3 className="text-xl font-semibold text-gray-900">
-                  Gnration de PDF
+                  Génération de PDF
                 </h3>
                 <p className="text-sm text-gray-600">
-                  {selectedPrescriptionsForPDF.length} prescription(s) slectionne(s)
+                  {selectedPrescriptionsForPDF.length} prescription(s) sélectionnée(s)
                 </p>
               </div>
               <button
@@ -1591,8 +1473,7 @@ disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-cen
                 className="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-100"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 
-6l12 12" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
@@ -1600,18 +1481,15 @@ disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-cen
             {/* Contenu du modal */}
             <div className="p-6">
               <div className="mb-6">
-                <h4 className="text-lg font-medium text-gray-900 mb-3">Prescriptions slectionnes 
-:</h4>
+                <h4 className="text-lg font-medium text-gray-900 mb-3">Prescriptions sélectionnées :</h4>
                 <div className="space-y-2 max-h-40 overflow-y-auto">
                   {selectedPrescriptionsForPDF.map((prescription, index) => (
-                    <div key={index} className="flex items-center justify-between p-3 bg-gray-50 
-rounded-lg">
+                    <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                       <div className="flex items-center gap-3">
                         {getTypeIcon(prescription.type_prescription)}
                         <div>
                           <p className="font-medium text-gray-900">
-                            {prescription.type_prescription === 'ordonnance' ? 'Ordonnance mdicale' 
-:
+                            {prescription.type_prescription === 'ordonnance' ? 'Ordonnance médicale' :
                               prescription.type_prescription === 'examen' ? 'Demande d\'examen' :
                                 prescription.type_prescription === 'consultation' ? 'Consultation' :
                                   prescription.type_prescription}
@@ -1621,7 +1499,7 @@ rounded-lg">
                           </p>
                           {prescription.prescriptionNumber && (
                             <p className="text-xs text-gray-500 font-mono">
-                              N {prescription.prescriptionNumber}
+                              N° {prescription.prescriptionNumber}
                             </p>
                           )}
                         </div>
@@ -1629,12 +1507,10 @@ rounded-lg">
                       <button
                         onClick={() => togglePrescriptionSelection(prescription)}
                         className="text-red-500 hover:text-red-700 p-1"
-                        title="Retirer de la slection"
+                        title="Retirer de la sélection"
                       >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 
-24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 
-18L18 6M6 6l12 12" />
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                         </svg>
                       </button>
                     </div>
@@ -1646,30 +1522,27 @@ rounded-lg">
               <div className="flex justify-end gap-3 pt-6 border-t">
                 <button
                   onClick={closePDFSelectionModal}
-                  className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 
-transition-colors"
+                  className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
                 >
                   Annuler
                 </button>
                 <button
                   onClick={handleGenerateMultiplePrescriptionsPDF}
                   disabled={isGenerating}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 
-disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
-                  title="Tlcharger les PDFs"
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                  title="Télécharger les PDFs"
                 >
                   <FaDownload />
-                  {isGenerating ? 'Gnration...' : 'Tlcharger'}
+                  {isGenerating ? 'Génération...' : 'Télécharger'}
                 </button>
                 <button
                   onClick={handlePrintMultiplePrescriptionsPDF}
                   disabled={isGenerating}
-                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 
-disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
                   title="Imprimer les PDFs"
                 >
                   <FaPrint />
-                  {isGenerating ? 'Prparation...' : 'Imprimer'}
+                  {isGenerating ? 'Préparation...' : 'Imprimer'}
                 </button>
               </div>
             </div>
@@ -1709,17 +1582,17 @@ const DMP = () => {
   const [uploadTitle, setUploadTitle] = useState('');
   const [uploadDescription, setUploadDescription] = useState('');
 
-  // tats pour les notifications en temps rel
+  // États pour les notifications en temps réel
   const [currentNotification, setCurrentNotification] = useState(null);
   const [showNotification, setShowNotification] = useState(false);
 
-  // tats pour la protection 2FA des dossiers patients (grs par le hook use2FA)
+  // États pour la protection 2FA des dossiers patients (gérés par le hook use2FA)
 
   const navigate = useNavigate();
   const dmpContext = useDMP();
   
-  // Logs de dbogage pour le contexte DMP
-  console.log(' DMP.js - Contexte DMP rcupr:', {
+  // Logs de débogage pour le contexte DMP
+  console.log('🔍 DMP.js - Contexte DMP récupéré:', {
     dmpContext: !!dmpContext,
     hasState: !!dmpContext?.state,
     hasActions: !!dmpContext?.actions,
@@ -1728,42 +1601,63 @@ const DMP = () => {
     error: dmpContext?.state?.error
   });
   
-  // Vrification de scurit pour le contexte DMP
+  // Vérification de sécurité pour le contexte DMP
   const createAutoMesure = dmpContext?.actions?.createAutoMesure;
   const uploadDocument = dmpContext?.actions?.uploadDocument;
   const dmpState = dmpContext?.state || {};
   const dmpActions = dmpContext?.actions || {};
 
 
-  // Vrification de scurit avant d'utiliser le contexte
-  if (!dmpContext || !dmpState || !dmpActions) {
-      // If you want to show this diagnostic UI, move it inside a component's render/return.
-      // Example: return this JSX inside the DMP component's render block.
-      // <div className="fixed top-4 right-4 bg-red-100 border border-red-400 rounded-lg p-4 shadow-lg z-50 max-w-sm">
-      //     <h4 className="font-semibold text-red-800 mb-2"> Erreur DMP Context</h4>
-      //     <div className="space-y-1 text-xs text-red-700">
-      //         <div>Contexte DMP non disponible</div>
-      //         <div>Vrifiez que le composant est dans un DMPProvider</div>
-      //     </div>
-      // </div>
-  }
-
-  const handleForceRefresh = () => {
-      if (dmpActions.forceRefreshPatientId) {
-          const newPatientId = dmpActions.forceRefreshPatientId();
-          if (newPatientId) {
-              // Recharger les donnes
-              if (dmpActions.refreshAllData) {
-                  dmpActions.refreshAllData();
-              }
-          }
-      } else {
+      // Vérification de sécurité avant d'utiliser le contexte
+      if (!dmpContext || !dmpState || !dmpActions) {
+          return (
+              <div className="fixed top-4 right-4 bg-red-100 border border-red-400 rounded-lg p-4 shadow-lg z-50 max-w-sm">
+                  <h4 className="font-semibold text-red-800 mb-2">⚠️ Erreur DMP Context</h4>
+                  <div className="space-y-1 text-xs text-red-700">
+                      <div>Contexte DMP non disponible</div>
+                      <div>Vérifiez que le composant est dans un DMPProvider</div>
+                  </div>
+              </div>
+          );
       }
-  };
-  
-// Misplaced return block removed. If you want to show this diagnostic UI, move it inside a component's render/return.
 
-  // Hook pour la gnration de PDF
+      const handleForceRefresh = () => {
+          console.log('🔄 DMPContextDiagnostic - Forçage de la réinitialisation du Patient ID');
+          if (dmpActions.forceRefreshPatientId) {
+              const newPatientId = dmpActions.forceRefreshPatientId();
+              if (newPatientId) {
+                  console.log('✅ DMPContextDiagnostic - Nouveau Patient ID défini:', newPatientId);
+                  // Recharger les données
+                  if (dmpActions.refreshAllData) {
+                      dmpActions.refreshAllData();
+                  }
+              }
+          } else {
+              console.warn('⚠️ DMPContextDiagnostic - forceRefreshPatientId non disponible');
+          }
+      };
+      
+      return (
+          <div className="fixed top-4 right-4 bg-yellow-100 border border-yellow-400 rounded-lg p-4 shadow-lg z-50 max-w-sm">
+              <h4 className="font-semibold text-yellow-800 mb-2">🔍 Diagnostic DMP Context</h4>
+              <div className="space-y-1 text-xs">
+                  <div>Patient ID: <span className="font-mono">{dmpState.patientId || 'null'}</span></div>
+                  <div>Loading: <span className={dmpState.loading ? 'text-green-600' : 'text-red-600'}>{dmpState.loading ? 'true' : 'false'}</span></div>
+                  <div>Error: <span className="text-red-600">{dmpState.error || 'none'}</span></div>
+                  <div>Last Update: <span className="font-mono">{dmpState.lastUpdate || 'never'}</span></div>
+              </div>
+              <button 
+                  onClick={handleForceRefresh}
+                  className="mt-2 w-full bg-yellow-500 text-white px-2 py-1 rounded text-xs hover:bg-yellow-600"
+                  disabled={!dmpActions.forceRefreshPatientId}
+              >
+                  🔄 Forcer Refresh Patient ID
+              </button>
+          </div>
+      );
+  };
+
+  // Hook pour la génération de PDF
   const {
     isGenerating: isGeneratingPDF,
     error: pdfError,
@@ -1772,7 +1666,7 @@ const DMP = () => {
     clearError: clearPDFError
   } = usePDFGenerator();
 
-  // Utilisation du hook centralis use2FA
+  // Utilisation du hook centralisé use2FA
   const {
     show2FA,
     requires2FA,
@@ -1807,13 +1701,13 @@ const DMP = () => {
       setLoading(true);
       setError(null);
 
-      // Rcuprer le profil patient depuis le localStorage
+      // Récupérer le profil patient depuis le localStorage
       const storedPatient = getStoredPatient();
       if (storedPatient) {
         setPatientProfile(storedPatient);
       }
 
-      // Charger le tableau de bord (utilise automatiquement l'ID du patient connect)
+      // Charger le tableau de bord (utilise automatiquement l'ID du patient connecté)
       try {
         const tableauData = await dmpApi.getTableauDeBord();
         setTableauDeBord(tableauData.data?.tableau_de_bord);
@@ -1822,10 +1716,10 @@ const DMP = () => {
         setTableauDeBord(null);
       }
 
-      // Charger les notifications des droits d'accs depuis l'API relle
-      console.log('Chargement des notifications des droits d\'accs depuis l\'API...');
+      // Charger les notifications des droits d'accès depuis l'API réelle
+      console.log('Chargement des notifications des droits d\'accès depuis l\'API...');
       try {
-        // Rcuprer l'ID du patient connect
+        // Récupérer l'ID du patient connecté
         const storedPatient = getStoredPatient();
         const patientId = storedPatient?.id_patient || storedPatient?.id;
 
@@ -1834,11 +1728,11 @@ const DMP = () => {
           setNotificationsDroitsAcces([]);
         } else {
           const pendingRequests = await dmpApi.getMedecinAccessRequests(patientId);
-          console.log('Demandes reues de l\'API:', pendingRequests);
+          console.log('Demandes reçues de l\'API:', pendingRequests);
 
-          // Filtrer pour ne garder que les accs du patient connect
+          // Filtrer pour ne garder que les accès du patient connecté
           const filteredRequests = filterAccessByPatient(pendingRequests, patientId);
-          console.log('Accs filtrs pour le patient:', filteredRequests);
+          console.log('Accès filtrés pour le patient:', filteredRequests);
           setNotificationsDroitsAcces(filteredRequests);
         }
       } catch (notificationsError) {
@@ -1846,15 +1740,15 @@ const DMP = () => {
         setNotificationsDroitsAcces([]);
       }
 
-      // Charger les droits d'accs complets
-      console.log('Chargement des droits d\'accs complets...');
+      // Charger les droits d'accès complets
+      console.log('Chargement des droits d\'accès complets...');
       try {
         const storedPatient = getStoredPatient();
         const patientId = storedPatient?.id_patient || storedPatient?.id;
 
         if (patientId) {
           const droitsAccesData = await dmpApi.getDroitsAcces(patientId);
-          console.log('Droits d\'accs reus de l\'API:', droitsAccesData);
+          console.log('Droits d\'accès reçus de l\'API:', droitsAccesData);
           
           if (Array.isArray(droitsAccesData)) {
             setDroitsAcces(droitsAccesData);
@@ -1865,29 +1759,29 @@ const DMP = () => {
           }
         }
       } catch (droitsError) {
-        console.warn('Droits d\'accs non disponibles:', droitsError.message);
+        console.warn('Droits d\'accès non disponibles:', droitsError.message);
         setDroitsAcces([]);
       }
 
-      // Charger les autorisations valides
+      // Charger les autorisations validées
       await loadAutorisationsValidees();
 
     } catch (error) {
-      console.error('Erreur lors du chargement des donnes initiales:', error);
+      console.error('Erreur lors du chargement des données initiales:', error);
       setError(`Erreur lors du chargement: ${error.message}`);
     } finally {
       setLoading(false);
     }
   };
 
-  // Nouvelle fonction pour charger les autorisations valides
+  // Nouvelle fonction pour charger les autorisations validées
   const loadAutorisationsValidees = async () => {
     try {
-      console.log(' Chargement des autorisations valides...');
+      console.log('🔍 Chargement des autorisations validées...');
       const autorisationsData = await dmpApi.getAutorisations();
-      console.log(' Autorisations reues de l\'API:', autorisationsData);
+      console.log('📄 Autorisations reçues de l\'API:', autorisationsData);
 
-      // Normaliser la rponse, en grant diffrentes structures possibles
+      // Normaliser la réponse, en gérant différentes structures possibles
       let autorisationsList = [];
       const payload = autorisationsData?.data ?? autorisationsData;
 
@@ -1907,9 +1801,9 @@ const DMP = () => {
 
       const autorisationsActives = (autorisationsList || []).filter(auth => auth.statut === 'actif');
       setAutorisationsValidees(autorisationsActives);
-      console.log(' Autorisations valides charges:', autorisationsActives.length);
+      console.log('✅ Autorisations validées chargées:', autorisationsActives.length);
     } catch (error) {
-      console.error(' Erreur lors du chargement des autorisations valides:', error);
+      console.error('❌ Erreur lors du chargement des autorisations validées:', error);
       // En cas d'erreur, initialiser avec un tableau vide
       setAutorisationsValidees([]);
     }
@@ -1919,22 +1813,22 @@ const DMP = () => {
   // FONCTIONS UTILITAIRES
   // ========================================
   
-  // Fonction pour filtrer les accs par patient ID
+  // Fonction pour filtrer les accès par patient ID
   const filterAccessByPatient = useCallback((accessData, patientId) => {
     if (!accessData || !patientId) return [];
     const arr = accessData.authorizationAccess || accessData;
-    console.log("Accs bruts:", arr);
-    arr.forEach(acc => console.log("Cls accs:", Object.keys(acc), acc));
+    console.log("Accès bruts:", arr);
+    arr.forEach(acc => console.log("Clés accès:", Object.keys(acc), acc));
     return arr.filter(access => Number(access.patient_id) === Number(patientId));
   }, []);
 
-  // Fonction pour obtenir les notifications  afficher
+  // Fonction pour obtenir les notifications à afficher
   const getNotificationsToDisplay = useCallback(() => {
     return notificationsDroitsAcces;
   }, [notificationsDroitsAcces]);
 
   // ========================================
-  // FONCTIONS DE CHARGEMENT DES DONNES
+  // FONCTIONS DE CHARGEMENT DES DONNÉES
   // ========================================
   
   const loadTabData = async (tab) => {
@@ -1944,42 +1838,42 @@ const DMP = () => {
 
       switch (tab) {
         case 'historique':
-          // L'historique mdical est maintenant gr par le composant HistoriqueMedical
+          // L'historique médical est maintenant géré par le composant HistoriqueMedical
           break;
         case 'droits-acces':
-          // Charger les notifications des droits d'accs depuis l'API relle
-          console.log(' Chargement des notifications (onglet droits-acces) depuis l\'API...');
+          // Charger les notifications des droits d'accès depuis l'API réelle
+          console.log('🔍 Chargement des notifications (onglet droits-acces) depuis l\'API...');
           try {
-            // Rcuprer l'ID du patient connect
+            // Récupérer l'ID du patient connecté
             const storedPatient = getStoredPatient();
             const patientId = storedPatient?.id_patient || storedPatient?.id;
 
             if (!patientId) {
-              console.warn(' ID patient non disponible pour charger les notifications');
+              console.warn('⚠️ ID patient non disponible pour charger les notifications');
               setNotificationsDroitsAcces([]);
             } else {
               const pendingRequests = await dmpApi.getMedecinAccessRequests(patientId);
-              console.log(' Notifications reues (onglet):', pendingRequests);
+              console.log('📄 Notifications reçues (onglet):', pendingRequests);
 
-              // Filtrer pour ne garder que les accs du patient connect
+              // Filtrer pour ne garder que les accès du patient connecté
               const filteredRequests = filterAccessByPatient(pendingRequests, patientId);
-              console.log(' Accs filtrs pour le patient (onglet):', filteredRequests);
+              console.log('🔍 Accès filtrés pour le patient (onglet):', filteredRequests);
               setNotificationsDroitsAcces(filteredRequests);
             }
           } catch (notificationsError) {
-            console.warn(' Notifications non disponibles:', notificationsError.message);
+            console.warn('⚠️ Notifications non disponibles:', notificationsError.message);
             setNotificationsDroitsAcces([]);
           }
 
-          // Charger aussi les autorisations valides
+          // Charger aussi les autorisations validées
           await loadAutorisationsValidees();
           break;
         case 'rappels':
           try {
-            const rappelsData = await dmpApi.getRappels(); // Utilise automatiquement l'ID du patient 
+            const rappelsData = await dmpApi.getRappels(); // Utilise automatiquement l'ID du patient connecté
             setRappels(rappelsData.data || []);
           } catch (rappelsError) {
-            console.warn(' Rappels non disponibles:', rappelsError.message);
+            console.warn('⚠️ Rappels non disponibles:', rappelsError.message);
             setRappels([]);
           }
           break;
@@ -1990,7 +1884,7 @@ const DMP = () => {
           break;
       }
     } catch (error) {
-      console.error("Erreur lors du chargement des donnes de l'onglet:", error);
+      console.error("Erreur lors du chargement des données de l'onglet:", error);
       setError(`Erreur lors du chargement de l'onglet: ${error.message}`);
     } finally {
       setLoading(false);
@@ -2001,11 +1895,11 @@ const DMP = () => {
   // WRAPPERS 2FA POUR LA PROTECTION
   // ========================================
   
-  const protectedLoadInitialData = with2FAProtection(loadInitialData, "Chargement des donnes initiales");
-  const protectedLoadTabData = with2FAProtection(loadTabData, 'Chargement des donnes d\'onglet');
+  const protectedLoadInitialData = with2FAProtection(loadInitialData, 'Chargement des données initiales');
+  const protectedLoadTabData = with2FAProtection(loadTabData, 'Chargement des données d\'onglet');
 
   // ========================================
-  // GESTIONNAIRES D'VNEMENTS
+  // GESTIONNAIRES D'ÉVÉNEMENTS
   // ========================================
   
   const handleTabChange = useCallback((tab) => {
@@ -2017,10 +1911,10 @@ const DMP = () => {
     try {
       await logoutAll();
       navigate('/connexion', {
-        state: { message: 'Vous avez t dconnect avec succs' }
+        state: { message: 'Vous avez été déconnecté avec succès' }
       });
     } catch (error) {
-      console.error('Erreur lors de la dconnexion:', error);
+      console.error('Erreur lors de la déconnexion:', error);
     }
   }, [navigate]);
 
@@ -2030,32 +1924,32 @@ const DMP = () => {
   
   const handleMarquerNotificationLue = useCallback(async (notificationId) => {
     try {
-      console.log(' DMP: Marquage de la notification comme lue, ID:', notificationId);
+      console.log('📝 DMP: Marquage de la notification comme lue, ID:', notificationId);
 
       // Appel API pour marquer comme lue
       await dmpApi.marquerNotificationDroitsAccesLue(notificationId);
 
-      console.log(' DMP: Notification marque comme lue avec succs');
+      console.log('✅ DMP: Notification marquée comme lue avec succès');
 
-      // Recharger les notifications depuis l'API pour avoir les donnes  jour
-      console.log(' DMP: Rechargement des notifications aprs marquage...');
+      // Recharger les notifications depuis l'API pour avoir les données à jour
+      console.log('🔄 DMP: Rechargement des notifications après marquage...');
       const storedPatient = getStoredPatient();
       const patientId = storedPatient?.id_patient || storedPatient?.id;
 
       if (patientId) {
         const pendingRequests = await dmpApi.getMedecinAccessRequests(patientId);
-        console.log(' DMP: Nouvelles notifications reues:', pendingRequests);
+        console.log('📄 DMP: Nouvelles notifications reçues:', pendingRequests);
         setNotificationsDroitsAcces(Array.isArray(pendingRequests) ? pendingRequests : []);
       }
 
-      // Recharger aussi les autorisations valides
+      // Recharger aussi les autorisations validées
       await loadAutorisationsValidees();
 
       // Afficher une confirmation
-      alert('Notification marque comme lue');
+      alert('Notification marquée comme lue');
 
     } catch (error) {
-      console.error(' DMP: Erreur lors du marquage de la notification:', error);
+      console.error('❌ DMP: Erreur lors du marquage de la notification:', error);
       alert(`Erreur lors du marquage de la notification: ${error.message}`);
     }
   }, []);
@@ -2067,20 +1961,20 @@ const DMP = () => {
       const patientId = storedPatient?.id_patient || storedPatient?.id;
 
       if (!patientId) {
-        console.warn('ID patient non disponible pour rafrachir les notifications');
+        console.warn('ID patient non disponible pour rafraîchir les notifications');
         setNotificationsDroitsAcces([]);
         return;
       }
 
       const pendingRequests = await dmpApi.getMedecinAccessRequests(patientId);
-      console.log('Demandes reues lors du rafrachissement:', pendingRequests);
+      console.log('Demandes reçues lors du rafraîchissement:', pendingRequests);
 
-      // Filtrer pour ne garder que les accs du patient connect
+      // Filtrer pour ne garder que les accès du patient connecté
       const filteredRequests = filterAccessByPatient(pendingRequests, patientId);
-      console.log('Accs filtrs lors du rafrachissement:', filteredRequests);
+      console.log('Accès filtrés lors du rafraîchissement:', filteredRequests);
       setNotificationsDroitsAcces(Array.isArray(filteredRequests) ? filteredRequests : []);
     } catch (error) {
-      console.error('Erreur lors du rafrachissement des notifications:', error);
+      console.error('Erreur lors du rafraîchissement des notifications:', error);
       setNotificationsDroitsAcces([]);
     } finally {
       setLoading(false);
@@ -2091,9 +1985,8 @@ const DMP = () => {
     try {
       const apiDecision = reponse === 'accepter' || reponse === 'accept' ? 'accept' : 'refuse';
       const confirmationMessage = apiDecision === 'accept'
-        ? `tes-vous sr de vouloir autoriser l'accs au Dr. ${request.professionnel.prenom} 
-${request.professionnel.nom} ?`
-        : `tes-vous sr de vouloir refuser l'accs ?`;
+        ? `Êtes-vous sûr de vouloir autoriser l'accès au Dr. ${request.professionnel.prenom} ${request.professionnel.nom} ?`
+        : `Êtes-vous sûr de vouloir refuser l'accès ?`;
 
       if (!window.confirm(confirmationMessage)) {
         return;
@@ -2101,20 +1994,20 @@ ${request.professionnel.nom} ?`
 
       // L'ID est directement disponible dans l'objet 'request'
       const autorisationId = request.id_acces_autorisation;
-      console.log(` Rponse  la demande ID: ${autorisationId}, Rponse: ${reponse}`);
+      console.log(`🚀 Réponse à la demande ID: ${autorisationId}, Réponse: ${reponse}`);
 
-      // Appel direct  la nouvelle fonction API
+      // Appel direct à la nouvelle fonction API
       await dmpApi.respondToAccessRequest(autorisationId, apiDecision);
 
       const message = apiDecision === 'accept'
-        ? 'Demande d\'accs accepte avec succs !'
-        : 'Demande d\'accs refuse.';
+        ? 'Demande d\'accès acceptée avec succès !'
+        : 'Demande d\'accès refusée.';
       alert(message);
       rafraichirNotifications();
 
     } catch (error) {
-      console.error(' Erreur lors de la rponse  la demande:', error);
-      alert(`Erreur : ${error.message || "Impossible de traiter votre rponse."}`);
+      console.error('❌ Erreur lors de la réponse à la demande:', error);
+      alert(`Erreur : ${error.message || "Impossible de traiter votre réponse."}`);
     }
   }, [rafraichirNotifications]);
 
@@ -2125,13 +2018,13 @@ ${request.professionnel.nom} ?`
       const patientId = storedPatient?.id_patient || storedPatient?.id;
 
       if (!patientId) {
-        console.warn('ID patient non disponible pour rafrachir les droits d\'accs');
+        console.warn('ID patient non disponible pour rafraîchir les droits d\'accès');
         setDroitsAcces([]);
         return;
       }
 
       const droitsAccesData = await dmpApi.getDroitsAcces(patientId);
-      console.log('Droits d\'accs reus lors du rafrachissement:', droitsAccesData);
+      console.log('Droits d\'accès reçus lors du rafraîchissement:', droitsAccesData);
       
       if (Array.isArray(droitsAccesData)) {
         setDroitsAcces(droitsAccesData);
@@ -2141,14 +2034,14 @@ ${request.professionnel.nom} ?`
         setDroitsAcces([]);
       }
     } catch (error) {
-      console.error('Erreur lors du rafrachissement des droits d\'accs:', error);
+      console.error('Erreur lors du rafraîchissement des droits d\'accès:', error);
       setDroitsAcces([]);
     } finally {
       setLoading(false);
     }
   };
 
-  // Fonction pour afficher une notification en temps rel
+  // Fonction pour afficher une notification en temps réel
   const showNotificationToast = (notification) => {
     setCurrentNotification(notification);
     setShowNotification(true);
@@ -2160,24 +2053,23 @@ ${request.professionnel.nom} ?`
     setCurrentNotification(null);
   };
 
-  // Fonction pour grer l'acceptation d'une demande d'accs
+  // Fonction pour gérer l'acceptation d'une demande d'accès
   const handleAcceptAccess = async (notificationId) => {
     try {
-      console.log(' DMP: === DBUT ACCEPTATION DEMANDE D\'ACCS ===');
-      console.log(' DMP: notificationId reu:', notificationId);
-      console.log(' DMP: Nombre total de notifications:', notificationsDroitsAcces.length);
+      console.log('🎯 DMP: === DÉBUT ACCEPTATION DEMANDE D\'ACCÈS ===');
+      console.log('📋 DMP: notificationId reçu:', notificationId);
+      console.log('📋 DMP: Nombre total de notifications:', notificationsDroitsAcces.length);
 
       // Trouver la notification correspondante
       const notification = notificationsDroitsAcces.find(n => n.id_notification === notificationId);
       if (!notification) {
-        console.error(' DMP: Notification non trouve pour l\'ID:', notificationId);
-        console.log(' DMP: Notifications disponibles:', notificationsDroitsAcces.map(n => ({ id: 
-n.id_notification, type: n.type_notification })));
-        alert('Erreur: Notification non trouve');
+        console.error('❌ DMP: Notification non trouvée pour l\'ID:', notificationId);
+        console.log('🔍 DMP: Notifications disponibles:', notificationsDroitsAcces.map(n => ({ id: n.id_notification, type: n.type_notification })));
+        alert('Erreur: Notification non trouvée');
         return;
       }
 
-      console.log(' DMP: Notification trouve:', {
+      console.log('✅ DMP: Notification trouvée:', {
         id_notification: notification.id_notification,
         type_notification: notification.type_notification,
         session_id: notification.session_id,
@@ -2187,152 +2079,159 @@ n.id_notification, type: n.type_notification })));
       });
 
       // Utiliser la fonction helper pour trouver l'ID d'autorisation
-      console.log(' DMP: Recherche de l\'ID d\'autorisation pour la notification...');
+      console.log('🔍 DMP: Recherche de l\'ID d\'autorisation pour la notification...');
       const autorisationId = await dmpApi.findAutorisationIdFromNotification(notification);
 
       if (!autorisationId) {
-        console.error(' DMP: Impossible de trouver l\'ID d\'autorisation pour cette notification');
-        console.log(' DMP: Dtails de la notification pour debug:', notification);
+        console.error('❌ DMP: Impossible de trouver l\'ID d\'autorisation pour cette notification');
+        console.log('🔍 DMP: Détails de la notification pour debug:', notification);
 
-        // Vrifier si l'autorisation existe
-        console.log(' DMP: Vrification de l\'existence de l\'autorisation...');
+        // Vérifier si l'autorisation existe
+        console.log('🔍 DMP: Vérification de l\'existence de l\'autorisation...');
         const autorisation = await dmpApi.verifierAutorisationExistence(notificationId);
-        console.log(' DMP: Rsultat de la vrification:', autorisation);
-
-      }
-
-      console.log(' DMP: ID d\'autorisation trouv:', autorisationId);
-
-      // Vrifier si l'autorisation existe
-      const autorisation = await dmpApi.verifierAutorisationExistence(autorisationId);
-      console.log(' DMP: Vrification de l\'autorisation:', autorisation);
-
-
-  console.log(' DMP: Acceptation de la demande d\'accs:', autorisationId);
-  const result = await dmpApi.accepterAutorisation(autorisationId, "Accès autorisé par le patient");
-
-      // Vrifier si l'autorisation tait dj active
-      if (result && result.success && result.message === 'L\'autorisation est dj active') {
-        console.log(' DMP: L\'autorisation tait dj active');
-        alert('Cette autorisation est dj active');
-      } else {
-        console.log(' DMP: Autorisation accepte avec succs');
-
-        // Recharger les notifications depuis l'API
-        console.log(' DMP: Rechargement des notifications aprs acceptation...');
-        const pendingRequests = await dmpApi.getMedecinAccessRequests();
-        console.log(' DMP: Nouvelles notifications reues:', pendingRequests);
-        setNotificationsDroitsAcces(Array.isArray(pendingRequests) ? pendingRequests : []);
-
-        // Recharger aussi les autorisations valides
-        await loadAutorisationsValidees();
-
-        // Afficher une confirmation
-        alert('Demande d\'accs accepte avec succs');
-      }
-
-      console.log(' DMP: === FIN ACCEPTATION DEMANDE D\'ACCS ===');
-    } catch (error) {
-      console.error(' DMP: Erreur lors de l\'acceptation:', error);
-      console.error(' DMP: Stack trace:', error.stack);
-      alert(`Erreur lors de l'acceptation de la demande d'accs: ${error.message}`);
-    }
-  };
-
-  // Fonction pour grer le refus d'une demande d'accs
-  const handleRejectAccess = async (notificationId) => {
-    try {
-      console.log(' DMP: === DBUT REFUS DEMANDE D\'ACCS ===');
-      console.log(' DMP: notificationId reu:', notificationId);
-      console.log(' DMP: Nombre total de notifications:', notificationsDroitsAcces.length);
-
-      // Trouver la notification correspondante
-      const notification = notificationsDroitsAcces.find(n => n.id_notification === notificationId);
-      if (!notification) {
-        console.error(' DMP: Notification non trouve pour l\'ID:', notificationId);
-        console.log(' DMP: Notifications disponibles:', notificationsDroitsAcces.map(n => ({ id: 
-n.id_notification, type: n.type_notification })));
-        alert('Erreur: Notification non trouve');
-        return;
-      }
-
-      console.log(' DMP: Notification trouve:', {
-        id_notification: notification.id_notification,
-        type_notification: notification.type_notification,
-        session_id: notification.session_id,
-        professionnel_id: notification.professionnel_id,
-        date_creation: notification.date_creation,
-        statut_envoi: notification.statut_envoi
-      });
-
-      // Utiliser la fonction helper pour trouver l'ID d'autorisation
-      console.log(' DMP: Recherche de l\'ID d\'autorisation pour la notification...');
-      const autorisationId = await dmpApi.findAutorisationIdFromNotification(notification);
-
-      if (!autorisationId) {
-        console.error(' DMP: Impossible de trouver l\'ID d\'autorisation pour cette notification');
-        console.log(' DMP: Dtails de la notification pour debug:', notification);
-
-        // Vrifier si l'autorisation existe
-        console.log(' DMP: Vrification de l\'existence de l\'autorisation...');
-        const autorisation = await dmpApi.verifierAutorisationExistence(notificationId);
-        console.log(' DMP: Rsultat de la vrification:', autorisation);
+        console.log('🔍 DMP: Résultat de la vérification:', autorisation);
 
         if (!autorisation) {
-          alert("Erreur: Impossible de trouver l'autorisation correspondante. Veuillez ressayer ou contacter le support.");
+          alert('Erreur: Impossible de trouver l\'autorisation correspondante. Veuillez réessayer ou contacter le support.');
           return;
         }
       }
 
-      console.log(' DMP: ID d\'autorisation trouv:', autorisationId);
+      console.log('✅ DMP: ID d\'autorisation trouvé:', autorisationId);
 
-      // Vrifier si l'autorisation existe
+      // Vérifier si l'autorisation existe
       const autorisation = await dmpApi.verifierAutorisationExistence(autorisationId);
-      console.log(' DMP: Vrification de l\'autorisation:', autorisation);
+      console.log('🔍 DMP: Vérification de l\'autorisation:', autorisation);
 
       if (!autorisation) {
-        console.error("DMP: L'autorisation trouvée n'existe pas ou n'est pas valide");
-        alert("Erreur: L'autorisation trouvée n'est pas valide. Veuillez ressayer ou contacter le support.");
+        console.error('❌ DMP: L\'autorisation trouvée n\'existe pas ou n\'est pas valide');
+        alert('Erreur: L\'autorisation trouvée n\'est pas valide. Veuillez réessayer ou contacter le support.');
         return;
       }
 
-  console.log("DMP: Refus de la demande d'accès:", autorisationId);
-  const result = await dmpApi.refuserAutorisation(autorisationId, "Accès refusé par le patient");
+      console.log('✅ DMP: Acceptation de la demande d\'accès:', autorisationId);
+      const result = await dmpApi.accepterAutorisation(autorisationId, 'Accès autorisé par le patient');
 
-      // Vrifier si l'autorisation tait dj refuse
-      if (result && result.success && result.message === 'L\'autorisation est dj refuse') {
-        console.log(' DMP: L\'autorisation tait dj refuse');
-        alert('Cette autorisation est dj refuse');
+      // Vérifier si l'autorisation était déjà active
+      if (result && result.success && result.message === 'L\'autorisation est déjà active') {
+        console.log('⚠️ DMP: L\'autorisation était déjà active');
+        alert('Cette autorisation est déjà active');
       } else {
-        console.log(' DMP: Autorisation refuse avec succs');
+        console.log('✅ DMP: Autorisation acceptée avec succès');
 
         // Recharger les notifications depuis l'API
-        console.log(' DMP: Rechargement des notifications aprs refus...');
+        console.log('🔄 DMP: Rechargement des notifications après acceptation...');
         const pendingRequests = await dmpApi.getMedecinAccessRequests();
-        console.log(' DMP: Nouvelles notifications reues:', pendingRequests);
+        console.log('📄 DMP: Nouvelles notifications reçues:', pendingRequests);
         setNotificationsDroitsAcces(Array.isArray(pendingRequests) ? pendingRequests : []);
 
-        // Recharger aussi les autorisations valides
+        // Recharger aussi les autorisations validées
         await loadAutorisationsValidees();
 
         // Afficher une confirmation
-        alert('Demande d\'accs refuse');
+        alert('Demande d\'accès acceptée avec succès');
       }
 
-      console.log(' DMP: === FIN REFUS DEMANDE D\'ACCS ===');
+      console.log('🎯 DMP: === FIN ACCEPTATION DEMANDE D\'ACCÈS ===');
     } catch (error) {
-      console.error(' DMP: Erreur lors du refus:', error);
-      console.error(' DMP: Stack trace:', error.stack);
-      alert(`Erreur lors du refus de la demande d'accs: ${error.message}`);
+      console.error('❌ DMP: Erreur lors de l\'acceptation:', error);
+      console.error('❌ DMP: Stack trace:', error.stack);
+      alert(`Erreur lors de l'acceptation de la demande d'accès: ${error.message}`);
     }
   };
 
-  // Fonctions pour la gnration de PDF de fiche d'urgence
+  // Fonction pour gérer le refus d'une demande d'accès
+  const handleRejectAccess = async (notificationId) => {
+    try {
+      console.log('🎯 DMP: === DÉBUT REFUS DEMANDE D\'ACCÈS ===');
+      console.log('📋 DMP: notificationId reçu:', notificationId);
+      console.log('📋 DMP: Nombre total de notifications:', notificationsDroitsAcces.length);
+
+      // Trouver la notification correspondante
+      const notification = notificationsDroitsAcces.find(n => n.id_notification === notificationId);
+      if (!notification) {
+        console.error('❌ DMP: Notification non trouvée pour l\'ID:', notificationId);
+        console.log('🔍 DMP: Notifications disponibles:', notificationsDroitsAcces.map(n => ({ id: n.id_notification, type: n.type_notification })));
+        alert('Erreur: Notification non trouvée');
+        return;
+      }
+
+      console.log('✅ DMP: Notification trouvée:', {
+        id_notification: notification.id_notification,
+        type_notification: notification.type_notification,
+        session_id: notification.session_id,
+        professionnel_id: notification.professionnel_id,
+        date_creation: notification.date_creation,
+        statut_envoi: notification.statut_envoi
+      });
+
+      // Utiliser la fonction helper pour trouver l'ID d'autorisation
+      console.log('🔍 DMP: Recherche de l\'ID d\'autorisation pour la notification...');
+      const autorisationId = await dmpApi.findAutorisationIdFromNotification(notification);
+
+      if (!autorisationId) {
+        console.error('❌ DMP: Impossible de trouver l\'ID d\'autorisation pour cette notification');
+        console.log('🔍 DMP: Détails de la notification pour debug:', notification);
+
+        // Vérifier si l'autorisation existe
+        console.log('🔍 DMP: Vérification de l\'existence de l\'autorisation...');
+        const autorisation = await dmpApi.verifierAutorisationExistence(notificationId);
+        console.log('🔍 DMP: Résultat de la vérification:', autorisation);
+
+        if (!autorisation) {
+          alert('Erreur: Impossible de trouver l\'autorisation correspondante. Veuillez réessayer ou contacter le support.');
+          return;
+        }
+      }
+
+      console.log('✅ DMP: ID d\'autorisation trouvé:', autorisationId);
+
+      // Vérifier si l'autorisation existe
+      const autorisation = await dmpApi.verifierAutorisationExistence(autorisationId);
+      console.log('🔍 DMP: Vérification de l\'autorisation:', autorisation);
+
+      if (!autorisation) {
+        console.error('❌ DMP: L\'autorisation trouvée n\'existe pas ou n\'est pas valide');
+        alert('Erreur: L\'autorisation trouvée n\'est pas valide. Veuillez réessayer ou contacter le support.');
+        return;
+      }
+
+      console.log('✅ DMP: Refus de la demande d\'accès:', autorisationId);
+      const result = await dmpApi.refuserAutorisation(autorisationId, 'Accès refusé par le patient');
+
+      // Vérifier si l'autorisation était déjà refusée
+      if (result && result.success && result.message === 'L\'autorisation est déjà refusée') {
+        console.log('⚠️ DMP: L\'autorisation était déjà refusée');
+        alert('Cette autorisation est déjà refusée');
+      } else {
+        console.log('✅ DMP: Autorisation refusée avec succès');
+
+        // Recharger les notifications depuis l'API
+        console.log('🔄 DMP: Rechargement des notifications après refus...');
+        const pendingRequests = await dmpApi.getMedecinAccessRequests();
+        console.log('📄 DMP: Nouvelles notifications reçues:', pendingRequests);
+        setNotificationsDroitsAcces(Array.isArray(pendingRequests) ? pendingRequests : []);
+
+        // Recharger aussi les autorisations validées
+        await loadAutorisationsValidees();
+
+        // Afficher une confirmation
+        alert('Demande d\'accès refusée');
+      }
+
+      console.log('🎯 DMP: === FIN REFUS DEMANDE D\'ACCÈS ===');
+    } catch (error) {
+      console.error('❌ DMP: Erreur lors du refus:', error);
+      console.error('❌ DMP: Stack trace:', error.stack);
+      alert(`Erreur lors du refus de la demande d'accès: ${error.message}`);
+    }
+  };
+
+  // Fonctions pour la génération de PDF de fiche d'urgence
   const handleGenerateUrgencyCardPDF = async () => {
     try {
       const patientData = {
-        nom_complet: patientProfile ? `${patientProfile.prenom || ''} ${patientProfile.nom || 
-''}`.trim() : 'N/A',
+        nom_complet: patientProfile ? `${patientProfile.prenom || ''} ${patientProfile.nom || ''}`.trim() : 'N/A',
         numero_dossier: patientProfile?.numero_dossier || patientProfile?.id,
         date_naissance: patientProfile?.date_naissance,
         telephone: patientProfile?.telephone,
@@ -2345,21 +2244,20 @@ n.id_notification, type: n.type_notification })));
 
       const result = await generateUrgencyCardPDF(patientData);
       if (result.success) {
-        alert(`Fiche d'urgence PDF gnre avec succs: ${result.filename}`);
+        alert(`Fiche d'urgence PDF générée avec succès: ${result.filename}`);
       } else {
-        alert(`Erreur lors de la gnration: ${result.error}`);
+        alert(`Erreur lors de la génération: ${result.error}`);
       }
     } catch (error) {
-      console.error('Erreur lors de la gnration de la fiche d\'urgence PDF:', error);
-      alert('Erreur lors de la gnration de la fiche d\'urgence PDF');
+      console.error('Erreur lors de la génération de la fiche d\'urgence PDF:', error);
+      alert('Erreur lors de la génération de la fiche d\'urgence PDF');
     }
   };
 
   const handlePrintUrgencyCardPDF = async () => {
     try {
       const patientData = {
-        nom_complet: patientProfile ? `${patientProfile.prenom || ''} ${patientProfile.nom || 
-''}`.trim() : 'N/A',
+        nom_complet: patientProfile ? `${patientProfile.prenom || ''} ${patientProfile.nom || ''}`.trim() : 'N/A',
         numero_dossier: patientProfile?.numero_dossier || patientProfile?.id,
         date_naissance: patientProfile?.date_naissance,
         telephone: patientProfile?.telephone,
@@ -2372,7 +2270,7 @@ n.id_notification, type: n.type_notification })));
 
       const result = await printUrgencyCardPDF(patientData);
       if (result.success) {
-        alert('Impression de la fiche d\'urgence lance avec succs');
+        alert('Impression de la fiche d\'urgence lancée avec succès');
       } else {
         alert(`Erreur lors de l'impression: ${result.error}`);
       }
@@ -2385,13 +2283,13 @@ n.id_notification, type: n.type_notification })));
   // Fonction pour marquer une notification comme lue
   const handleMarkNotificationAsRead = async (notificationId) => {
     try {
-  console.log(`DMP: Marquage de la notification comme lue (handleMarkNotificationAsRead), ID: ${notificationId}`);
+      console.log('📝 DMP: Marquage de la notification comme lue (handleMarkNotificationAsRead), ID:', notificationId);
 
       await dmpApi.marquerNotificationDroitsAccesLue(notificationId);
 
-  console.log('DMP: Notification marquée comme lue avec succès (handleMarkNotificationAsRead)');
+      console.log('✅ DMP: Notification marquée comme lue avec succès (handleMarkNotificationAsRead)');
 
-      // Mettre  jour la liste des notifications
+      // Mettre à jour la liste des notifications
       setNotificationsDroitsAcces(prev =>
         prev.map(notif =>
           notif.id_notification === notificationId
@@ -2401,21 +2299,21 @@ n.id_notification, type: n.type_notification })));
       );
 
       // Afficher une confirmation
-  alert('Notification marquée comme lue');
+      alert('Notification marquée comme lue');
 
     } catch (error) {
-  console.error('DMP: Erreur lors du marquage de la notification (handleMarkNotificationAsRead):', error);
+      console.error('❌ DMP: Erreur lors du marquage de la notification (handleMarkNotificationAsRead):', error);
       alert(`Erreur lors du marquage de la notification: ${error.message}`);
     }
   };
 
 
 
-  // Vrifier les nouvelles notifications priodiquement
+  // Vérifier les nouvelles notifications périodiquement
   useEffect(() => {
     const checkNewNotifications = async () => {
       try {
-        // Utiliser l'endpoint appropri pour les mdecins
+        // Utiliser l'endpoint approprié pour les médecins
         const newNotifications = await dmpApi.getMedecinAccessRequests();
         const list = Array.isArray(newNotifications) ? newNotifications : [];
 
@@ -2423,25 +2321,25 @@ n.id_notification, type: n.type_notification })));
         const unreadNotifications = list.filter(n => n.statut_envoi === 'en_attente');
 
         if (unreadNotifications.length > 0) {
-          // Afficher la premire notification non lue
+          // Afficher la première notification non lue
           const latestNotification = unreadNotifications[0];
           showNotificationToast(latestNotification);
         }
       } catch (error) {
-        console.error('Erreur lors de la vrification des notifications:', error);
+        console.error('Erreur lors de la vérification des notifications:', error);
       }
     };
 
-    // Vrifier toutes les 30 secondes
+    // Vérifier toutes les 30 secondes
     const interval = setInterval(checkNewNotifications, 30000);
 
-    // Vrification initiale
+    // Vérification initiale
     checkNewNotifications();
 
     return () => clearInterval(interval);
   }, []);
 
-  // Fonction pour obtenir l'icne selon le type de notification
+  // Fonction pour obtenir l'icône selon le type de notification
   const getNotificationIcon = (type) => {
     switch (type) {
       case 'demande_validation':
@@ -2473,9 +2371,9 @@ n.id_notification, type: n.type_notification })));
       case 'demande_validation':
         return 'Demande en attente';
       case 'acces_autorise':
-        return 'Accs autoris';
+        return 'Accès autorisé';
       case 'acces_refuse':
-        return 'Accs refus';
+        return 'Accès refusé';
       default:
         return 'Notification';
     }
@@ -2484,9 +2382,9 @@ n.id_notification, type: n.type_notification })));
   const handleAutoMesureSubmit = async (e) => {
     e.preventDefault();
     
-    // Logs de dbogage pour le contexte DMP
-    console.log(' tat du contexte DMP:', { createAutoMesure, uploadDocument });
-    console.log(' Patient connect depuis localStorage:', getStoredPatient());
+    // Logs de débogage pour le contexte DMP
+    console.log('🔍 État du contexte DMP:', { createAutoMesure, uploadDocument });
+    console.log('🔍 Patient connecté depuis localStorage:', getStoredPatient());
     
     if (!autoMesure.valeur || !autoMesure.type_mesure) {
       alert('Veuillez remplir tous les champs obligatoires');
@@ -2495,27 +2393,27 @@ n.id_notification, type: n.type_notification })));
 
     setLoading(true);
     try {
-      // Prparer les donnes selon le type de mesure
+      // Préparer les données selon le type de mesure
       const mesureData = {
         ...autoMesure,
         valeur_formatee: autoMesure.type_mesure === 'tension_arterielle'
           ? `${autoMesure.valeur}/${autoMesure.valeur_secondaire} ${autoMesure.unite}`
           : `${autoMesure.valeur} ${autoMesure.unite}`,
-        date_complete: `${autoMesure.date_mesure}  ${autoMesure.heure_mesure}`
+        date_complete: `${autoMesure.date_mesure} à ${autoMesure.heure_mesure}`
       };
 
-      console.log('Mesure  enregistrer:', mesureData);
+      console.log('Mesure à enregistrer:', mesureData);
 
-      // Utiliser le contexte DMP pour crer l'auto-mesure
+      // Utiliser le contexte DMP pour créer l'auto-mesure
       const response = await createAutoMesure(mesureData);
 
-      // Vrifier que la rponse contient des donnes valides
+      // Vérifier que la réponse contient des données valides
       if (response && (response.data || response.id_dossier || response.numeroDossier)) {
-        console.log(' Auto-mesure cre avec succs via contexte:', response);
+        console.log('✅ Auto-mesure créée avec succès via contexte:', response);
 
         setShowAutoMesureModal(false);
 
-        // Rinitialiser le formulaire
+        // Réinitialiser le formulaire
         const config = getMesureConfig('poids');
         setAutoMesure({
           type_mesure: 'poids',
@@ -2528,10 +2426,10 @@ n.id_notification, type: n.type_notification })));
           heure_mesure: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
         });
 
-        alert('Mesure enregistre avec succs !');
+        alert('Mesure enregistrée avec succès !');
       } else {
-        console.warn(' Rponse de l\'API inattendue:', response);
-        throw new Error('Rponse invalide de l\'API - structure de donnes inattendue');
+        console.warn('⚠️ Réponse de l\'API inattendue:', response);
+        throw new Error('Réponse invalide de l\'API - structure de données inattendue');
       }
     } catch (error) {
       console.error('Erreur lors de l\'enregistrement:', error);
@@ -2544,25 +2442,25 @@ n.id_notification, type: n.type_notification })));
   const handleUploadSubmit = async (e) => {
     e.preventDefault();
     if (!uploadFile || !uploadTitle) {
-      alert('Veuillez slectionner un fichier et saisir un titre');
+      alert('Veuillez sélectionner un fichier et saisir un titre');
       return;
     }
 
     try {
       setLoading(true);
-      // Construction des donnes pour l'upload
+      // Construction des données pour l'upload
       const documentData = {
         file: uploadFile,
         description: uploadTitle,
-        type: 'general', // ou  adapter selon le formulaire
-        categorie: 'general', // ou  adapter selon le formulaire
+        type: 'general', // ou à adapter selon le formulaire
+        categorie: 'general', // ou à adapter selon le formulaire
       };
       await uploadDocument(documentData);
       setShowUploadModal(false);
       setUploadFile(null);
       setUploadTitle('');
       setUploadDescription('');
-      alert('Document upload avec succs !');
+      alert('Document uploadé avec succès !');
     } catch (error) {
       console.error("Erreur lors de l'upload:", error);
       alert("Erreur lors de l'upload du document: " + (error.message || ""));
@@ -2579,8 +2477,8 @@ n.id_notification, type: n.type_notification })));
       const warningSize = 8 * 1024 * 1024; // 8MB - seuil d'avertissement
 
       if (file.size > maxSize) {
-        alert('Le fichier est trop volumineux. Taille maximale autorise : 10MB');
-        e.target.value = ''; // Rinitialiser l'input
+        alert('Le fichier est trop volumineux. Taille maximale autorisée : 10MB');
+        e.target.value = ''; // Réinitialiser l'input
         return;
       }
 
@@ -2588,16 +2486,14 @@ n.id_notification, type: n.type_notification })));
       if (file.size > warningSize) {
         const fileSizeMB = (file.size / (1024 * 1024)).toFixed(1);
         const remainingMB = (10 - fileSizeMB).toFixed(1);
-        alert(`Attention : Votre fichier fait ${fileSizeMB}MB. Il reste ${remainingMB}MB disponibles 
-sur la limite de 10MB.`);
+        alert(`Attention : Votre fichier fait ${fileSizeMB}MB. Il reste ${remainingMB}MB disponibles sur la limite de 10MB.`);
       }
 
-      // Validation du type de fichier autoris
-      const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'application/pdf', 'text/plain', 
-'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+      // Validation du type de fichier autorisé
+      const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'application/pdf', 'text/plain', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
       if (!allowedTypes.includes(file.type)) {
-        alert('Type de fichier non autoris. Types accepts : JPG, PNG, GIF, PDF, TXT, DOC, DOCX');
-        e.target.value = ''; // Rinitialiser l'input
+        alert('Type de fichier non autorisé. Types acceptés : JPG, PNG, GIF, PDF, TXT, DOC, DOCX');
+        e.target.value = ''; // Réinitialiser l'input
         return;
       }
 
@@ -2611,7 +2507,7 @@ sur la limite de 10MB.`);
 
 
 
-  // Configuration spcifique pour chaque type de mesure
+  // Configuration spécifique pour chaque type de mesure
   const getMesureConfig = (type) => {
     const configs = {
       poids: {
@@ -2636,10 +2532,10 @@ sur la limite de 10MB.`);
         min: 50,
         max: 250,
         step: 0.5,
-        description: 'Votre taille en centimtres'
+        description: 'Votre taille en centimètres'
       },
       tension_arterielle: {
-        label: 'Tension artrielle',
+        label: 'Tension artérielle',
         icon: FaHeartbeat,
         color: 'text-red-500',
         bgColor: 'bg-red-100',
@@ -2649,11 +2545,11 @@ sur la limite de 10MB.`);
         min: 50,
         max: 300,
         step: 1,
-        description: 'Votre tension artrielle (systolique/diastolique)',
+        description: 'Votre tension artérielle (systolique/diastolique)',
         hasSecondValue: true
       },
       glycemie: {
-        label: 'Glycmie',
+        label: 'Glycémie',
         icon: FaTint,
         color: 'text-purple-500',
         bgColor: 'bg-purple-100',
@@ -2662,19 +2558,19 @@ sur la limite de 10MB.`);
         min: 20,
         max: 600,
         step: 1,
-        description: 'Votre taux de glycmie'
+        description: 'Votre taux de glycémie'
       },
       temperature: {
-        label: 'Temprature',
+        label: 'Température',
         icon: FaThermometerHalf,
         color: 'text-orange-500',
         bgColor: 'bg-orange-100',
-        unite: 'C',
+        unite: '°C',
         placeholder: 'Ex: 36.8',
         min: 30,
         max: 45,
         step: 0.1,
-        description: 'Votre temprature corporelle'
+        description: 'Votre température corporelle'
       },
       saturation: {
         label: 'Saturation O2',
@@ -2686,13 +2582,13 @@ sur la limite de 10MB.`);
         min: 70,
         max: 100,
         step: 1,
-        description: 'Votre saturation en oxygne'
+        description: 'Votre saturation en oxygène'
       }
     };
     return configs[type] || configs.poids;
   };
 
-  // Rinitialiser le formulaire quand le type change
+  // Réinitialiser le formulaire quand le type change
   const handleTypeMesureChange = (newType) => {
     const config = getMesureConfig(newType);
     setAutoMesure(prev => ({
@@ -2705,7 +2601,7 @@ sur la limite de 10MB.`);
     }));
   };
 
-  // Validation spcifique selon le type supprime : validateMesure
+  // Validation spécifique selon le type supprimée : validateMesure
 
   // Rendu du composant
   if (loading && !tableauDeBord) {
@@ -2716,18 +2612,17 @@ sur la limite de 10MB.`);
     );
   }
 
-  // Vrification de scurit pour le contexte DMP
+  // Vérification de sécurité pour le contexte DMP
   if (!dmpContext || !dmpState) {
     return (
       <div className="flex flex-col items-center justify-center h-screen text-red-600 p-4">
         <p className="text-lg font-medium mb-4">Erreur de contexte DMP</p>
-        <p className="mb-4">Le contexte DMP n'est pas disponible. Vrifiez que le composant est dans 
-un DMPProvider.</p>
+        <p className="mb-4">Le contexte DMP n'est pas disponible. Vérifiez que le composant est dans un DMPProvider.</p>
         <button
           onClick={() => window.location.reload()}
           className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
         >
-          Ressayer
+          Réessayer
         </button>
       </div>
     );
@@ -2736,21 +2631,21 @@ un DMPProvider.</p>
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center h-screen text-red-600 p-4">
-        <p className="text-lg font-medium mb-4">Erreur lors du chargement des donnes</p>
+        <p className="text-lg font-medium mb-4">Erreur lors du chargement des données</p>
         <p className="mb-4">{error}</p>
         <button
           onClick={() => window.location.reload()}
           className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
         >
-          Ressayer
+          Réessayer
         </button>
       </div>
     );
   }
 
   return (
-  <div className="min-h-screen bg-gray-50">
-      {/* Notification en temps rel */}
+    <div className="min-h-screen bg-gray-50">
+      {/* Notification en temps réel */}
       {currentNotification && (
         <DMPNotification
           notification={currentNotification}
@@ -2769,7 +2664,7 @@ un DMPProvider.</p>
             <div className="flex items-center space-x-4">
               <h1 className="text-2xl font-bold text-gray-900">Mon DMP</h1>
               <span className="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded">
-                Dossier Mdical Partag
+                Dossier Médical Partagé
               </span>
             </div>
             <div className="flex items-center space-x-4">
@@ -2778,20 +2673,18 @@ un DMPProvider.</p>
               
               <button
                 onClick={() => setShowAutoMesureModal(true)}
-                className="flex items-center px-3 py-2 bg-blue-600 text-white rounded-md 
-hover:bg-blue-700"
+                className="flex items-center px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
               >
                 <FaPlus className="mr-2" />
                 Auto-mesure
               </button>
 
-              {/* Indicateur de notifications des droits d'accs */}
+              {/* Indicateur de notifications des droits d'accès */}
               {notificationsDroitsAcces.filter(n => n.statut_envoi === 'en_attente').length > 0 && (
                 <div className="relative">
                   <button
                     onClick={() => setActiveTab('droits-acces')}
-                    className="flex items-center px-3 py-2 bg-orange-600 text-white rounded-md 
-hover:bg-orange-700"
+                    className="flex items-center px-3 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700"
                   >
                     <FaBell className="mr-2" />
                     Notifications
@@ -2805,8 +2698,7 @@ hover:bg-orange-700"
               {activeTab === 'mon-espace-sante' && (
                 <button
                   onClick={() => setShowUploadModal(true)}
-                  className="flex items-center px-3 py-2 bg-green-600 text-white rounded-md 
-hover:bg-green-700"
+                  className="flex items-center px-3 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
                 >
                   <FaUpload className="mr-2" />
                   Upload Document
@@ -2817,14 +2709,11 @@ hover:bg-green-700"
               <div className="relative profile-menu-container">
                 <button
                   onClick={() => setShowProfileMenu(!showProfileMenu)}
-                  className="flex items-center space-x-3 px-3 py-2 text-gray-700 hover:text-gray-900 
-hover:bg-gray-100 rounded-md transition-colors"
+                  className="flex items-center space-x-3 px-3 py-2 text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
                 >
-                  <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center 
-text-white font-medium">
+                  <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white font-medium">
                     {patientProfile ?
-                      `${patientProfile.prenom?.charAt(0) || ''}${patientProfile.nom?.charAt(0) || 
-''}` :
+                      `${patientProfile.prenom?.charAt(0) || ''}${patientProfile.nom?.charAt(0) || ''}` :
                       'P'
                     }
                   </div>
@@ -2841,10 +2730,9 @@ text-white font-medium">
                   </div>
                 </button>
 
-                {/* Menu droulant du profil */}
+                {/* Menu déroulant du profil */}
                 {showProfileMenu && (
-                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50 
-border">
+                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50 border">
                     <div className="px-4 py-2 border-b">
                       <p className="text-sm font-medium text-gray-900">
                         {patientProfile ?
@@ -2858,11 +2746,10 @@ border">
                     </div>
                     <button
                       onClick={handleLogout}
-                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 
-hover:bg-gray-100 flex items-center"
+                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
                     >
                       <FaSignOutAlt className="mr-2" />
-                      Dconnexion
+                      Déconnexion
                     </button>
                   </div>
                 )}
@@ -2878,26 +2765,24 @@ hover:bg-gray-100 flex items-center"
           <div className="flex space-x-8">
             {[
               { id: 'tableau-de-bord', label: 'Tableau de bord', icon: FaChartBar },
-              { id: 'mon-espace-sante', label: 'Mon espace de sant', icon: FaHeartbeat },
-              { id: 'historique', label: 'Historique mdical', icon: FaFileMedical },
+              { id: 'mon-espace-sante', label: 'Mon espace de santé', icon: FaHeartbeat },
+              { id: 'historique', label: 'Historique médical', icon: FaFileMedical },
               {
                 id: 'droits-acces',
-                label: 'Droits d\'accs',
+                label: 'Droits d\'accès',
                 icon: FaShieldAlt,
-                badge: notificationsDroitsAcces.filter(n => n.statut_envoi === 'en_attente').length > 
-0 ? notificationsDroitsAcces.filter(n => n.statut_envoi === 'en_attente').length : null
+                badge: notificationsDroitsAcces.filter(n => n.statut_envoi === 'en_attente').length > 0 ? notificationsDroitsAcces.filter(n => n.statut_envoi === 'en_attente').length : null
               },
               { id: 'rappels', label: 'Rappels', icon: FaBell },
               { id: 'urgence', label: 'Fiche d\'urgence', icon: FaQrcode },
-              { id: 'bibliotheque', label: 'Bibliothque', icon: FaBook }
+              { id: 'bibliotheque', label: 'Bibliothèque', icon: FaBook }
             ].map((tab) => {
               const Icon = tab.icon;
               return (
                 <button
                   key={tab.id}
                   onClick={() => handleTabChange(tab.id)}
-                  className={`flex items-center py-4 px-1 border-b-2 font-medium text-sm relative 
-${activeTab === tab.id
+                  className={`flex items-center py-4 px-1 border-b-2 font-medium text-sm relative ${activeTab === tab.id
                       ? 'border-blue-500 text-blue-600'
                       : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                     }`}
@@ -2929,14 +2814,14 @@ ${activeTab === tab.id
           <DMPDashboard />
         )}
 
-        {/* Historique Mdical */}
+        {/* Historique Médical */}
         {activeTab === 'historique' && (
           <HistoriqueMedical 
             patientProfile={patientProfile}
           />
         )}
 
-        {/* Droits d'Accs */}
+        {/* Droits d'Accès */}
         {activeTab === 'droits-acces' && (
           <div className="bg-white rounded-lg shadow">
             <div className="p-6 border-b">
@@ -2974,6 +2859,7 @@ ${activeTab === tab.id
                       </svg>
                       Rafraîchir
                     </button>
+
                   </div>
                 </div>
 
@@ -2998,7 +2884,10 @@ ${activeTab === tab.id
                                   Nouveau
                                 </span>
                               )}
-                              <span className={`text-xs px-2 py-1 rounded-full font-medium ${notification.type_notification === 'demande_validation' ? 'bg-orange-100 text-orange-800' : notification.type_notification === 'acces_autorise' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                              <span className={`text-xs px-2 py-1 rounded-full font-medium ${notification.type_notification === 'demande_validation' ? 'bg-orange-100 text-orange-800' :
+                                  notification.type_notification === 'acces_autorise' ? 'bg-green-100 text-green-800' :
+                                    'bg-red-100 text-red-800'
+                                }`}>
                                 {getStatusText(notification.type_notification)}
                               </span>
                             </div>
@@ -3277,43 +3166,236 @@ ${activeTab === tab.id
         {/* Rappels */}
         {activeTab === 'rappels' && (
           <div className="bg-white rounded-lg shadow">
-            ...existing code...
+            <div className="p-6 border-b">
+              <h2 className="text-xl font-semibold">Mes rappels</h2>
+              <p className="text-gray-600">Gérez vos rappels médicaux et rendez-vous</p>
+            </div>
+            <div className="p-6">
+              {/* Récupérer les rappels de rendez-vous depuis le localStorage */}
+              {(() => {
+                const storedPatient = getStoredPatient();
+                const patientId = storedPatient?.id_patient || storedPatient?.id;
+                const patientRemindersKey = `patient_reminders_${patientId}`;
+                const appointmentReminders = JSON.parse(localStorage.getItem(patientRemindersKey) || '[]');
+                const allReminders = [...rappels, ...appointmentReminders];
+                
+                if (allReminders.length > 0) {
+                  return (
+                    <div className="space-y-4">
+                      {allReminders.map((rappel, index) => (
+                        <div key={index} className="border rounded-lg p-4 hover:bg-gray-50 transition-colors">
+                          <div className="flex justify-between items-start">
+                            <div className="flex-1">
+                              <div className="flex items-center space-x-2 mb-2">
+                                <h3 className="font-medium text-lg">{rappel.titre}</h3>
+                                {rappel.type === 'rendez-vous' && (
+                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                    📅 Rendez-vous
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-sm text-gray-600 mb-2">{rappel.description}</p>
+                              
+                              {/* Informations spécifiques aux rendez-vous */}
+                              {rappel.type === 'rendez-vous' && (
+                                <div className="bg-blue-50 p-3 rounded-lg mb-3">
+                                  <div className="grid grid-cols-2 gap-4 text-sm">
+                                    <div>
+                                      <span className="font-medium text-gray-700">Heure :</span>
+                                      <p className="text-gray-600">{rappel.heure_debut} - {rappel.heure_fin}</p>
+                                    </div>
+                                    <div>
+                                      <span className="font-medium text-gray-700">Durée :</span>
+                                      <p className="text-gray-600">{rappel.duree} minutes</p>
+                                    </div>
+                                    <div>
+                                      <span className="font-medium text-gray-700">Médecin :</span>
+                                      <p className="text-gray-600">{rappel.medecin}</p>
+                                    </div>
+                                    <div>
+                                      <span className="font-medium text-gray-700">Lieu :</span>
+                                      <p className="text-gray-600">{rappel.lieu}</p>
+                                    </div>
+                                  </div>
+                                  
+                                  {/* Instructions pour le rendez-vous */}
+                                  {rappel.instructions && rappel.instructions.length > 0 && (
+                                    <div className="mt-3">
+                                      <span className="font-medium text-gray-700 text-sm">Instructions :</span>
+                                      <ul className="mt-1 space-y-1">
+                                        {rappel.instructions.map((instruction, idx) => (
+                                          <li key={idx} className="text-xs text-gray-600 flex items-start">
+                                            <span className="text-blue-500 mr-2">•</span>
+                                            {instruction}
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                              
+                              <div className="flex items-center justify-between text-sm text-gray-500">
+                                <span>Date : {new Date(rappel.date_rappel).toLocaleDateString('fr-FR', { 
+                                  weekday: 'long', 
+                                  year: 'numeric', 
+                                  month: 'long', 
+                                  day: 'numeric' 
+                                })}</span>
+                                {rappel.date_creation && (
+                                  <span>Créé le : {new Date(rappel.date_creation).toLocaleDateString('fr-FR')}</span>
+                                )}
+                              </div>
+                            </div>
+                            
+                            <div className="ml-4 flex flex-col items-end space-y-2">
+                              <span className={`px-2 py-1 rounded text-xs font-medium ${
+                                rappel.priorite === 'haute' ? 'bg-red-100 text-red-800' :
+                                rappel.priorite === 'moyenne' ? 'bg-yellow-100 text-yellow-800' :
+                                'bg-green-100 text-green-800'
+                              }`}>
+                                {rappel.priorite}
+                              </span>
+                              
+                              {/* Actions pour les rendez-vous */}
+                              {rappel.type === 'rendez-vous' && (
+                                <div className="flex space-x-2">
+                                  <button 
+                                    className="text-blue-600 hover:text-blue-800 text-xs p-1 rounded hover:bg-blue-50"
+                                    title="Voir les détails"
+                                  >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                    </svg>
+                                  </button>
+                                  <button 
+                                    className="text-green-600 hover:text-green-800 text-xs p-1 rounded hover:bg-green-50"
+                                    title="Confirmer"
+                                  >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                    </svg>
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                } else {
+                  return (
+                    <div className="text-center py-8">
+                      <svg className="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                      <p className="text-gray-500">Aucun rappel actif</p>
+                      <p className="text-gray-400 text-sm mt-1">Vos rappels et rendez-vous apparaîtront ici</p>
+                    </div>
+                  );
+                }
+              })()}
+            </div>
           </div>
         )}
 
-        {/* Mon Espace de Sant */}
+        {/* Mon Espace de Santé */}
         {activeTab === 'mon-espace-sante' && (
           <DMPMonEspaceSante />
         )}
 
+
+
         {/* Fiche d'Urgence */}
         {activeTab === 'urgence' && (
           <div className="bg-white rounded-lg shadow">
-            ...existing code...
+            <div className="p-6 border-b">
+              <h2 className="text-xl font-semibold">Fiche d'urgence</h2>
+              <p className="text-gray-600">Informations vitales en cas d'urgence</p>
+            </div>
+            <div className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <h3 className="font-medium mb-4">Informations personnelles</h3>
+                  <div className="space-y-2">
+                    <p><span className="font-medium">Nom:</span> {tableauDeBord?.patient?.prenom} {tableauDeBord?.patient?.nom}</p>
+                    <p><span className="font-medium">Groupe sanguin:</span> {tableauDeBord?.patient?.groupe_sanguin || 'Non renseigné'}</p>
+                    <p><span className="font-medium">Allergies:</span> {tableauDeBord?.patient?.allergies || 'Aucune'}</p>
+                    <p><span className="font-medium">Maladies chroniques:</span> {tableauDeBord?.patient?.maladies_chroniques || 'Aucune'}</p>
+                  </div>
+                </div>
+                <div className="text-center">
+                  <div className="bg-gray-100 rounded-lg p-4 mb-4">
+                    <FaQrcode className="text-4xl mx-auto text-gray-400 mb-2" />
+                    <p className="text-sm text-gray-600">QR Code d'urgence</p>
+                  </div>
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={handleGenerateUrgencyCardPDF}
+                      disabled={isGeneratingPDF}
+                      className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                    >
+                      <FaDownload className="mr-2" />
+                      {isGeneratingPDF ? 'Génération...' : 'PDF Fiche'}
+                    </button>
+                    <button
+                      onClick={handlePrintUrgencyCardPDF}
+                      disabled={isGeneratingPDF}
+                      className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                    >
+                      <FaPrint className="mr-2" />
+                      {isGeneratingPDF ? 'Préparation...' : 'Imprimer'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
-        {/* Bibliothque */}
+        {/* Bibliothèque */}
         {activeTab === 'bibliotheque' && (
           <div className="bg-white rounded-lg shadow">
-            ...existing code...
+            <div className="p-6 border-b">
+              <h2 className="text-xl font-semibold">Bibliothèque de santé</h2>
+              <p className="text-gray-600">Informations et ressources médicales</p>
+            </div>
+            <div className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="border rounded-lg p-4">
+                  <FaBook className="text-blue-600 text-2xl mb-2" />
+                  <h3 className="font-medium">Guide des maladies</h3>
+                  <p className="text-sm text-gray-600">Informations sur les maladies courantes</p>
+                </div>
+                <div className="border rounded-lg p-4">
+                  <FaPills className="text-green-600 text-2xl mb-2" />
+                  <h3 className="font-medium">Guide des médicaments</h3>
+                  <p className="text-sm text-gray-600">Informations sur les traitements</p>
+                </div>
+                <div className="border rounded-lg p-4">
+                  <FaHeartbeat className="text-red-600 text-2xl mb-2" />
+                  <h3 className="font-medium">Prévention</h3>
+                  <p className="text-sm text-gray-600">Conseils de prévention</p>
+                </div>
+              </div>
+            </div>
           </div>
         )}
-  </main>
+      </main>
 
       {/* Modal Auto-mesure */}
       {showAutoMesureModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 
-p-4">
-          <div className="bg-white rounded-lg p-4 sm:p-6 w-full max-w-sm sm:max-w-md md:max-w-lg 
-lg:max-w-xl xl:max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-4 sm:p-6 w-full max-w-sm sm:max-w-md md:max-w-lg lg:max-w-xl xl:max-w-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-semibold">Ajouter une auto-mesure</h3>
               <button
                 onClick={() => setShowAutoMesureModal(false)}
                 className="text-gray-400 hover:text-gray-600"
               >
-                
+                ✕
               </button>
             </div>
 
@@ -3324,7 +3406,7 @@ lg:max-w-xl xl:max-w-2xl max-h-[90vh] overflow-y-auto">
 
                 return (
                   <div className="space-y-6">
-                    {/* En-tte avec icne et description */}
+                    {/* En-tête avec icône et description */}
                     <div className={`p-4 ${config.bgColor} rounded-lg`}>
                       <div className="flex items-center mb-2">
                         <Icon className={`mr-3 ${config.color} text-xl`} />
@@ -3333,21 +3415,19 @@ lg:max-w-xl xl:max-w-2xl max-h-[90vh] overflow-y-auto">
                       <p className="text-sm text-gray-600">{config.description}</p>
                     </div>
 
-                    {/* Slection du type de mesure */}
+                    {/* Sélection du type de mesure */}
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Type de 
-mesure</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Type de mesure</label>
                       <select
                         value={autoMesure.type_mesure}
                         onChange={(e) => handleTypeMesureChange(e.target.value)}
-                        className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 
-focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       >
                         <option value="poids">Poids</option>
                         <option value="taille">Taille</option>
-                        <option value="tension_arterielle">Tension artrielle</option>
-                        <option value="glycemie">Glycmie</option>
-                        <option value="temperature">Temprature</option>
+                        <option value="tension_arterielle">Tension artérielle</option>
+                        <option value="glycemie">Glycémie</option>
+                        <option value="temperature">Température</option>
                         <option value="saturation">Saturation O2</option>
                       </select>
                     </div>
@@ -3363,10 +3443,8 @@ focus:ring-blue-500 focus:border-blue-500"
                             <input
                               type="number"
                               value={autoMesure.valeur}
-                              onChange={(e) => setAutoMesure({ ...autoMesure, valeur: e.target.value 
-})}
-                              className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 
-focus:ring-blue-500 focus:border-blue-500"
+                              onChange={(e) => setAutoMesure({ ...autoMesure, valeur: e.target.value })}
+                              className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                               placeholder={config.placeholder_systolique}
                               min={config.min}
                               max={config.max}
@@ -3381,10 +3459,8 @@ focus:ring-blue-500 focus:border-blue-500"
                             <input
                               type="number"
                               value={autoMesure.valeur_secondaire}
-                              onChange={(e) => setAutoMesure({ ...autoMesure, valeur_secondaire: 
-e.target.value })}
-                              className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 
-focus:ring-blue-500 focus:border-blue-500"
+                              onChange={(e) => setAutoMesure({ ...autoMesure, valeur_secondaire: e.target.value })}
+                              className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                               placeholder={config.placeholder_diastolique}
                               min={config.min}
                               max={config.max}
@@ -3402,8 +3478,7 @@ focus:ring-blue-500 focus:border-blue-500"
                             type="number"
                             value={autoMesure.valeur}
                             onChange={(e) => setAutoMesure({ ...autoMesure, valeur: e.target.value })}
-                            className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 
-focus:ring-blue-500 focus:border-blue-500"
+                            className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                             placeholder={config.placeholder}
                             min={config.min}
                             max={config.max}
@@ -3417,28 +3492,22 @@ focus:ring-blue-500 focus:border-blue-500"
                     {/* Date et heure de la mesure */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Date de 
-mesure</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Date de mesure</label>
                         <input
                           type="date"
                           value={autoMesure.date_mesure}
-                          onChange={(e) => setAutoMesure({ ...autoMesure, date_mesure: e.target.value 
-})}
-                          className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 
-focus:ring-blue-500 focus:border-blue-500"
+                          onChange={(e) => setAutoMesure({ ...autoMesure, date_mesure: e.target.value })}
+                          className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                           required
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Heure de 
-mesure</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Heure de mesure</label>
                         <input
                           type="time"
                           value={autoMesure.heure_mesure}
-                          onChange={(e) => setAutoMesure({ ...autoMesure, heure_mesure: 
-e.target.value })}
-                          className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 
-focus:ring-blue-500 focus:border-blue-500"
+                          onChange={(e) => setAutoMesure({ ...autoMesure, heure_mesure: e.target.value })}
+                          className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                           required
                         />
                       </div>
@@ -3451,10 +3520,8 @@ focus:ring-blue-500 focus:border-blue-500"
                       </label>
                       <textarea
                         value={autoMesure.commentaire}
-                        onChange={(e) => setAutoMesure({ ...autoMesure, commentaire: e.target.value 
-})}
-                        className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 
-focus:ring-blue-500 focus:border-blue-500"
+                        onChange={(e) => setAutoMesure({ ...autoMesure, commentaire: e.target.value })}
+                        className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         rows="3"
                         placeholder="Ajoutez un commentaire sur cette mesure..."
                       />
@@ -3463,8 +3530,7 @@ focus:ring-blue-500 focus:border-blue-500"
                     {/* Informations de validation */}
                     <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
                       <p className="text-sm text-blue-800">
-                        <strong>Plage de valeurs acceptes :</strong> {config.min} - {config.max} 
-{config.unite}
+                        <strong>Plage de valeurs acceptées :</strong> {config.min} - {config.max} {config.unite}
                       </p>
                       {config.hasSecondValue && (
                         <p className="text-sm text-blue-800 mt-1">
@@ -3480,15 +3546,13 @@ focus:ring-blue-500 focus:border-blue-500"
                 <button
                   type="button"
                   onClick={() => setShowAutoMesureModal(false)}
-                  className="w-full sm:w-auto px-4 py-2 text-gray-600 hover:text-gray-800 border 
-border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                  className="w-full sm:w-auto px-4 py-2 text-gray-600 hover:text-gray-800 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
                 >
                   Annuler
                 </button>
                 <button
                   type="submit"
-                  className="w-full sm:w-auto px-4 py-2 bg-blue-600 text-white rounded-md 
-hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 transition-colors"
+                  className="w-full sm:w-auto px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 transition-colors"
                   disabled={loading}
                 >
                   {loading ? 'Enregistrement...' : 'Enregistrer la mesure'}
@@ -3501,10 +3565,8 @@ hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 transition-colors"
 
       {/* Modal Upload */}
       {showUploadModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 
-p-4">
-          <div className="bg-white rounded-lg p-4 sm:p-6 w-full max-w-sm sm:max-w-md md:max-w-lg 
-max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-4 sm:p-6 w-full max-w-sm sm:max-w-md md:max-w-lg max-h-[90vh] overflow-y-auto">
             <h3 className="text-lg font-semibold mb-4">Uploader un document</h3>
             <form onSubmit={handleUploadSubmit}>
               <div className="space-y-4">
@@ -3539,17 +3601,16 @@ max-h-[90vh] overflow-y-auto">
                   {uploadFile && (
                     <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded-md">
                       <p className="text-sm text-blue-800">
-                        <strong>Fichier slectionn :</strong> {uploadFile.name}
+                        <strong>Fichier sélectionné :</strong> {uploadFile.name}
                       </p>
                       <p className="text-sm text-blue-700">
                         <strong>Taille :</strong> {(uploadFile.size / (1024 * 1024)).toFixed(2)}MB
                         {uploadFile.size > 8 * 1024 * 1024 && (
-                          <span className="text-orange-600 font-medium"> (Proche de la limite de 
-10MB)</span>
+                          <span className="text-orange-600 font-medium"> (Proche de la limite de 10MB)</span>
                         )}
                       </p>
                       <p className="text-xs text-blue-600 mt-1">
-                        Limite maximale : 10MB | Types accepts : JPG, PNG, GIF, PDF, TXT, DOC, DOCX
+                        Limite maximale : 10MB | Types acceptés : JPG, PNG, GIF, PDF, TXT, DOC, DOCX
                       </p>
                     </div>
                   )}
@@ -3559,15 +3620,13 @@ max-h-[90vh] overflow-y-auto">
                 <button
                   type="button"
                   onClick={() => setShowUploadModal(false)}
-                  className="w-full sm:w-auto px-4 py-2 text-gray-600 hover:text-gray-800 border 
-border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                  className="w-full sm:w-auto px-4 py-2 text-gray-600 hover:text-gray-800 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
                 >
                   Annuler
                 </button>
                 <button
                   type="submit"
-                  className="w-full sm:w-auto px-4 py-2 bg-green-600 text-white rounded-md 
-hover:bg-green-700 transition-colors"
+                  className="w-full sm:w-auto px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
                 >
                   Uploader
                 </button>
@@ -3577,22 +3636,22 @@ hover:bg-green-700 transition-colors"
         </div>
       )}
 
-      {/* Protection 2FA pour l'accs aux dossiers patients */}
+      {/* Protection 2FA pour l'accès aux dossiers patients */}
       {show2FA && requires2FA && (
         <Validate2FA
           onSuccess={handle2FASuccess}
           onCancel={handle2FACancel}
           isRequired={true}
-          message="Vrification 2FA requise pour accder aux dossiers patients"
+          message="Vérification 2FA requise pour accéder aux dossiers patients"
         />
       )}
 
-      {/* Composant de test WebSocket ct patient */}
-  {/* supprim : PatientMessagingTest */}
+      {/* Composant de test WebSocket côté patient */}
+  {/* supprimé : PatientMessagingTest */}
 
     </div>
   );
-}
+};
 
 // Composant wrapper avec protection
 const DMPProtected = () => (
@@ -3602,7 +3661,3 @@ const DMPProtected = () => (
 );
 
 export default DMPProtected; 
-
-
-
-

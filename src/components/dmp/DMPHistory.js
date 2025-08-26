@@ -6,8 +6,18 @@ import { use2FA } from '../../hooks/use2FA';
 // Protection 2FA pour l'accès aux dossiers patients
 import Validate2FA from '../2fa/Validate2FA';
 
+import MessagingWidget from '../../messaging/components/MessagingWidget'
+import MessagingButton from '../../messaging/components/MessagingButton'
+
 function DMPHistory({ patientId = null }) {
+  // État pour afficher ou non le widget de messagerie
+  const [showMessaging, setShowMessaging] = useState(false);
   const { state: dmpState } = useDMP();
+  
+  // Récupérer les informations d'authentification
+  const [userId, setUserId] = useState(null);
+  const [role, setRole] = useState(null);
+  const [jwtToken, setJwtToken] = useState(null);
   
   // Utilisation du hook centralisé use2FA
   const {
@@ -38,6 +48,46 @@ function DMPHistory({ patientId = null }) {
   const [isPatientAuthorized, setIsPatientAuthorized] = useState(false);
   const [hasAccessRequests, setHasAccessRequests] = useState(false);
   const [authorizations, setAuthorizations] = useState([]);
+
+  // Récupérer les informations d'authentification au montage du composant
+  useEffect(() => {
+    const token = localStorage.getItem('token') || localStorage.getItem('jwt');
+    const patientData = localStorage.getItem('patient');
+    const medecinData = localStorage.getItem('medecin');
+    
+    console.log('🔍 DMPHistory - Récupération des informations d\'authentification:');
+    console.log('  - Token:', token ? '✅ Présent' : '❌ Absent');
+    console.log('  - Patient data:', patientData ? '✅ Présent' : '❌ Absent');
+    console.log('  - Médecin data:', medecinData ? '✅ Présent' : '❌ Absent');
+    
+    if (token) {
+      setJwtToken(token);
+      
+      if (patientData) {
+        try {
+          const patient = JSON.parse(patientData);
+          const patientUserId = patient.id_patient || patient.id;
+          setUserId(patientUserId);
+          setRole('patient');
+          console.log('✅ DMPHistory - Patient connecté:', { userId: patientUserId, role: 'patient' });
+        } catch (error) {
+          console.error('❌ DMPHistory - Erreur lors du parsing des données patient:', error);
+        }
+      } else if (medecinData) {
+        try {
+          const medecin = JSON.parse(medecinData);
+          const medecinUserId = medecin.id_professionnel || medecin.id;
+          setUserId(medecinUserId);
+          setRole('medecin');
+          console.log('✅ DMPHistory - Médecin connecté:', { userId: medecinUserId, role: 'medecin', nom: medecin.nom, prenom: medecin.prenom });
+        } catch (error) {
+          console.error('❌ DMPHistory - Erreur lors du parsing des données médecin:', error);
+        }
+      }
+    } else {
+      console.warn('⚠️ DMPHistory - Aucun token trouvé');
+    }
+  }, []);
 
   // Vérifier que l'utilisateur est autorisé (patient ou médecin)
   const checkPatientAuthorization = useMemo(() => {
@@ -631,8 +681,8 @@ function DMPHistory({ patientId = null }) {
                   <div className="flex items-center space-x-2 mb-3">
                     <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(entry.statut)}`}>
                       {entry.statut === 'SUCCES' ? 'Succès' :
-                       entry.statut === 'ERREUR' ? 'Erreur' :
-                       entry.statut === 'en_attente' ? 'En attente' : entry.statut}
+                      entry.statut === 'ERREUR' ? 'Erreur' :
+                      entry.statut === 'en_attente' ? 'En attente' : entry.statut}
                     </span>
                     <span className="text-sm font-medium text-gray-700">
                       {getActionLabel(entry.action)}
@@ -673,8 +723,8 @@ function DMPHistory({ patientId = null }) {
                         <span className="font-medium text-gray-700">Statut:</span>
                         <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ml-2 ${getStatusColor(entry.statut)}`}>
                           {entry.statut === 'SUCCES' ? 'Succès' :
-                           entry.statut === 'ERREUR' ? 'Erreur' :
-                           entry.statut === 'en_attente' ? 'En attente' : entry.statut}
+                          entry.statut === 'ERREUR' ? 'Erreur' :
+                          entry.statut === 'en_attente' ? 'En attente' : entry.statut}
                         </span>
                       </div>
                     </div>
@@ -758,6 +808,91 @@ function DMPHistory({ patientId = null }) {
         </div>
       )}
 
+      
+
+      {/* Section de messagerie */}
+      <div className="mt-8 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+        <h3 className="text-lg font-semibold text-blue-800 mb-4">🔍 Debug - Section Messagerie</h3>
+        <div className="space-y-2 text-sm">
+          <div className="flex justify-between">
+            <span>User ID:</span>
+            <span className="font-mono">{userId || 'undefined'}</span>
+          </div>
+          <div className="flex justify-between">
+            <span>Role:</span>
+            <span className="font-mono">{role || 'undefined'}</span>
+          </div>
+          <div className="flex justify-between">
+            <span>Token:</span>
+            <span className={jwtToken ? 'text-green-600' : 'text-red-600'}>
+              {jwtToken ? '✅ Présent' : '❌ Absent'}
+            </span>
+          </div>
+          <div className="flex justify-between">
+            <span>showMessaging:</span>
+            <span className="font-mono">{showMessaging ? 'true' : 'false'}</span>
+          </div>
+          <div className="flex justify-between">
+            <span>isPatientAuthorized:</span>
+            <span className="font-mono">{isPatientAuthorized ? 'true' : 'false'}</span>
+          </div>
+        </div>
+        
+        {/* Bouton d'ouverture de la messagerie */}
+        {userId && role && jwtToken && !showMessaging && (
+          <div className="mt-4 text-center">
+            <h4 className="text-md font-semibold text-blue-800 mb-3">
+              {role === 'medecin' ? 'Messagerie avec les patients' : 'Messagerie sécurisée'}
+            </h4>
+            <MessagingButton
+              userId={userId}
+              role={role}
+              token={jwtToken}
+              onClick={() => {
+                console.log('🚀 DMPHistory - Ouverture de la messagerie pour:', { userId, role });
+                setShowMessaging(true);
+              }}
+            />
+            <p className="text-sm text-blue-600 mt-2">
+              {role === 'medecin' 
+                ? 'Communiquez de manière sécurisée avec vos patients'
+                : 'Communiquez de manière sécurisée avec votre médecin'
+              }
+            </p>
+          </div>
+        )}
+        
+        {/* Message si conditions non remplies */}
+        {(!userId || !role || !jwtToken) && (
+          <div className="mt-4 text-center text-red-600">
+            <p>⚠️ Conditions non remplies pour afficher la messagerie</p>
+            <p className="text-xs">Vérifiez l'authentification</p>
+          </div>
+        )}
+      </div>
+      {/* Widget de messagerie */}
+      {userId && role && jwtToken && showMessaging && (
+        <div className="mt-8">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-lg font-bold">
+              {role === 'medecin' ? 'Messagerie avec les patients' : 'Messagerie sécurisée'}
+            </h2>
+            <button
+              onClick={() => setShowMessaging(false)}
+              className="text-gray-500 hover:text-gray-700 text-sm"
+            >
+              ← Retour
+            </button>
+          </div>
+          <MessagingWidget
+            userId={userId}
+            role={role}
+            token={jwtToken}
+            conversationId={null}
+            onClose={() => setShowMessaging(false)}
+          />
+        </div>
+      )}
       {/* Protection 2FA pour l'accès aux dossiers patients */}
       {show2FAModal && (
         <Validate2FA

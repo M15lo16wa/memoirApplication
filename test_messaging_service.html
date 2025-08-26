@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Service de Messagerie</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        .warning { background-color: #fff3cd; border-color: #ffeaa7; }
+        button { padding: 10px 15px; margin: 5px; border: none; border-radius: 3px; cursor: pointer; }
+        .btn-primary { background-color: #007bff; color: white; }
+        .btn-success { background-color: #28a745; color: white; }
+        .btn-danger { background-color: #dc3545; color: white; }
+        .log { background-color: #f8f9fa; padding: 10px; margin: 10px 0; border-radius: 3px; font-family: monospace; }
+    </style>
+</head>
+<body>
+    <h1>🔍 Test du Service de Messagerie</h1>
+    
+    <div class="test-section">
+        <h3>1. Configuration de base</h3>
+        <div id="config-info"></div>
+        <button class="btn-primary" onclick="testConfig()">Tester la configuration</button>
+    </div>
+
+    <div class="test-section">
+        <h3>2. Test d'authentification</h3>
+        <div id="auth-info"></div>
+        <button class="btn-primary" onclick="testAuth()">Tester l'authentification</button>
+    </div>
+
+    <div class="test-section">
+        <h3>3. Test de connexion WebSocket</h3>
+        <div id="websocket-info"></div>
+        <button class="btn-primary" onclick="testWebSocket()">Tester WebSocket</button>
+        <button class="btn-danger" onclick="disconnectWebSocket()">Déconnecter</button>
+    </div>
+
+    <div class="test-section">
+        <h3>4. Test des API REST</h3>
+        <div id="api-info"></div>
+        <button class="btn-primary" onclick="testAPI()">Tester les API</button>
+    </div>
+
+    <div class="test-section">
+        <h3>5. Logs de débogage</h3>
+        <div id="logs" class="log"></div>
+        <button class="btn-danger" onclick="clearLogs()">Effacer les logs</button>
+    </div>
+
+    <script>
+        let socket = null;
+        
+        function log(message, type = 'info') {
+            const logsDiv = document.getElementById('logs');
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.innerHTML = `[${timestamp}] ${message}`;
+            logEntry.className = type;
+            logsDiv.appendChild(logEntry);
+            logsDiv.scrollTop = logsDiv.scrollHeight;
+            console.log(message);
+        }
+
+        function clearLogs() {
+            document.getElementById('logs').innerHTML = '';
+        }
+
+        function testConfig() {
+            log('🔧 Test de la configuration...');
+            
+            const baseURL = process?.env?.REACT_APP_API_URL || 'http://localhost:3000';
+            const configDiv = document.getElementById('config-info');
+            
+            configDiv.innerHTML = `
+                <div class="success">
+                    <strong>Configuration détectée :</strong><br/>
+                    • Base URL: ${baseURL}<br/>
+                    • Environnement: ${process?.env?.NODE_ENV || 'développement'}<br/>
+                    • Socket.IO disponible: ${typeof io !== 'undefined' ? '✅' : '❌'}
+                </div>
+            `;
+            
+            log(`✅ Configuration: Base URL = ${baseURL}`);
+        }
+
+        function testAuth() {
+            log('🔐 Test de l\'authentification...');
+            
+            const token = localStorage.getItem('token') || localStorage.getItem('jwt');
+            const patientData = localStorage.getItem('patient');
+            const medecinData = localStorage.getItem('medecin');
+            
+            const authDiv = document.getElementById('auth-info');
+            
+            if (token) {
+                let userInfo = 'Token présent';
+                if (patientData) {
+                    try {
+                        const patient = JSON.parse(patientData);
+                        userInfo = `Patient: ${patient.nom || patient.name || 'N/A'} ${patient.prenom || patient.firstName || ''}`;
+                    } catch (e) {
+                        userInfo = 'Patient (données invalides)';
+                    }
+                } else if (medecinData) {
+                    try {
+                        const medecin = JSON.parse(medecinData);
+                        userInfo = `Médecin: ${medecin.nom || medecin.name || 'N/A'} ${medecin.prenom || medecin.firstName || ''}`;
+                    } catch (e) {
+                        userInfo = 'Médecin (données invalides)';
+                    }
+                }
+                
+                authDiv.innerHTML = `
+                    <div class="success">
+                        <strong>Authentification réussie :</strong><br/>
+                        • ${userInfo}<br/>
+                        • Token: ${token.substring(0, 20)}...<br/>
+                        • Type: ${patientData ? 'Patient' : 'Médecin'}
+                    </div>
+                `;
+                log('✅ Authentification réussie');
+            } else {
+                authDiv.innerHTML = `
+                    <div class="error">
+                        <strong>Authentification échouée :</strong><br/>
+                        • Aucun token trouvé<br/>
+                        • Patient data: ${patientData ? 'Présent' : 'Absent'}<br/>
+                        • Médecin data: ${medecinData ? 'Présent' : 'Absent'}
+                    </div>
+                `;
+                log('❌ Aucun token d\'authentification trouvé');
+            }
+        }
+
+        function testWebSocket() {
+            log('🔌 Test de connexion WebSocket...');
+            
+            const token = localStorage.getItem('token') || localStorage.getItem('jwt');
+            if (!token) {
+                log('❌ Impossible de tester WebSocket sans token');
+                return;
+            }
+
+            const baseURL = process?.env?.REACT_APP_API_URL || 'http://localhost:3000';
+            const websocketDiv = document.getElementById('websocket-info');
+            
+            try {
+                // Test de connexion HTTP d'abord
+                fetch(`${baseURL}/api/health`)
+                    .then(response => {
+                        if (response.ok) {
+                            log('✅ Serveur HTTP accessible');
+                            
+                            // Maintenant tester WebSocket
+                            if (typeof io !== 'undefined') {
+                                log('🚀 Tentative de connexion WebSocket...');
+                                
+                                socket = io(`${baseURL}/messaging`, {
+                                    auth: { token },
+                                    transports: ['websocket']
+                                });
+
+                                socket.on('connect', () => {
+                                    log('✅ WebSocket connecté avec succès');
+                                    websocketDiv.innerHTML = `
+                                        <div class="success">
+                                            <strong>WebSocket connecté :</strong><br/>
+                                            • ID: ${socket.id}<br/>
+                                            • URL: ${baseURL}/messaging<br/>
+                                            • Statut: Connecté
+                                        </div>
+                                    `;
+                                });
+
+                                socket.on('disconnect', () => {
+                                    log('🔌 WebSocket déconnecté');
+                                    websocketDiv.innerHTML = `
+                                        <div class="warning">
+                                            <strong>WebSocket déconnecté</strong>
+                                        </div>
+                                    `;
+                                });
+
+                                socket.on('connect_error', (error) => {
+                                    log(`❌ Erreur de connexion WebSocket: ${error.message}`);
+                                    websocketDiv.innerHTML = `
+                                        <div class="error">
+                                            <strong>Erreur WebSocket :</strong><br/>
+                                            • Message: ${error.message}<br/>
+                                            • Vérifiez que le serveur supporte Socket.IO
+                                        </div>
+                                    `;
+                                });
+                            } else {
+                                log('❌ Socket.IO non disponible');
+                                websocketDiv.innerHTML = `
+                                    <div class="error">
+                                        <strong>Socket.IO non disponible</strong><br/>
+                                        • Vérifiez que socket.io-client est installé
+                                    </div>
+                                `;
+                            }
+                        } else {
+                            log(`❌ Serveur HTTP non accessible: ${response.status}`);
+                            websocketDiv.innerHTML = `
+                                <div class="error">
+                                    <strong>Serveur HTTP non accessible :</strong><br/>
+                                    • Status: ${response.status}<br/>
+                                    • Vérifiez que le serveur backend fonctionne
+                                </div>
+                            `;
+                        }
+                    })
+                    .catch(error => {
+                        log(`❌ Erreur de connexion HTTP: ${error.message}`);
+                        websocketDiv.innerHTML = `
+                            <div class="error">
+                                <strong>Erreur de connexion HTTP :</strong><br/>
+                                • Message: ${error.message}<br/>
+                                • Vérifiez l'URL et que le serveur fonctionne
+                            </div>
+                        `;
+                    });
+            } catch (error) {
+                log(`❌ Erreur lors du test WebSocket: ${error.message}`);
+            }
+        }
+
+        function disconnectWebSocket() {
+            if (socket) {
+                socket.disconnect();
+                socket = null;
+                log('🔌 WebSocket déconnecté manuellement');
+                document.getElementById('websocket-info').innerHTML = `
+                    <div class="warning">
+                        <strong>WebSocket déconnecté manuellement</strong>
+                    </div>
+                `;
+            }
+        }
+
+        function testAPI() {
+            log('🌐 Test des API REST...');
+            
+            const token = localStorage.getItem('token') || localStorage.getItem('jwt');
+            if (!token) {
+                log('❌ Impossible de tester les API sans token');
+                return;
+            }
+
+            const baseURL = process?.env?.REACT_APP_API_URL || 'http://localhost:3000';
+            const apiDiv = document.getElementById('api-info');
+            
+            // Test de l'endpoint de conversations
+            fetch(`${baseURL}/api/messaging/conversations`, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => {
+                if (response.ok) {
+                    return response.json();
+                } else {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+            })
+            .then(data => {
+                log('✅ API conversations accessible');
+                apiDiv.innerHTML = `
+                    <div class="success">
+                        <strong>API accessible :</strong><br/>
+                        • Endpoint: /api/messaging/conversations<br/>
+                        • Status: ${response.status}<br/>
+                        • Conversations: ${data.data?.conversations?.length || 0}
+                    </div>
+                `;
+            })
+            .catch(error => {
+                log(`❌ Erreur API conversations: ${error.message}`);
+                apiDiv.innerHTML = `
+                    <div class="error">
+                        <strong>Erreur API :</strong><br/>
+                        • Endpoint: /api/messaging/conversations<br/>
+                        • Erreur: ${error.message}<br/>
+                        • Vérifiez que l'endpoint existe sur le serveur
+                    </div>
+                `;
+            });
+        }
+
+        // Tests automatiques au chargement
+        window.onload = function() {
+            log('🚀 Page de test chargée');
+            testConfig();
+            testAuth();
+        };
+    </script>
+</body>
+</html>

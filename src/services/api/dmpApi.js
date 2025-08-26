@@ -418,7 +418,33 @@ export const refuserAutorisation = async (autorisationId, raisonRefus) => {
     return response.data.data;
 };
 
-// Fonction exportée pour révoquer une autorisation (utilise la route patient par défaut)
+// ============================================================================
+// 🔐 FONCTIONS UNIFIÉES DE RÉVOCATION D'AUTORISATION
+// ============================================================================
+
+// ✅ FONCTION UNIFIÉE : Révocation d'autorisation pour tous les utilisateurs
+export const revokerAutorisationUnified = async (autorisationId, raisonRevocation) => {
+    try {
+        console.log(`🔐 Révocation unifiée de l'autorisation ${autorisationId}:`, raisonRevocation);
+        
+        // ✅ MÉTHODE UNIFIÉE : PATCH avec statut 'expire'
+        const response = await dmpApi.patch(`/access/patient/authorization/${autorisationId}`, {
+            statut: 'expire',
+            raison_demande: raisonRevocation
+        }, {
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('jwt')}`
+            }
+        });
+        
+        console.log('✅ Autorisation révoquée avec succès (méthode unifiée):', response.data);
+        return response.data;
+    } catch (error) {
+        console.error('❌ Erreur lors de la révocation unifiée de l\'autorisation:', error);
+        throw error;
+    }
+};
+
 export const revokerAutorisation = async (autorisationId, raisonRevocation) => {
     try {
         // Utiliser la route patient pour la révocation
@@ -990,6 +1016,7 @@ const dmpApiExports = {
     refuserAutorisation,
     revokerAutorisation,
     revokerAutorisationMedecin,
+    revokerAutorisationUnified, // ✅ NOUVELLE FONCTION UNIFIÉE
     getNotificationsStats,
     marquerToutesNotificationsLues,
     marquerNotificationDroitsAccesLue,

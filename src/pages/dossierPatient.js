@@ -206,7 +206,6 @@ function DossierPatient() {
   const deselectPatient = useCallback(() => {
     selectedPatientForPrescriptionRef.current = null;
     setPatientSelectionKey(prev => prev + 1); // Force la re-render
-    console.log('Patient décocher avec succès');
   }, []);
 
   // Données dérivées avec useMemo
@@ -228,9 +227,7 @@ function DossierPatient() {
     try {
       // Use the correct ID field - backend uses 'id' not 'Id'
       const dossierId = dossier.id || dossier.Id || dossier.dossier_id || dossier.id_dossier;
-      console.log('Loading dossier details for ID:', dossierId);
       const details = await getDossierMedical(dossierId);
-      console.log('Dossier details received:', details);
       
       // Handle the response format from backend
       let dossierData;
@@ -271,7 +268,6 @@ function DossierPatient() {
   };
 
   const handleEditDossier = (dossier) => {
-    console.log('Opening edit modal for dossier:', dossier);
     selectedDossierRef.current = dossier;
     
     // Pre-fill the form with existing data
@@ -310,7 +306,6 @@ function DossierPatient() {
     
     try {
       const dossierId = selectedDossierRef.current.id_dossier || selectedDossierRef.current.id;
-      console.log('Updating dossier:', dossierId, editDossierFormRef.current);
       
       // Convert date to ISO format if provided
       const formData = {
@@ -401,11 +396,8 @@ function DossierPatient() {
       try {
         const profileResponse = await getMedecinProfile();
         medecinProfile = profileResponse?.data?.professionnel || profileResponse?.professionnel;
-        console.log('🔍 DEBUG - Profil médecin récupéré:', medecinProfile);
-        console.log('🔍 DEBUG - Specialite ID:', medecinProfile?.specialite_id);
-        console.log('🔍 DEBUG - Toutes les clés du profil:', medecinProfile ? Object.keys(medecinProfile) : 'null');
       } catch (profileError) {
-        console.warn('Impossible de récupérer le profil médecin:', profileError);
+        // Impossible de récupérer le profil médecin
       }
       
       // Load services and patients in parallel
@@ -416,41 +408,20 @@ function DossierPatient() {
       
       // Pré-remplir le service du médecin si disponible
       if (medecinProfile && medecinProfile.specialite_id) {
-        console.log('🔍 DEBUG - Tentative de pré-remplissage du service...');
-        console.log('🔍 DEBUG - Specialite ID du médecin:', medecinProfile.specialite_id);
-        
         // Utiliser directement les services chargés au lieu d'attendre l'état
         const servicesLoaded = await getServices();
-        console.log('🔍 DEBUG - Services chargés directement:', servicesLoaded);
-        console.log('🔍 DEBUG - Nombre de services:', servicesLoaded?.length || 0);
         
         // Chercher le service correspondant à la spécialité du médecin
         const medecinService = servicesLoaded.find(service => {
           const serviceId = service.id || service.id_service || service.service_id;
-          const match = serviceId == medecinProfile.specialite_id;
-          console.log(`🔍 DEBUG - Service ${serviceId} vs ${medecinProfile.specialite_id}: ${match ? 'MATCH!' : 'non'}`);
-          return match;
+          return serviceId == medecinProfile.specialite_id;
         });
         
         if (medecinService) {
           const serviceId = medecinService.id || medecinService.id_service || medecinService.service_id;
           setFormData(prev => ({ ...prev, service_id: serviceId }));
-          console.log('✅ SUCCESS - Service du médecin pré-rempli:', medecinService.name || medecinService.nom, 'ID:', serviceId);
-        } else {
-          console.log('❌ ERROR - Service du médecin non trouvé dans la liste des services disponibles');
-          console.log('🔍 DEBUG - Specialite ID recherché:', medecinProfile.specialite_id);
-          console.log('🔍 DEBUG - Services disponibles:', servicesLoaded.map(s => ({
-            id: s.id || s.id_service || s.service_id,
-            name: s.name || s.nom || s.libelle || s.service_name
-          })));
         }
-      } else {
-        console.log('⚠️ WARNING - Impossible de pré-remplir le service:');
-        console.log('  - medecinProfile:', !!medecinProfile);
-        console.log('  - specialite_id:', medecinProfile?.specialite_id);
       }
-      
-      console.log('Services and patients loaded successfully');
     } catch (error) {
       console.error('Error loading data for modal:', error);
     }
@@ -496,33 +467,19 @@ function DossierPatient() {
         console.log('Services data is an object, checking for nested services...');
         const possibleServices = servicesData.services || servicesData.data || servicesData.result || [];
         if (Array.isArray(possibleServices)) {
-          console.log('Found services in nested object:', possibleServices);
-          updateDataState({ services: possibleServices });
-          console.log(`${possibleServices.length} services chargés depuis l'objet imbriqué`);
-        } else {
-          console.error('No valid services array found in object:', servicesData);
-          updateDataState({ services: [] });
-        }
+                  updateDataState({ services: possibleServices });
       } else {
-        console.error('Unexpected services data format:', servicesData);
-        if (servicesData && typeof servicesData === 'object') {
-          console.error('Services data keys:', Object.keys(servicesData));
-        }
         updateDataState({ services: [] });
       }
-    } catch (error) {
-      console.error('Erreur lors du chargement des services:', error);
-      console.error('Error details:', {
-        message: error.message,
-        stack: error.stack,
-        response: error.response?.data,
-        status: error.response?.status
-      });
+    } else {
       updateDataState({ services: [] });
-    } finally {
-      updateLoadingState({ services: false });
-      console.log('Chargement des services terminé');
     }
+  } catch (error) {
+    console.error('Erreur lors du chargement des services:', error);
+    updateDataState({ services: [] });
+  } finally {
+    updateLoadingState({ services: false });
+  }
   }, []);
 
   // Function to get service name by ID
@@ -550,14 +507,11 @@ function DossierPatient() {
       const medecinProfile = profileResponse?.data?.professionnel || profileResponse?.professionnel;
       
       if (medecinProfile && medecinProfile.specialite_id) {
-        console.log('Service ID du médecin trouvé:', medecinProfile.specialite_id);
         return medecinProfile.specialite_id;
       }
       
-      console.log('Aucun service ID trouvé pour le médecin');
       return null;
     } catch (error) {
-      console.warn('Erreur lors de la récupération du service du médecin:', error);
       return null;
     }
   }, []);
@@ -565,12 +519,10 @@ function DossierPatient() {
   // Fonction pour gérer les changements dans le formulaire
   const handleFormChange = useCallback((field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
-    console.log(`Champ ${field} modifié:`, value);
   }, []);
 
   const handleCreatePatientFile = async (e) => {
     e.preventDefault();
-    console.log('Submitting patient file form:', formData);
     
     // Validation côté client
     if (!formData.patient_id) {
@@ -658,12 +610,9 @@ function DossierPatient() {
 
   const loadPatientsForSelect = async () => {
     try {
-      console.log('Début du chargement des dataState.patients pour sélection...');
       const patientsData = await getPatients();
-      console.log('Patients loaded for select:', patientsData);
       
       if (!Array.isArray(patientsData)) {
-        console.error('Expected an array of patients but received:', patientsData);
         updateDataState({ patientsForSelect: [] });
         return;
       }
@@ -675,17 +624,9 @@ function DossierPatient() {
         numero_dossier: patient.numero_dossier || 'N/A'
       }));
       
-      console.log('Formatted dataState.patients for select:', formattedPatientsForSelect);
       updateDataState({ patientsForSelect: formattedPatientsForSelect });
-      console.log(`${formattedPatientsForSelect.length} dataState.patients formatés pour la sélection`);
     } catch (error) {
-      console.error('Erreur lors du chargement des dataState.patients pour sélection:', error);
-      console.error('Error details:', {
-        message: error.message,
-        stack: error.stack,
-        response: error.response?.data,
-        status: error.response?.status
-      });
+      console.error('Erreur lors du chargement des patients pour sélection:', error);
       updateDataState({ patientsForSelect: [] });
     }
   };
@@ -693,56 +634,17 @@ function DossierPatient() {
   const loadDossiersPatients = async () => {
     updateLoadingState({ dossiers: true });
     try {
-      console.log('Chargement des dossiers dataState.patients...');
       const dossiersData = await getAllDossiersMedical();
-      console.log('Dossiers dataState.patients reçus:', dossiersData);
       
       let dossiers = [];
       if (dossiersData && dossiersData.status === 'success' && dossiersData.data && Array.isArray(dossiersData.data)) {
         dossiers = dossiersData.data;
-        console.log('Setting dossiers from dossiersData.data:', dossiers);
-        console.log('First dossier structure:', dossiers[0]);
-        console.log(`${dossiers.length} dossiers dataState.patients chargés avec succès`);
       } else if (Array.isArray(dossiersData)) {
         dossiers = dossiersData;
-        console.log('Setting dossiers from direct array:', dossiers);
-        console.log('First dossier structure:', dossiers[0]);
-        console.log(`${dossiers.length} dossiers dataState.patients chargés`);
       } else {
-        console.error('Format de données inattendu:', dossiersData);
-        console.error('Type of dossiersData:', typeof dossiersData);
-        console.error('Keys in dossiersData:', dossiersData ? Object.keys(dossiersData) : 'null');
         updateDataState({ dossiersPatients: [] });
         return;
       }
-
-      // Log detailed information about each dossier to diagnose patient data issues
-      dossiers.forEach((dossier, index) => {
-        console.log(`=== DIAGNOSTIC DOSSIER ${index + 1} ===`);
-        console.log('Raw dossier object:', dossier);
-        console.log('ID:', dossier.id_dossier || dossier.id);
-        console.log('Numéro dossier (numeroDossier):', dossier.numeroDossier);
-        console.log('Numéro dossier (numero_dossier):', dossier.numero_dossier);
-        console.log('Numéro dossier (numeroDossier - exact):', dossier.numeroDossier);
-        console.log('Numéro dossier (id_dossier):', dossier.id_dossier);
-        console.log('Numéro dossier (id):', dossier.id);
-        console.log('Patient ID:', dossier.patient_id);
-        console.log('Service ID:', dossier.service_id);
-        console.log('Has patient object:', !!dossier.patient);
-        console.log('Patient object:', dossier.patient);
-        console.log('Patient name fields:', {
-          patient_name: dossier.patient_name,
-          patient_nom: dossier.patient_nom,
-          Patient_nom: dossier.Patient?.nom
-        });
-        console.log('Service name fields:', {
-          service_name: dossier.service_name,
-          service_nom: dossier.service_nom,
-          ServiceSante_nom: dossier.ServiceSante?.nom
-        });
-        console.log('All keys:', Object.keys(dossier));
-        console.log('=====================================');
-      });
 
       updateDataState({ dossiersPatients: dossiers });
     } catch (error) {
@@ -757,80 +659,21 @@ function DossierPatient() {
   const loadPatients = useCallback(async () => {
     updateUIState({ loading: true });
     try {
-      console.log('🔄 DEBUG - Début de loadPatients...');
-      console.log('🌐 DEBUG - Appel API getPatients()...');
-      
       const patientsData = await getPatients();
-      
-      console.log('📡 DEBUG - Réponse API getPatients:', {
-        data: patientsData,
-        type: typeof patientsData,
-        isArray: Array.isArray(patientsData),
-        length: Array.isArray(patientsData) ? patientsData.length : 'N/A'
-      });
-      
-      // Log détaillé de la structure de chaque patient
-      if (Array.isArray(patientsData) && patientsData.length > 0) {
-        console.log('🔍 DEBUG - Structure détaillée des patients:');
-        patientsData.forEach((patient, index) => {
-          console.log(`  Patient ${index + 1} (${patient.prenom} ${patient.nom}):`, {
-            toutes_les_cles: Object.keys(patient),
-            id_patient: patient.id_patient,
-            id: patient.id,
-            patient_id: patient.patient_id,
-            _id: patient._id,
-            numero_patient: patient.numero_patient,
-            numero_dossier: patient.numero_dossier
-          });
-          
-          // Log spécial pour le patient 6
-          if (patient.prenom === 'Patient' && patient.nom === '6' || 
-              patient.prenom === '6' || patient.nom === '6' ||
-              patient.numero_dossier === '6' || patient.numero_patient === '6') {
-            console.log('🎯 DEBUG SPÉCIAL - Patient 6 détecté!');
-            console.log('  - Données complètes:', patient);
-            console.log('  - Tous les champs:', Object.entries(patient));
-            console.log('  - Types des champs:', Object.fromEntries(
-              Object.entries(patient).map(([key, value]) => [key, typeof value])
-            ));
-          }
-        });
-      }
 
       if (!patientsData) {
-        console.error('No patient data received:', patientsData);
         updateDataState({ patients: [] });
         return [];
       }
 
       if (!Array.isArray(patientsData)) {
-        console.error('Expected an array of patients but received:', patientsData);
         updateDataState({ patients: [] });
         return [];
-      }
-
-      if (patientsData.length === 0) {
-        console.warn('Received empty patient array:', patientsData);
       }
       
       // Map the patients to the expected format
       const formattedPatients = patientsData.map(patient => {
         const patientId = patient.id_patient || patient.id || patient.patient_id || patient._id || patient.numero_patient || patient.numero_dossier || 'unknown';
-        console.log(`🔍 DEBUG - Patient ${patient.prenom} ${patient.nom}:`, {
-          id_patient: patient.id_patient,
-          id: patient.id,
-          patient_id: patient.patient_id,
-          _id: patient._id,
-          numero_patient: patient.numero_patient,
-          numero_dossier: patient.numero_dossier,
-          final_id: patientId
-        });
-        
-        // Validation que l'ID est valide
-        if (!patientId || patientId === 'unknown' || patientId === 'null' || patientId === 'undefined') {
-          console.error(`❌ ERROR - Patient ${patient.prenom} ${patient.nom} n'a pas d'ID valide:`, patientId);
-          console.error('  - Données complètes du patient:', patient);
-        }
         
         return {
           id: patientId,
@@ -853,37 +696,11 @@ function DossierPatient() {
         };
       });
 
-      console.log('Formatted patients:', formattedPatients);
-      console.log('Updating dataState with patients:', formattedPatients);
-      
-      // Vérification finale que tous les patients ont des IDs valides
-      const patientsWithValidIds = formattedPatients.filter(patient => {
-        const isValid = patient.id && patient.id !== 'unknown' && patient.id !== 'null' && patient.id !== 'undefined';
-        if (!isValid) {
-          console.error(`❌ ERROR - Patient ${patient.name} a un ID invalide:`, patient.id);
-        }
-        return isValid;
-      });
-      
-      if (patientsWithValidIds.length !== formattedPatients.length) {
-        console.error(`⚠️ WARNING - ${formattedPatients.length - patientsWithValidIds.length} patients ont des IDs invalides`);
-        console.error('Patients avec IDs invalides:', formattedPatients.filter(p => !p.id || p.id === 'unknown' || p.id === 'null' || p.id === 'undefined'));
-      } else {
-        console.log('✅ SUCCESS - Tous les patients ont des IDs valides');
-      }
-      
-      // Résumé final de tous les patients
-      console.log('📋 RÉSUMÉ FINAL - Tous les patients:');
-      formattedPatients.forEach((patient, index) => {
-        console.log(`  ${index + 1}. ${patient.name} - ID: ${patient.id} (${typeof patient.id})`);
-      });
-      
       updateDataState({ patients: formattedPatients });
       
       // Initialiser automatiquement le premier patient comme sélection par défaut
       // seulement si aucun patient n'est déjà sélectionné
       if (formattedPatients.length > 0 && !selectedPatientForPrescriptionRef.current) {
-        console.log('Initialisation automatique du premier patient:', formattedPatients[0]);
         selectedPatientForPrescriptionRef.current = formattedPatients[0];
       }
       
@@ -921,29 +738,18 @@ function DossierPatient() {
   // Vérification de l'authentification
   useEffect(() => {
     const checkAuthentication = async () => {
-      console.log('🔍 Vérification de l\'authentification...');
       const isAuth = isAuthenticated();
       const isMedecin = isMedecinAuthenticated();
       const isPatient = isPatientAuthenticated();
       
-      console.log('  - isAuthenticated:', isAuth);
-      console.log('  - isMedecinAuthenticated:', isMedecin);
-      console.log('  - isPatientAuthenticated:', isPatient);
-      console.log('  - Token JWT:', !!localStorage.getItem('jwt'));
-      console.log('  - Token général:', !!localStorage.getItem('token'));
-      
       if (isAuth) {
-        console.log('✅ Utilisateur authentifié, chargement des données...');
         // Mettre à jour l'état d'authentification
         updateAuthState({ isAuthenticated: true, loading: false });
         
         // Charger les données directement
-        console.log('🔄 Appel de loadPatients...');
         await loadPatients();
-        console.log('🔄 Appel de loadServices...');
         await loadServices();
       } else {
-        console.log('❌ Utilisateur non authentifié, redirection...');
         updateAuthState({ isAuthenticated: false, loading: false });
         // Rediriger vers la page de connexion
         navigate("/connexion", { 
@@ -961,7 +767,6 @@ function DossierPatient() {
   // Reload dataState.services when modal opens
   useEffect(() => {
     if (modalState.showPatientFile) {
-      console.log('Modal opened, ensuring dataState.services are loaded...');
       loadServices();
     }
   }, [modalState.showPatientFile, loadServices]);
@@ -972,7 +777,6 @@ function DossierPatient() {
     try {
       // Récupérer toutes les dataState.prescriptions depuis l'API
       const prescriptionsData = await getAllPrescriptions();
-      console.log('Prescriptions récupérées depuis l\'API:', prescriptionsData);
       
       // Filtrer par patient si un patient est sélectionné
       let prescriptionsToShow = prescriptionsData;
@@ -3357,13 +3161,7 @@ Dr. Dupont`
                     </div>
                   </div>
 
-                  {/* Raw Data for Debugging */}
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <h4 className="text-md font-semibold text-gray-800 mb-4">Données Brutes (Debug)</h4>
-                    <pre className="text-xs text-gray-600 bg-white p-2 rounded border overflow-auto max-h-40">
-                      {JSON.stringify(dossierDetailsRef.current, null, 2)}
-                    </pre>
-                  </div>
+                  
                 </div>
               ) : (
                 <div className="text-center py-8">

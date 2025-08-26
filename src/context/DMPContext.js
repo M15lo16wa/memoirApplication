@@ -93,15 +93,58 @@ export const DMPProvider = ({ children }) => {
 
     // Initialiser le patient ID
     useEffect(() => {
-        const currentUser = getCurrentUser();
-        const storedPatientData = getStoredPatient();
+        const initializePatientId = () => {
+            const currentUser = getCurrentUser();
+            const storedPatientData = getStoredPatient();
+            
+            console.log('🔍 DMPContext - Initialisation du patient ID:');
+            console.log('  - currentUser:', currentUser);
+            console.log('  - storedPatientData:', storedPatientData);
+            
+            let patientId = null;
+            
+            // Prioriser les données du patient stockées localement
+            if (storedPatientData?.id_patient || storedPatientData?.id) {
+                patientId = storedPatientData.id_patient || storedPatientData.id;
+                console.log('✅ DMPContext - Patient ID récupéré depuis storedPatientData:', patientId);
+            } else if (currentUser?.id_patient || currentUser?.id) {
+                patientId = currentUser.id_patient || currentUser.id;
+                console.log('✅ DMPContext - Patient ID récupéré depuis currentUser:', patientId);
+            }
+            
+            if (patientId) {
+                // Vérifier que l'ID est valide (nombre positif)
+                if (typeof patientId === 'number' && patientId > 0) {
+                    console.log('✅ DMPContext - Patient ID valide défini:', patientId);
+                    dispatch({ type: 'SET_PATIENT_ID', payload: patientId });
+                } else if (typeof patientId === 'string' && !isNaN(parseInt(patientId)) && parseInt(patientId) > 0) {
+                    const numericId = parseInt(patientId);
+                    console.log('✅ DMPContext - Patient ID converti en nombre:', numericId);
+                    dispatch({ type: 'SET_PATIENT_ID', payload: numericId });
+                } else {
+                    console.error('❌ DMPContext - Patient ID invalide:', patientId, 'Type:', typeof patientId);
+                }
+            } else {
+                console.warn('⚠️ DMPContext - Aucun Patient ID trouvé');
+            }
+        };
         
-        // Prioriser les données du patient stockées localement
-        if (storedPatientData?.id_patient || storedPatientData?.id) {
-            dispatch({ type: 'SET_PATIENT_ID', payload: storedPatientData.id_patient || storedPatientData.id });
-        } else if (currentUser?.id_patient || currentUser?.id) {
-            dispatch({ type: 'SET_PATIENT_ID', payload: currentUser.id_patient || currentUser.id });
-        }
+        // Initialiser immédiatement
+        initializePatientId();
+        
+        // Écouter les changements dans le localStorage
+        const handleStorageChange = (e) => {
+            if (e.key === 'patient' || e.key === 'token') {
+                console.log('🔄 DMPContext - Changement détecté dans localStorage, réinitialisation du Patient ID');
+                setTimeout(initializePatientId, 100); // Délai pour laisser le temps aux données de se mettre à jour
+            }
+        };
+        
+        window.addEventListener('storage', handleStorageChange);
+        
+        return () => {
+            window.removeEventListener('storage', handleStorageChange);
+        };
     }, []);
 
     // Charger les données initiales quand le patientId est disponible
@@ -545,9 +588,14 @@ export const DMPProvider = ({ children }) => {
 
         // Recharger toutes les données
         refreshAllData: async () => {
-            if (!state.patientId) return;
+            if (!state.patientId) {
+                console.warn('⚠️ DMPContext - refreshAllData: patientId non défini');
+                return;
+            }
             
+            console.log('🔄 DMPContext - Rechargement de toutes les données pour le patient:', state.patientId);
             dispatch({ type: 'SET_LOADING', payload: true });
+            
             try {
                 const [
                     dmpDataResponse,
@@ -581,9 +629,41 @@ export const DMPProvider = ({ children }) => {
                 dispatch({ type: 'SET_BIBLIOTHEQUE', payload: bibliothequeResponse.data });
                 dispatch({ type: 'SET_STATISTIQUES', payload: statistiquesResponse.data });
                 dispatch({ type: 'SET_RENDEZ_VOUS', payload: rendezVousResponse.data });
+                
+                console.log('✅ DMPContext - Toutes les données rechargées avec succès pour le patient:', state.patientId);
             } catch (error) {
+                console.error('❌ DMPContext - Erreur lors du rechargement des données pour le patient:', state.patientId, error);
                 dispatch({ type: 'SET_ERROR', payload: error.message });
+            } finally {
+                dispatch({ type: 'SET_LOADING', payload: false });
             }
+        },
+
+        // Forcer la réinitialisation du patient ID
+        forceRefreshPatientId: () => {
+            console.log('🔄 DMPContext - Forçage de la réinitialisation du Patient ID');
+            const currentUser = getCurrentUser();
+            const storedPatientData = getStoredPatient();
+            
+            let patientId = null;
+            
+            if (storedPatientData?.id_patient || storedPatientData?.id) {
+                patientId = storedPatientData.id_patient || storedPatientData.id;
+            } else if (currentUser?.id_patient || currentUser?.id) {
+                patientId = currentUser.id_patient || currentUser.id;
+            }
+            
+            if (patientId) {
+                const numericId = typeof patientId === 'string' ? parseInt(patientId) : patientId;
+                if (numericId > 0) {
+                    console.log('✅ DMPContext - Nouveau Patient ID forcé:', numericId);
+                    dispatch({ type: 'SET_PATIENT_ID', payload: numericId });
+                    return numericId;
+                }
+            }
+            
+            console.warn('⚠️ DMPContext - Impossible de forcer la réinitialisation du Patient ID');
+            return null;
         }
     }), [state.patientId]);
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getDMP, getHistoriqueMedical, getAutorisations, getDocumentsPersonnelsDMP, getAutoMesuresDMP, revokerAutorisationMedecin } from '../services/api/dmpApi';
+import { getDMP, getHistoriqueMedical, getAutorisations, getDocumentsPersonnelsDMP, getAutoMesuresDMP, revokerAutorisation } from '../services/api/dmpApi';
 import { downloadDocument } from '../services/api/medicalApi';
 import PDFPreviewModal from '../components/common/PDFPreviewModal';
 
@@ -148,9 +148,34 @@ function DMPPatientView() {
 
       // Révocation de l'accès
       const raisonRevocation = 'Accès révoqué automatiquement lors de la fermeture du dossier';
-      await revokerAutorisationMedecin(professionnelId, patientId, raisonRevocation);
       
-      console.log('✅ Accès révoqué avec succès, navigation vers DMP');
+      // ✅ ÉTAPE 1: Récupérer l'autorisation active pour obtenir son ID
+      try {
+        const verification = await fetch(`http://localhost:3000/api/access/status/${patientId}?professionnelId=${professionnelId}`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('jwt')}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        if (verification.ok) {
+          const verificationData = await verification.json();
+          const autorisationId = verificationData.data?.authorization?.id_acces;
+          
+          if (autorisationId) {
+            // ✅ ÉTAPE 2: Révoquer l'autorisation avec la fonction unifiée
+            await revokerAutorisation(autorisationId, raisonRevocation);
+            console.log('✅ Accès révoqué avec succès, navigation vers DMP');
+          } else {
+            console.log('ℹ️ Aucune autorisation active trouvée, navigation directe');
+          }
+        } else {
+          console.warn('⚠️ Impossible de vérifier l\'autorisation, navigation directe');
+        }
+      } catch (error) {
+        console.error('❌ Erreur lors de la vérification de l\'autorisation:', error);
+      }
+      
       navigate('/dmp');
       
     } catch (error) {
