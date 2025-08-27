@@ -33,6 +33,21 @@ function DMPAccess() {
     const { patientId } = useParams();
     const navigate = useNavigate();
     
+    // 🔍 DEBUG - Vérifier l'état des tokens au chargement de DMPAccess
+    useEffect(() => {
+        console.log('🔍 DEBUG - DMPAccess chargé, vérification des tokens:');
+        console.log('  - Token JWT (jwt):', localStorage.getItem('jwt') ? '✅ Présent' : '❌ Absent');
+        console.log('  - Token (token):', localStorage.getItem('token') ? '✅ Présent' : '❌ Absent');
+        console.log('  - Token JWT valeur:', localStorage.getItem('jwt'));
+        console.log('  - Token valeur:', localStorage.getItem('token'));
+        console.log('  - Toutes les clés localStorage:', Object.keys(localStorage));
+        
+        // 🔍 DEBUG - Vérifier aussi les données utilisateur
+        console.log('  - Données médecin:', localStorage.getItem('medecin'));
+        console.log('  - Données professionnel:', localStorage.getItem('professionnel'));
+        console.log('  - tempTokenId_urgence:', localStorage.getItem('tempTokenId_urgence'));
+    }, []);
+    
     // Hook 2FA pour la protection des dossiers patients
     const { 
         show2FAModal, 
@@ -112,9 +127,18 @@ function DMPAccess() {
             };
             
             console.log('🔍 Tentative de recherche patient - déclenchement 2FA...');
+            console.log('🔍 DEBUG - Données de recherche (première tentative):', {
+                searchData,
+                nom: searchData.nom,
+                prenom: searchData.prenom,
+                hasTwoFactorToken: false,
+                timestamp: new Date().toISOString()
+            });
             
+            console.log('🚀 APPEL API - Première tentative searchPatientFullData (sans 2FA)...');
             // Appel API pour rechercher le patient - cela va déclencher la création de session 2FA
             const patientResponse = await dmpApi.searchPatientFullData(searchData);
+            console.log('⚠️ ATTENTION - Si on arrive ici, c\'est que la 2FA n\'a pas été déclenchée !');
             
             // Si on arrive ici, c'est que la 2FA a été validée et la recherche a réussi
             if (!patientResponse || !patientResponse.data || patientResponse.data.length === 0) {
@@ -280,7 +304,17 @@ function DMPAccess() {
                 twoFactorToken: 'VALIDATED' // Indiquer que la 2FA est validée
             };
             
+            console.log('🔍 DEBUG - Données de recherche envoyées à searchPatientFullData:', {
+                searchData,
+                nom: searchData.nom,
+                prenom: searchData.prenom,
+                twoFactorToken: searchData.twoFactorToken,
+                timestamp: new Date().toISOString()
+            });
+            
+            console.log('🚀 APPEL API - Début de searchPatientFullData...');
             const patientResponse = await dmpApi.searchPatientFullData(searchData);
+            console.log('✅ APPEL API - Fin de searchPatientFullData, réponse reçue');
             
             // 🔍 DEBUG - Vérifier la structure de la réponse
             console.log('🔍 DEBUG - Structure de la réponse patientResponse:', {
@@ -355,10 +389,28 @@ function DMPAccess() {
             }
             
             // Récupération du dossier complet
+            console.log('🔍 DEBUG - AVANT appel getPatient, vérification des tokens:');
+            console.log('  - Token JWT (jwt):', localStorage.getItem('jwt') ? '✅ Présent' : '❌ Absent');
+            console.log('  - Token (token):', localStorage.getItem('token') ? '✅ Présent' : '❌ Absent');
+            
             const fullPatientData = await getPatient(patientId);
             setPatientInfo(fullPatientData);
             
+            console.log('🔍 DEBUG - APRÈS appel getPatient, vérification des tokens:');
+            console.log('  - Token JWT (jwt):', localStorage.getItem('jwt') ? '✅ Présent' : '❌ Absent');
+            console.log('  - Token (token):', localStorage.getItem('token') ? '✅ Présent' : '❌ Absent');
+            
             console.log('✅ Accès d\'urgence réussi, dossier patient récupéré:', fullPatientData);
+            
+            // 🔍 DEBUG - Vérifier l'état des tokens avant redirection
+            console.log('🔍 DEBUG - État des tokens avant redirection:', {
+                hasJwt: !!localStorage.getItem('jwt'),
+                hasToken: !!localStorage.getItem('token'),
+                jwtValue: localStorage.getItem('jwt')?.substring(0, 50) + '...',
+                tokenValue: localStorage.getItem('token')?.substring(0, 50) + '...',
+                tempTokenId: localStorage.getItem('tempTokenId_urgence'),
+                localStorageKeys: Object.keys(localStorage)
+            });
             
             // Nettoyer le tempTokenId temporaire après utilisation réussie
             const tempTokenId = localStorage.getItem('tempTokenId_urgence');
@@ -366,6 +418,15 @@ function DMPAccess() {
                 localStorage.removeItem('tempTokenId_urgence');
                 console.log('🧹 tempTokenId temporaire nettoyé après utilisation réussie');
             }
+            
+            // 🔍 DEBUG - Vérifier l'état des tokens après nettoyage
+            console.log('🔍 DEBUG - État des tokens après nettoyage:', {
+                hasJwt: !!localStorage.getItem('jwt'),
+                hasToken: !!localStorage.getItem('token'),
+                jwtValue: localStorage.getItem('jwt')?.substring(0, 50) + '...',
+                tokenValue: localStorage.getItem('token')?.substring(0, 50) + '...',
+                localStorageKeys: Object.keys(localStorage)
+            });
             
             // Redirection vers la vue du patient
             navigate(`/dmp-patient-view/${patientId}`);

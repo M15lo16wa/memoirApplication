@@ -5,7 +5,8 @@ import {
   FaUpload, FaBell, FaQrcode, FaBook, FaChartBar,
   FaSignOutAlt, FaPlus, FaDownload,
   FaHeartbeat, FaPills, FaThermometerHalf, FaWeight,
-  FaTint, FaPrint, FaUserShield, FaCheck, FaTimes
+  FaTint, FaPrint, FaUserShield, FaCheck, FaTimes,
+  FaComments
 } from "react-icons/fa";
 
 // Routes et protection
@@ -24,7 +25,7 @@ import DMPNotification from "../components/ui/DMPNotification";
 import AutorisationsEnAttente from "../components/dmp/AutorisationsEnAttente";
 import DMPHistory from "../components/dmp/DMPHistory";
 import NotificationManager from "../components/ui/NotificationManager";
-import MessagingButton from "../messaging/components/MessagingButton";
+import { MessagingButton, MessagingWidget, ChatMessage } from "../messaging";
 // ...existing code...
 
 // APIs
@@ -73,7 +74,7 @@ const safeProfessionalName = (professional, prefix = 'Dr.') => {
 
 
 // Composant HistoriqueMedical qui utilise les fonctions de patientApi et dmpApi
-const HistoriqueMedical = ({ patientProfile }) => {
+const HistoriqueMedical = ({ patientProfile, onOpenMessaging }) => {
   // Fonction utilitaire pour sécuriser l'affichage des données
   const safeDisplay = (value, fallback = 'N/A', maxLength = null) => {
     if (value === null || value === undefined) return fallback;
@@ -1310,17 +1311,16 @@ disabled:opacity-50 disabled:cursor-not-allowed"
                     {(prescription.type_prescription === 'ordonnance' || 
 prescription.type_prescription === 'examen') && (
                       <div className="pt-2 border-t border-gray-200">
-                        <MessagingButton
-                          contextType={prescription.type_prescription}
-                          contextId={prescription.id_prescription || prescription.id}
-                          contextTitle={`${prescription.type_prescription === 'ordonnance' ? 
-'Ordonnance' : 'Examen'} du ${formatDate(prescription.date_prescription)}`}
-                          className="w-full"
-                          medecinInfo={prescription.medecinInfo}
-                          currentUserName={`${patientProfile?.prenom || ''} ${patientProfile?.nom || 
-''}`.trim() || 'Patient'}
-                          currentUserRole="patient"
-                        />
+                        {patientProfile && (
+                          <MessagingButton
+                            userId={patientProfile.id_patient || patientProfile.id}
+                            role="patient"
+                            token={localStorage.getItem('jwt') || localStorage.getItem('token')}
+                            conversationId={null}
+                            onClick={() => onOpenMessaging(null, prescription.medecinInfo?.id)}
+                            unreadCount={0}
+                          />
+                        )}
                       </div>
                     )}
 
@@ -1830,6 +1830,9 @@ const DMP = () => {
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [patientProfile, setPatientProfile] = useState(null);
+  const [showMessagingTest, setShowMessagingTest] = useState(false);
+  const [showMessagingInterface, setShowMessagingInterface] = useState(false);
+  const [selectedConversationId, setSelectedConversationId] = useState(null);
   const [autoMesure, setAutoMesure] = useState({
     type_mesure: 'poids',
     valeur: '',
@@ -1894,6 +1897,26 @@ const DMP = () => {
           }
       } else {
       }
+  };
+
+  // Fonction pour ouvrir l'interface de messagerie
+  const handleOpenMessaging = (conversationId = null, medecinId = null) => {
+    console.log('🚀 Ouverture de la messagerie avec conversationId:', conversationId, 'et medecinId:', medecinId);
+    setSelectedConversationId(conversationId);
+    setShowMessagingInterface(true);
+    // Stocker l'ID du médecin pour l'utiliser dans ChatMessage
+    if (medecinId) {
+      localStorage.setItem('currentMedecinId', medecinId.toString());
+    }
+  };
+
+  // Fonction pour fermer l'interface de messagerie
+  const handleCloseMessaging = () => {
+    console.log('🔒 Fermeture de la messagerie');
+    setShowMessagingInterface(false);
+    setSelectedConversationId(null);
+    // Nettoyer l'ID du médecin
+    localStorage.removeItem('currentMedecinId');
   };
   
 // Misplaced return block removed. If you want to show this diagnostic UI, move it inside a component's render/return.
@@ -2991,6 +3014,19 @@ border">
                         Dossier: {patientProfile?.numero_dossier || patientProfile?.id || 'N/A'}
                       </p>
                     </div>
+                    {patientProfile && (
+                      <button
+                        onClick={() => {
+                          console.log('🧪 Test de la messagerie pour le patient:', patientProfile.id_patient);
+                          setShowMessagingTest(!showMessagingTest);
+                        }}
+                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 
+hover:bg-gray-100 flex items-center"
+                      >
+                        <FaComments className="mr-2" />
+                        {showMessagingTest ? 'Masquer' : 'Test'} Messagerie
+                      </button>
+                    )}
                     <button
                       onClick={handleLogout}
                       className="block w-full text-left px-4 py-2 text-sm text-gray-700 
@@ -3051,6 +3087,76 @@ ${activeTab === tab.id
         </div>
       </nav>
 
+      {/* Widget de test de la messagerie */}
+      {showMessagingTest && patientProfile && (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold text-blue-800">🧪 Test de la Messagerie</h3>
+              <button
+                onClick={() => setShowMessagingTest(false)}
+                className="text-blue-600 hover:text-blue-800 text-sm"
+              >
+                × Fermer
+              </button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-white rounded-lg p-4 border border-blue-200">
+                <h4 className="font-medium text-gray-800 mb-2">MessagingButton</h4>
+                <MessagingButton
+                  userId={patientProfile.id_patient || patientProfile.id}
+                  role="patient"
+                  token={localStorage.getItem('jwt') || localStorage.getItem('token')}
+                  conversationId={null}
+                  onClick={() => handleOpenMessaging(null)}
+                  unreadCount={0}
+                />
+              </div>
+              <div className="bg-white rounded-lg p-4 border border-blue-200">
+                <h4 className="font-medium text-gray-800 mb-2">MessagingWidget</h4>
+                <MessagingWidget
+                  userId={patientProfile.id_patient || patientProfile.id}
+                  role="patient"
+                  token={localStorage.getItem('jwt') || localStorage.getItem('token')}
+                  conversationId={null}
+                  onClose={() => {}}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Interface de messagerie principale */}
+      {showMessagingInterface && patientProfile && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-6xl h-5/6 flex flex-col">
+            <div className="flex justify-between items-center p-4 border-b bg-gradient-to-r from-blue-600 to-purple-600 text-white">
+              <div className="flex items-center space-x-3">
+                <h3 className="text-lg font-semibold">
+                  💬 Messagerie - {patientProfile.prenom} {patientProfile.nom}
+                </h3>
+              </div>
+              <button
+                onClick={handleCloseMessaging}
+                className="text-white hover:text-gray-200 text-2xl font-bold"
+              >
+                ×
+              </button>
+            </div>
+            <div className="flex-1 overflow-hidden">
+              <ChatMessage
+                userId={patientProfile.id_patient || patientProfile.id}
+                role="patient"
+                token={localStorage.getItem('jwt') || localStorage.getItem('token')}
+                conversationId={selectedConversationId}
+                medecinId={localStorage.getItem('currentMedecinId')}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {loading && (
@@ -3068,6 +3174,7 @@ ${activeTab === tab.id
         {activeTab === 'historique' && (
           <HistoriqueMedical 
             patientProfile={patientProfile}
+            onOpenMessaging={handleOpenMessaging}
           />
         )}
 

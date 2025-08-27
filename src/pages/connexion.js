@@ -85,14 +85,14 @@ function Connexion() {
                 console.log('✅ Réponse complète de connexion patient:', response);
                 
                 // Vérifier si la 2FA est requise - amélioration de la détection
-                const requires2FA = response.data?.status === 'requires2FA' || 
-                                  response.data?.requires2FA || 
-                                  response.data?.message?.includes('2FA') ||
-                                  response.data?.message?.includes('double facteur') ||
-                                  response.data?.message?.includes('authentification') ||
-                                  response.data?.two_factor_required ||
-                                  response.data?.data?.two_factor_required;
-                
+                const requires2FA = response.data?.status === 'requires2FA' ||
+                    response.data?.requires2FA ||
+                    response.data?.message?.includes('2FA') ||
+                    response.data?.message?.includes('double facteur') ||
+                    response.data?.message?.includes('authentification') ||
+                    response.data?.two_factor_required ||
+                    response.data?.data?.two_factor_required;
+
                 console.log('🔍 Vérification 2FA:', {
                     status: response.data?.status,
                     requires2FA: response.data?.requires2FA,
@@ -187,10 +187,10 @@ function Connexion() {
                         console.log('🔐 Réponse create2FASession:', twoFAResponse);
                         
                         // Extraire le tempTokenId de la réponse
-                        const tempTokenId = twoFAResponse.data?.tempTokenId || 
-                                          twoFAResponse.tempTokenId || 
-                                          twoFAResponse.data?.sessionId ||
-                                          twoFAResponse.sessionId;
+                        const tempTokenId = twoFAResponse.data?.tempTokenId ||
+                            twoFAResponse.tempTokenId ||
+                            twoFAResponse.data?.sessionId ||
+                            twoFAResponse.sessionId;
                         
                         console.log('🔐 tempTokenId extrait:', tempTokenId);
                         
@@ -281,10 +281,10 @@ function Connexion() {
                         console.log('🔐 Réponse create2FASession:', twoFAResponse);
                         
                         // Extraire le tempTokenId de la réponse
-                        const tempTokenId = twoFAResponse.data?.tempTokenId || 
-                                          twoFAResponse.tempTokenId || 
-                                          twoFAResponse.data?.sessionId ||
-                                          twoFAResponse.sessionId;
+                        const tempTokenId = twoFAResponse.data?.tempTokenId ||
+                            twoFAResponse.tempTokenId ||
+                            twoFAResponse.data?.sessionId ||
+                            twoFAResponse.sessionId;
                         
                         console.log('🔐 tempTokenId extrait:', tempTokenId);
                         

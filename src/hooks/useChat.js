@@ -1,3 +1,4 @@
+// src/hooks/useChat.js
 import { useState, useEffect, useCallback } from 'react';
 import signalingService from '../services/signalingService';
 

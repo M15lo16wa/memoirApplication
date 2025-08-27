@@ -120,24 +120,43 @@ class SignalingService {
 
         if (!this.tokens.primaryToken) {
             console.error('❌ Aucun token valide disponible pour la connexion');
+            console.log('�� Tokens disponibles:', {
+                jwt: !!this.tokens.jwt,
+                token: !!this.tokens.token,
+                patient: !!this.tokens.patient,
+                medecin: !!this.tokens.medecin
+            });
             return false;
         }
 
         console.log('🔌 Tentative de connexion WebSocket...');
-        
-        this.socket = io(`${this.baseURL}/messaging`, {
-            auth: {
-                token: this.tokens.primaryToken,
-                userType: this.userInfo.userType,
-                userId: this.userInfo.userId,
-                role: this.userInfo.role
-            },
-            transports: ['websocket'],
-            timeout: 10000
+        console.log('🔍 Paramètres de connexion:', {
+            baseURL: this.baseURL,
+            userType: this.userInfo.userType,
+            userId: this.userInfo.userId,
+            role: this.userInfo.role,
+            hasToken: !!this.tokens.primaryToken
         });
+        
+        try {
+            this.socket = io(this.baseURL, {
+                auth: {
+                    token: this.tokens.primaryToken,
+                    userType: this.userInfo.userType,
+                    userId: this.userInfo.userId,
+                    role: this.userInfo.role
+                },
+                transports: ['websocket'],
+                timeout: 10000,
+                forceNew: true
+            });
 
-        this.setupSocketListeners();
-        return true;
+            this.setupSocketListeners();
+            return true;
+        } catch (error) {
+            console.error('❌ Erreur lors de la création de la connexion WebSocket:', error);
+            return false;
+        }
     }
 
     /**
@@ -450,8 +469,9 @@ class SignalingService {
 
     /**
      * Créer une conversation
+     * CORRECTION: Adaptation aux paramètres de votre API backend
      */
-    async createConversation(participants, type = 'private') {
+    async createConversation(patientId, professionnelId, type = 'patient_medecin', titre = null) {
         try {
             const response = await fetch(`${this.baseURL}/api/messaging/conversations`, {
                 method: 'POST',
@@ -460,8 +480,10 @@ class SignalingService {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    participants,
-                    type
+                    patient_id: patientId,
+                    professionnel_id: professionnelId,
+                    type_conversation: type,
+                    titre: titre || `Conversation ${patientId}-${professionnelId}`
                 })
             });
 
@@ -485,11 +507,12 @@ class SignalingService {
 
     /**
      * Obtenir les messages d'une conversation
+     * CORRECTION: Adaptation aux paramètres de votre API backend
      */
-    async getConversationMessages(conversationId, page = 1, limit = 50) {
+    async getConversationMessages(conversationId, limit = 50, offset = 0) {
         try {
             const response = await fetch(
-                `${this.baseURL}/api/messaging/conversations/${conversationId}/messages?page=${page}&limit=${limit}`,
+                `${this.baseURL}/api/messaging/conversations/${conversationId}/messages?limit=${limit}&offset=${offset}`,
                 {
                     headers: {
                         'Authorization': `Bearer ${this.tokens.primaryToken}`
@@ -515,9 +538,228 @@ class SignalingService {
         }
     }
 
+    // ===== NOUVELLES MÉTHODES WEBRTC =====
 
+    /**
+     * Créer une session WebRTC
+     */
+    async createWebRTCSession(conversationId, sessionType, sdpOffer) {
+        try {
+            const response = await fetch(`${this.baseURL}/api/messaging/webrtc/sessions`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${this.tokens.primaryToken}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    conversation_id: conversationId,
+                    session_type: sessionType,
+                    sdp_offer: sdpOffer
+                })
+            });
 
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
 
+            const data = await response.json();
+            return {
+                success: true,
+                session: data.data?.session
+            };
+        } catch (error) {
+            console.error('❌ Erreur lors de la création de la session WebRTC:', error);
+            return {
+                success: false,
+                error: error.message
+            };
+        }
+    }
+
+    /**
+     * Répondre à une session WebRTC
+     */
+    async answerWebRTCSession(sessionId, sdpAnswer) {
+        try {
+            const response = await fetch(`${this.baseURL}/api/messaging/webrtc/sessions/${sessionId}/answer`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${this.tokens.primaryToken}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    sdp_answer: sdpAnswer
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            const data = await response.json();
+            return {
+                success: true,
+                session: data.data?.session
+            };
+        } catch (error) {
+            console.error('❌ Erreur lors de la réponse WebRTC:', error);
+            return {
+                success: false,
+                error: error.message
+            };
+        }
+    }
+
+    /**
+     * Ajouter des candidats ICE
+     */
+    async addICECandidates(sessionId, candidates) {
+        try {
+            const response = await fetch(`${this.baseURL}/api/messaging/webrtc/sessions/${sessionId}/ice-candidates`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${this.tokens.primaryToken}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    candidates
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            return {
+                success: true,
+                message: 'Candidats ICE ajoutés'
+            };
+        } catch (error) {
+            console.error('❌ Erreur lors de l\'ajout des candidats ICE:', error);
+            return {
+                success: false,
+                error: error.message
+            };
+        }
+    }
+
+    /**
+     * Terminer une session WebRTC
+     */
+    async endWebRTCSession(sessionId) {
+        try {
+            const response = await fetch(`${this.baseURL}/api/messaging/webrtc/sessions/${sessionId}`, {
+                method: 'PATCH',
+                headers: {
+                    'Authorization': `Bearer ${this.tokens.primaryToken}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    statut: 'ended'
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            return {
+                success: true,
+                message: 'Session WebRTC terminée'
+            };
+        } catch (error) {
+            console.error('❌ Erreur lors de la terminaison de la session WebRTC:', error);
+            return {
+                success: false,
+                error: error.message
+            };
+        }
+    }
+
+    /**
+     * Obtenir les détails d'une conversation
+     */
+    async getConversationDetails(conversationId) {
+        try {
+            const response = await fetch(`${this.baseURL}/api/messaging/conversations/${conversationId}`, {
+                headers: {
+                    'Authorization': `Bearer ${this.tokens.primaryToken}`
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            const data = await response.json();
+            return {
+                success: true,
+                conversation: data.data?.conversation
+            };
+        } catch (error) {
+            console.error('❌ Erreur lors de la récupération des détails de conversation:', error);
+            return {
+                success: false,
+                error: error.message
+            };
+        }
+    }
+
+    /**
+     * Marquer un message comme lu
+     */
+    async markMessageAsRead(messageId) {
+        try {
+            const response = await fetch(`${this.baseURL}/api/messaging/messages/${messageId}/read`, {
+                method: 'PATCH',
+                headers: {
+                    'Authorization': `Bearer ${this.tokens.primaryToken}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            const data = await response.json();
+            return {
+                success: true,
+                message: data.data?.message
+            };
+        } catch (error) {
+            console.error('❌ Erreur lors du marquage du message:', error);
+            return {
+                success: false,
+                error: error.message
+            };
+        }
+    }
+
+    /**
+     * Diagnostic complet du service
+     */
+    getDiagnosticInfo() {
+        return {
+            serviceInitialized: !!this.tokens,
+            socketExists: !!this.socket,
+            socketConnected: this.socket?.connected || false,
+            baseURL: this.baseURL,
+            tokens: this.tokens ? {
+                hasJWT: !!this.tokens.jwt,
+                hasToken: !!this.tokens.token,
+                hasPatient: !!this.tokens.patient,
+                hasMedecin: !!this.tokens.medecin,
+                hasPrimaryToken: !!this.tokens.primaryToken
+            } : null,
+            userInfo: this.userInfo,
+            connectionStatus: this.socket ? {
+                connected: this.socket.connected,
+                id: this.socket.id,
+                disconnected: this.socket.disconnected
+            } : null
+        };
+    }
 }
 
 // Exporter une instance unique

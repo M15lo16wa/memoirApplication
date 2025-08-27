@@ -1,3 +1,4 @@
+// src/components/dmp/DMPHistory.js
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { getDMPAccessHistory, getPatientInfo, getPatientAuthorizations, getPatientConsultations } from '../../services/api/dmpApi';
 import { useDMP } from '../../hooks/useDMP';
@@ -6,8 +7,7 @@ import { use2FA } from '../../hooks/use2FA';
 // Protection 2FA pour l'accès aux dossiers patients
 import Validate2FA from '../2fa/Validate2FA';
 
-import MessagingWidget from '../../messaging/components/MessagingWidget'
-import MessagingButton from '../../messaging/components/MessagingButton'
+import { MessagingWidget, MessagingButton } from '../../messaging'
 
 function DMPHistory({ patientId = null }) {
   // Fonctions utilitaires pour sécuriser l'affichage des données

@@ -16,7 +16,7 @@ import DMPPatientView from './pages/DMPPatientView';
 import Agenda from './pages/agenda';
 
 // messagerie
-import ChatMessage from './messaging/components/chatMessage';
+import { ChatMessage } from './messaging';
 
 
 

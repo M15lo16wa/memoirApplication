@@ -17,6 +17,25 @@ function DMPPatientView() {
   const [revokingAccess, setRevokingAccess] = useState(false);
   const previewBlobUrlRef = useRef(null);
 
+  // 🔍 DEBUG - Vérifier l'état des tokens au chargement du composant
+  useEffect(() => {
+    console.log('🔍 DEBUG - DMPPatientView chargé, vérification des tokens:');
+    console.log('  - Token JWT (jwt):', localStorage.getItem('jwt') ? '✅ Présent' : '❌ Absent');
+    console.log('  - Token (token):', localStorage.getItem('token') ? '✅ Présent' : '❌ Absent');
+    console.log('  - Token JWT valeur:', localStorage.getItem('jwt'));
+    console.log('  - Token valeur:', localStorage.getItem('token'));
+    console.log('  - Toutes les clés localStorage:', Object.keys(localStorage));
+    console.log('  - Patient ID:', patientId);
+    
+    // 🔍 DEBUG - Vérifier l'état des tokens IMMÉDIATEMENT
+    console.log('🔍 DEBUG - État IMMÉDIAT des tokens dans DMPPatientView:');
+    console.log('  - localStorage.getItem("jwt"):', localStorage.getItem('jwt'));
+    console.log('  - localStorage.getItem("token"):', localStorage.getItem('token'));
+    console.log('  - localStorage.getItem("medecin"):', localStorage.getItem('medecin'));
+    console.log('  - localStorage.getItem("professionnel"):', localStorage.getItem('professionnel'));
+    console.log('  - localStorage.getItem("tempTokenId_urgence"):', localStorage.getItem('tempTokenId_urgence'));
+  }, [patientId]);
+
   // Normalise une URL de fichier potentiellement relative vers une URL absolue côté backend
   const resolveFileUrl = useCallback((rawUrl) => {
     if (!rawUrl) {
@@ -151,9 +170,16 @@ function DMPPatientView() {
       
       // ✅ ÉTAPE 1: Récupérer l'autorisation active pour obtenir son ID
       try {
+        const jwtToken = localStorage.getItem('jwt');
+        console.log('🔍 DEBUG - Token utilisé pour la vérification d\'autorisation:');
+        console.log('  - Token JWT récupéré:', jwtToken ? '✅ Présent' : '❌ Absent');
+        console.log('  - Longueur du token:', jwtToken ? jwtToken.length : 0);
+        console.log('  - Début du token:', jwtToken ? jwtToken.substring(0, 50) + '...' : 'N/A');
+        console.log('  - Token complet:', jwtToken);
+        
         const verification = await fetch(`http://localhost:3000/api/access/status/${patientId}?professionnelId=${professionnelId}`, {
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('jwt')}`,
+            'Authorization': `Bearer ${jwtToken}`,
             'Content-Type': 'application/json'
           }
         });
@@ -202,8 +228,14 @@ function DMPPatientView() {
     
     console.log('🔍 DEBUG - Vérification autorisation DMPPatientView:');
     console.log('  - Token:', jwtToken ? '✅ Présent' : '❌ Absent');
+    console.log('  - Token JWT (jwt):', localStorage.getItem('jwt') ? '✅ Présent' : '❌ Absent');
+    console.log('  - Token (token):', localStorage.getItem('token') ? '✅ Présent' : '❌ Absent');
+    console.log('  - Token utilisé:', jwtToken);
+    console.log('  - Longueur du token:', jwtToken ? jwtToken.length : 0);
+    console.log('  - Début du token:', jwtToken ? jwtToken.substring(0, 50) + '...' : 'N/A');
     console.log('  - Patient data:', patientData ? '✅ Présent' : '❌ Absent');
     console.log('  - Médecin data:', medecinData ? '✅ Présent' : '❌ Absent');
+    console.log('  - Toutes les clés localStorage:', Object.keys(localStorage));
     
     // Vérifier qu'il y a au moins un token et des données utilisateur
     if (!jwtToken || (!patientData && !medecinData)) {

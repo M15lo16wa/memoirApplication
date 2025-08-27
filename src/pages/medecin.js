@@ -6,8 +6,9 @@ import { ProtectedMedecinRoute } from "../services/api/protectedRoute";
 import { FaComments, FaCalendarAlt, FaUserInjured, FaChartBar, FaSearch, FaSpinner, FaBell, FaUser } from "react-icons/fa";
 
 // Import des composants de messagerie
-import { MessagingButton, MessagingWidget } from "../messaging/components";
+import { MessagingButton, MessagingWidget, ChatMessage } from "../messaging";
 import signalingService from "../services/signalingService";
+import { getPatientsByMedecin } from "../services/api/patientApi";
 
 function Medecin() {
     const [activeSection, setActiveSection] = useState('dashboard');
@@ -25,9 +26,18 @@ function Medecin() {
     
     // État pour la messagerie sécurisée
     const [showMessaging, setShowMessaging] = useState(false);
+    const [showPatientSelection, setShowPatientSelection] = useState(false);
+    const [selectedPatientId, setSelectedPatientId] = useState(null);
+    const [selectedConversationId, setSelectedConversationId] = useState(null);
     const [userId, setUserId] = useState(null);
     const [role, setRole] = useState(null);
     const [jwtToken, setJwtToken] = useState(null);
+    
+    // État pour la liste des patients
+    const [patients, setPatients] = useState([]);
+    const [loadingPatients, setLoadingPatients] = useState(false);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [error, setError] = useState(null);
 
     const handleSend = useCallback(() => {
         if (input.trim()) {
@@ -85,46 +95,256 @@ function Medecin() {
         }
     }, [userId, role, jwtToken]);
 
+    // Charger la liste des patients depuis le serveur
+    const loadPatients = async () => {
+        try {
+            setLoadingPatients(true);
+            setError(null);
+            
+            if (!userId) {
+                console.error('❌ ID utilisateur non disponible pour charger les patients');
+                setError("ID utilisateur non disponible");
+                return;
+            }
+            
+            console.log('🔍 Chargement des patients pour le médecin:', userId);
+            const patientsData = await getPatientsByMedecin(userId);
+            
+            if (patientsData && Array.isArray(patientsData)) {
+                console.log('✅ Patients récupérés:', patientsData.length);
+                setPatients(patientsData);
+            } else {
+                console.warn('⚠️ Aucun patient trouvé ou format de réponse invalide');
+                setPatients([]);
+            }
+        } catch (error) {
+            console.error('❌ Erreur lors du chargement des patients:', error);
+            setError(`Erreur lors du chargement des patients: ${error.message}`);
+            setPatients([]);
+        } finally {
+            setLoadingPatients(false);
+        }
+    };
+
+    // Fonction pour ouvrir la sélection de patient
+    const handleOpenPatientSelection = () => {
+        setShowPatientSelection(true);
+        loadPatients();
+    };
+
+    // Fonction pour sélectionner un patient et créer une conversation
+    const handleSelectPatient = (patientId) => {
+        const selectedPatient = patients.find(p => (p.id || p.id_patient) === patientId);
+        if (selectedPatient) {
+            console.log('✅ Patient sélectionné:', selectedPatient);
+            setSelectedPatientId(patientId);
+            setShowPatientSelection(false);
+            setShowMessaging(true);
+            setSelectedConversationId(null); // Nouvelle conversation
+            setError(null); // Nettoyer les erreurs
+        } else {
+            console.error('❌ Patient non trouvé avec l\'ID:', patientId);
+            setError("Patient non trouvé");
+        }
+    };
+
+    // Fonction pour fermer la messagerie
+    const handleCloseMessaging = () => {
+        setShowMessaging(false);
+        setSelectedPatientId(null);
+        setSelectedConversationId(null);
+    };
+
     const renderContent = () => {
         if (activeSection === 'messaging') {
             return (
                 <div className="bg-white rounded-lg shadow-md p-6 mt-6">
                     <h2 className="text-xl font-bold text-gray-800 mb-6">Messagerie Sécurisée</h2>
                     
-                    {/* Bouton d'ouverture de la messagerie */}
+                    {/* Boutons d'action pour la messagerie */}
                     {userId && role && jwtToken && !showMessaging && (
-                        <div className="text-center py-8">
-                            <MessagingButton
-                                userId={userId}
-                                role={role}
-                                token={jwtToken}
-                                onClick={() => setShowMessaging(true)}
-                            />
+                        <div className="text-center py-8 space-y-4">
+                            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                                <button
+                                    onClick={handleOpenPatientSelection}
+                                    className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center space-x-2"
+                                >
+                                    <FaUserInjured className="w-5 h-5" />
+                                    <span>Nouvelle conversation avec un patient</span>
+                                </button>
+                                
+                                <button
+                                    onClick={() => setShowMessaging(true)}
+                                    className="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center space-x-2"
+                                >
+                                    <FaComments className="w-5 h-5" />
+                                    <span>Voir les conversations existantes</span>
+                                </button>
+                            </div>
+                            
                             <p className="text-sm text-gray-600 mt-4">
-                                Cliquez sur le bouton ci-dessus pour accéder à la messagerie sécurisée
+                                Choisissez une option pour accéder à la messagerie sécurisée
                             </p>
                         </div>
                     )}
                     
-                    {/* Widget de messagerie */}
-                    {userId && role && jwtToken && showMessaging && (
-                        <div>
-                            <div className="flex justify-between items-center mb-4">
-                                <h3 className="text-lg font-semibold">Messagerie avec les patients</h3>
+                    {/* Interface de sélection de patient */}
+                    {userId && role && jwtToken && showPatientSelection && (
+                        <div className="bg-white rounded-lg shadow-md p-6">
+                            <div className="flex justify-between items-center mb-6">
+                                <h3 className="text-xl font-semibold text-gray-800">Sélectionner un patient</h3>
                                 <button
-                                    onClick={() => setShowMessaging(false)}
+                                    onClick={() => setShowPatientSelection(false)}
                                     className="text-gray-500 hover:text-gray-700 text-sm"
                                 >
                                     ← Retour
                                 </button>
                             </div>
-                            <MessagingWidget
-                                userId={userId}
-                                role={role}
-                                token={jwtToken}
-                                conversationId={null}
-                                onClose={() => setShowMessaging(false)}
-                            />
+                            
+                            {/* Barre de recherche */}
+                            <div className="mb-6">
+                                <div className="relative">
+                                    <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                                    <input
+                                        type="text"
+                                        placeholder="Rechercher un patient par nom, prénom ou numéro de sécurité sociale..."
+                                        value={searchTerm}
+                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                        className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    />
+                                </div>
+                            </div>
+                            
+                            {/* Messages d'erreur */}
+                            {error && (
+                                <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-red-800 text-sm">{error}</span>
+                                        <button
+                                            onClick={() => setError(null)}
+                                            className="text-red-600 hover:text-red-800 text-lg"
+                                        >
+                                            ×
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                            
+                            {/* Liste des patients */}
+                            <div className="space-y-3">
+                                {loadingPatients ? (
+                                    <div className="text-center py-8">
+                                        <FaSpinner className="animate-spin mx-auto text-blue-500 text-2xl mb-2" />
+                                        <p className="text-gray-600">Chargement des patients...</p>
+                                    </div>
+                                ) : patients.length === 0 ? (
+                                    <div className="text-center py-8">
+                                        <FaUser className="mx-auto text-gray-400 text-3xl mb-2" />
+                                        <p className="text-gray-600">Aucun patient trouvé</p>
+                                        <p className="text-sm text-gray-500 mt-1">
+                                            {error ? 'Erreur lors du chargement' : 'Vous n\'avez pas encore de patients assignés'}
+                                        </p>
+                                        {!error && (
+                                            <button
+                                                onClick={loadPatients}
+                                                className="mt-3 text-blue-600 hover:text-blue-800 text-sm underline"
+                                            >
+                                                Réessayer
+                                            </button>
+                                        )}
+                                    </div>
+                                ) : (
+                                    patients
+                                        .filter(patient => {
+                                            const searchLower = searchTerm.toLowerCase();
+                                            const nom = (patient.nom || '').toLowerCase();
+                                            const prenom = (patient.prenom || '').toLowerCase();
+                                            const numeroAssure = (patient.numero_assure || patient.numero_securite_sociale || '').toLowerCase();
+                                            
+                                            return nom.includes(searchLower) || 
+                                                   prenom.includes(searchLower) || 
+                                                   numeroAssure.includes(searchLower);
+                                        })
+                                        .map(patient => {
+                                            // Gérer différents formats de données patient
+                                            const patientId = patient.id || patient.id_patient;
+                                            const nom = patient.nom || 'N/A';
+                                            const prenom = patient.prenom || 'N/A';
+                                            const numeroAssure = patient.numero_assure || patient.numero_securite_sociale || 'N/A';
+                                            
+                                            return (
+                                                <div
+                                                    key={patientId}
+                                                    onClick={() => handleSelectPatient(patientId)}
+                                                    className="p-4 border border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-300 cursor-pointer transition-colors"
+                                                >
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex items-center space-x-3">
+                                                            <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                                                                <FaUser className="text-blue-600" />
+                                                            </div>
+                                                            <div>
+                                                                <h4 className="font-medium text-gray-900">
+                                                                    {prenom} {nom}
+                                                                </h4>
+                                                                <p className="text-sm text-gray-600">
+                                                                    N° Sécurité Sociale: {numeroAssure}
+                                                                </p>
+                                                                {patient.date_naissance && (
+                                                                    <p className="text-xs text-gray-500 mt-1">
+                                                                        Né(e) le: {new Date(patient.date_naissance).toLocaleDateString('fr-FR')}
+                                                                    </p>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                        <div className="text-blue-600">
+                                                            <FaComments className="w-5 h-5" />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })
+                                )}
+                            </div>
+                        </div>
+                    )}
+                    
+                    {/* Interface de messagerie avec ChatMessage */}
+                    {userId && role && jwtToken && showMessaging && (
+                        <div className="bg-white rounded-lg shadow-md">
+                            <div className="flex justify-between items-center p-6 border-b border-gray-200">
+                                <div>
+                                    <h3 className="text-xl font-semibold text-gray-800">
+                                        {selectedPatientId ? 'Nouvelle conversation' : 'Conversations existantes'}
+                                    </h3>
+                                    {selectedPatientId && (
+                                        <div className="text-sm text-gray-600 mt-1">
+                                            <p className="font-medium">
+                                                Patient sélectionné: {patients.find(p => (p.id || p.id_patient) === selectedPatientId)?.prenom} {patients.find(p => (p.id || p.id_patient) === selectedPatientId)?.nom}
+                                            </p>
+                                            <p className="text-xs text-gray-500">
+                                                ID: {selectedPatientId}
+                                            </p>
+                                        </div>
+                                    )}
+                                </div>
+                                <button
+                                    onClick={handleCloseMessaging}
+                                    className="text-gray-500 hover:text-gray-700 text-sm"
+                                >
+                                    ← Retour
+                                </button>
+                            </div>
+                            
+                            <div className="h-96">
+                                <ChatMessage
+                                    userId={userId}
+                                    role={role}
+                                    token={jwtToken}
+                                    conversationId={selectedConversationId}
+                                    patientId={selectedPatientId}
+                                />
+                            </div>
                         </div>
                     )}
                     

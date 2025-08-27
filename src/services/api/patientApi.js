@@ -14,12 +14,31 @@ const api = axios.create({
 // PRIORITÉ : Token patient (JWT) pour accéder aux données patient
 api.interceptors.request.use(
     (config) => {
+        // 🔍 DEBUG - Vérifier tous les tokens disponibles
+        const allTokens = {
+            originalJWT: localStorage.getItem('originalJWT'),
+            firstConnectionToken: localStorage.getItem('firstConnectionToken'),
+            jwt: localStorage.getItem('jwt'),
+            token: localStorage.getItem('token'),
+            tempTokenIdUrgence: localStorage.getItem('tempTokenId_urgence')
+        };
+        
+        console.log('[patientApi] 🔍 Tokens disponibles:', {
+            hasOriginalJWT: !!allTokens.originalJWT,
+            hasFirstConnectionToken: !!allTokens.firstConnectionToken,
+            hasJwt: !!allTokens.jwt,
+            hasToken: !!allTokens.token,
+            hasTempTokenIdUrgence: !!allTokens.tempTokenIdUrgence,
+            jwtLength: allTokens.jwt?.length || 0,
+            tokenLength: allTokens.token?.length || 0
+        });
+        
         // ✅ SÉLECTION STRICTE : Prioriser les JWT de première connexion et rejeter les tokens temporaires
         const candidates = [
-            localStorage.getItem('originalJWT'),
-            localStorage.getItem('firstConnectionToken'),
-            localStorage.getItem('jwt'),
-            localStorage.getItem('token'),
+            allTokens.originalJWT,
+            allTokens.firstConnectionToken,
+            allTokens.jwt,
+            allTokens.token,
         ];
         
         let usedToken = null;
@@ -38,9 +57,15 @@ api.interceptors.request.use(
         
         if (usedToken) {
             config.headers.Authorization = `Bearer ${usedToken}`;
-            console.log('[patientApi] JWT valide utilisé pour Authorization:', `${usedToken.substring(0, 20)}...`);
+            console.log('[patientApi] ✅ JWT valide utilisé pour Authorization:', `${usedToken.substring(0, 20)}...`);
         } else {
-            console.warn('[patientApi] Aucun JWT valide disponible pour l\'authentification');
+            console.warn('[patientApi] ⚠️ Aucun JWT valide disponible pour l\'authentification');
+            console.log('[patientApi] 🔍 Détail des tokens rejetés:', {
+                originalJWT: allTokens.originalJWT ? `${allTokens.originalJWT.substring(0, 20)}...` : 'null',
+                firstConnectionToken: allTokens.firstConnectionToken ? `${allTokens.firstConnectionToken.substring(0, 20)}...` : 'null',
+                jwt: allTokens.jwt ? `${allTokens.jwt.substring(0, 20)}...` : 'null',
+                token: allTokens.token ? `${allTokens.token.substring(0, 20)}...` : 'null'
+            });
         }
         
         return config;
@@ -135,15 +160,15 @@ export const getPatients = async () => {
 };
 
 // 1b-) Récupération des patients d'un médecin spécifique (FONCTION SÉCURISÉE)
-export const getPatientsByMedecin = async (medecinId) => {
+export const getPatientsByMedecin = async () => {
     try {
-        console.log('🔍 [patientApi] Récupération des patients du médecin:', medecinId);
+        console.log('🔍 [patientApi] Récupération des patient:',);
         
         // Endpoint spécifique pour récupérer les patients d'un médecin
-        const response = await api.get(`/medecin/${medecinId}/patients`);
+        const response = await api.get(`/patient`);
         
         if (!response || !response.data) {
-            console.error('❌ [patientApi] Réponse API invalide pour les patients du médecin');
+            console.error('❌ [patientApi] Réponse API invalide aucun patient trouvé');
             return [];
         }
         
@@ -161,7 +186,7 @@ export const getPatientsByMedecin = async (medecinId) => {
         
         // Fallback : essayer de récupérer via les consultations
         console.log('🔄 [patientApi] Tentative de récupération via les consultations...');
-        const consultationsResponse = await api.get(`/medecin/${medecinId}/consultations`);
+        const consultationsResponse = await api.get(`/consultation`);
         
         if (consultationsResponse && consultationsResponse.data && consultationsResponse.data.status === 'success') {
             const consultations = consultationsResponse.data.data || [];
@@ -194,11 +219,11 @@ export const getPatientsByMedecin = async (medecinId) => {
             return patients;
         }
         
-        console.warn('⚠️ [patientApi] Aucun patient trouvé pour le médecin:', medecinId);
+        console.warn('⚠️ [patientApi] Aucun patient trouvé:',);
         return [];
         
     } catch (error) {
-        console.error('❌ [patientApi] Erreur lors de la récupération des patients du médecin:', error);
+        console.error('❌ [patientApi] Erreur lors de la récupération des patients:', error);
         
         // En cas d'erreur, retourner une liste vide mais log l'erreur
         if (error.response) {

@@ -477,6 +477,26 @@ export const refuserAutorisation = async (autorisationId, raisonRefus) => {
  */
 export const searchPatientFullData = async ({ nom = '', prenom = '', twoFactorToken }) => {
     try {
+        console.log('🔍 searchPatientFullData appelé avec:', { nom, prenom, hasTwoFactorToken: !!twoFactorToken });
+        console.log('🔍 DEBUG - Paramètres détaillés:', {
+            nom: nom,
+            prenom: prenom,
+            twoFactorToken: twoFactorToken,
+            twoFactorTokenType: typeof twoFactorToken,
+            twoFactorTokenLength: twoFactorToken ? String(twoFactorToken).length : 0,
+            timestamp: new Date().toISOString()
+        });
+        
+        // 🔍 DEBUG - Vérifier l'état des tokens au début de la fonction
+        console.log('🔍 DEBUG - État des tokens au début de searchPatientFullData:', {
+            hasJwt: !!localStorage.getItem('jwt'),
+            hasToken: !!localStorage.getItem('token'),
+            jwtValue: localStorage.getItem('jwt')?.substring(0, 50) + '...',
+            tokenValue: localStorage.getItem('token')?.substring(0, 50) + '...',
+            tempTokenIdUrgence: localStorage.getItem('tempTokenId_urgence'),
+            localStorageKeys: Object.keys(localStorage)
+        });
+        
         // Si pas de token 2FA, créer une session 2FA et déclencher le flux
         if (!twoFactorToken) {
             console.log('🔐 Aucun token 2FA fourni, création de session 2FA...');
@@ -515,9 +535,18 @@ export const searchPatientFullData = async ({ nom = '', prenom = '', twoFactorTo
                 }
                 
                 console.log('🔐 Création de session 2FA avec:', { userType, identifier });
+                console.log('🔍 DEBUG - Données utilisateur récupérées:', {
+                    hasMedecinData: !!medecinData,
+                    hasProfessionnelData: !!professionnelData,
+                    medecinKeys: medecinData ? Object.keys(JSON.parse(medecinData)) : [],
+                    professionnelKeys: professionnelData ? Object.keys(JSON.parse(professionnelData)) : []
+                });
                 
                 // Importer et utiliser la fonction de création de session 2FA
+                console.log('📦 Import de create2FASession...');
                 const { create2FASession } = await import('./twoFactorApi.js');
+                console.log('✅ Import réussi, appel de create2FASession...');
+                
                 const sessionResult = await create2FASession({
                     userType,
                     identifier,
@@ -526,6 +555,16 @@ export const searchPatientFullData = async ({ nom = '', prenom = '', twoFactorTo
                 });
                 
                 console.log('🔐 Session 2FA créée:', sessionResult);
+                console.log('🔍 DEBUG - Structure de sessionResult:', {
+                    hasStatus: !!sessionResult?.status,
+                    statusValue: sessionResult?.status,
+                    hasSuccess: !!sessionResult?.success,
+                    successValue: sessionResult?.success,
+                    hasData: !!sessionResult?.data,
+                    hasTempTokenId: !!sessionResult?.data?.tempTokenId,
+                    tempTokenIdValue: sessionResult?.data?.tempTokenId,
+                    fullResult: JSON.stringify(sessionResult, null, 2)
+                });
                 
                 // Vérifier que la session a été créée avec succès
                 // create2FASession retourne { status: 'success', data: { tempTokenId, ... } }
@@ -545,6 +584,7 @@ export const searchPatientFullData = async ({ nom = '', prenom = '', twoFactorTo
                     });
                     
                     // Déclencher le flux 2FA en retournant une erreur 403
+                    console.log('🚨 Déclenchement du flux 2FA - Lancement d\'une erreur 403...');
                     const error = new Error('Veuillez valider votre authentification 2FA pour accéder aux données patient');
                     error.response = {
                         status: 403,
@@ -576,6 +616,24 @@ export const searchPatientFullData = async ({ nom = '', prenom = '', twoFactorTo
         
         // Faire la recherche directement avec le token JWT validé (comme l'authentification normale)
         console.log('🔐 2FA validée, recherche directe avec token JWT:', { nom, prenom, hasJWT: !!jwtToken });
+        console.log('🔍 DEBUG - Token JWT récupéré:', {
+            hasJwt: !!localStorage.getItem('jwt'),
+            hasToken: !!localStorage.getItem('token'),
+            jwtLength: localStorage.getItem('jwt')?.length || 0,
+            tokenLength: localStorage.getItem('token')?.length || 0,
+            jwtValue: localStorage.getItem('jwt')?.substring(0, 50) + '...',
+            tokenValue: localStorage.getItem('token')?.substring(0, 50) + '...',
+            selectedToken: jwtToken.substring(0, 50) + '...',
+            selectedTokenLength: jwtToken.length
+        });
+        
+        console.log('🚀 APPEL API - GET /search-patient avec paramètres:', {
+            nom: nom || undefined,
+            prenom: prenom || undefined,
+            headers: {
+                'Authorization': `Bearer ${jwtToken.substring(0, 20)}...`
+            }
+        });
         
         const response = await dmpApi.get('/search-patient', {
             params: {
@@ -589,10 +647,26 @@ export const searchPatientFullData = async ({ nom = '', prenom = '', twoFactorTo
             }
         });
 
+        console.log('✅ APPEL API - Réponse reçue de /search-patient:', {
+            status: response.status,
+            statusText: response.statusText,
+            hasData: !!response.data,
+            dataType: typeof response.data,
+            dataKeys: response.data ? Object.keys(response.data) : [],
+            dataLength: response.data?.data?.length || 'N/A'
+        });
+
         // Format attendu: { count: number, data: [...] }
         return response.data;
     } catch (error) {
         console.error('❌ Erreur dans searchPatientFullData:', error);
+        console.log('🔍 DEBUG - Détails de l\'erreur:', {
+            message: error.message,
+            hasResponse: !!error.response,
+            responseStatus: error.response?.status,
+            responseData: error.response?.data,
+            stack: error.stack?.split('\n').slice(0, 3)
+        });
         throw error;
     }
 };

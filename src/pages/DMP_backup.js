@@ -24,7 +24,7 @@ import DMPNotification from "../components/ui/DMPNotification";
 import AutorisationsEnAttente from "../components/dmp/AutorisationsEnAttente";
 import DMPHistory from "../components/dmp/DMPHistory";
 import NotificationManager from "../components/ui/NotificationManager";
-import MessagingButton from "../messaging/components/MessagingButton";
+import { MessagingButton } from "../messaging";
 // ...existing code...
 
 // APIs
