@@ -280,15 +280,12 @@ export const validate2FASession = async (params) => {
     try {
         console.log('🔐 Validate2FASession - Validation avec:', params);
         
-        // ✅ CORRECTION : Utiliser la nouvelle route recommandée par le serveur
-        // Format: /api/auth/verify-2fa avec tempTokenId
+        // ✅ CORRECTION : Envoyer les paramètres directement sans imbrication excessive
         const requestData = {
-            verificationCode: {
-                verificationCode: params.verificationCode,
-                userType: params.userType,
-                identifier: params.identifier,
-                tempTokenId: params.tempTokenId
-            }
+            verificationCode: params.verificationCode,
+            userType: params.userType,
+            identifier: params.identifier,
+            tempTokenId: params.tempTokenId
         };
         
         console.log('🔐 DEBUG - Données de requête envoyées:', requestData);

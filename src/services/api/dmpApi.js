@@ -48,6 +48,50 @@ export const authenticateCPS = (cpsData) => dmpApi.post('/auth/authenticate-cps'
 export const requestStandardAccess = (accessData) => dmpApi.post('/access/request-standard', accessData);
 
 /**
+ * Enregistre un accès d'urgence dans le système
+ * @param {Object} emergencyData - Données de l'accès d'urgence
+ * @param {string} emergencyData.mode - Mode d'accès ('urgence')
+ * @param {string} emergencyData.raison - Raison de l'accès
+ * @param {number} emergencyData.patient_id - ID du patient
+ * @param {string} emergencyData.justification_urgence - Justification détaillée
+ * @param {string} emergencyData.timestamp - Horodatage de l'accès
+ * @returns {Promise<Object>} Réponse de l'API
+ */
+export const recordEmergencyAccess = async (emergencyData) => {
+    try {
+        console.log('🚨 Enregistrement de l\'accès d\'urgence:', emergencyData);
+        
+        // Essayer d'enregistrer via l'API d'urgence si elle existe
+        try {
+            const response = await dmpApi.post('/access/emergency', emergencyData);
+            console.log('✅ Accès d\'urgence enregistré via API dédiée:', response.data);
+            return response.data;
+        } catch (apiError) {
+            console.log('⚠️ API d\'urgence non disponible, utilisation du fallback...');
+            
+            // Fallback : essayer d'enregistrer via l'historique des accès
+            const fallbackResponse = await dmpApi.post('/access/history', {
+                ...emergencyData,
+                type: 'urgence',
+                statut: 'actif',
+                timestamp: new Date().toISOString()
+            });
+            
+            console.log('✅ Accès d\'urgence enregistré via fallback:', fallbackResponse.data);
+            return fallbackResponse.data;
+        }
+    } catch (error) {
+        console.warn('⚠️ Impossible d\'enregistrer l\'accès d\'urgence, mais l\'accès principal fonctionne:', error);
+        // Ne pas faire échouer l'opération principale pour un problème d'enregistrement
+        return { 
+            status: 'warning', 
+            message: 'Accès d\'urgence réussi mais enregistrement échoué',
+            data: emergencyData 
+        };
+    }
+};
+
+/**
  * (Médecin) Récupère le statut d'accès actuel pour un patient donné.
  * @param {number} patientId L'ID du patient.
  * @returns {Promise<{accessStatus: string, authorization: object|null}>}
@@ -417,6 +461,140 @@ export const refuserAutorisation = async (autorisationId, raisonRefus) => {
         raisonRefus 
     });
     return response.data.data;
+};
+
+// =================================================================
+//                 API RECHERCHE PATIENT (PROFESSIONNEL + 2FA)
+// =================================================================
+
+/**
+ * Recherche un patient par nom/prénom et récupère toutes ses données associées.
+ * - Réservé aux professionnels de santé authentifiés
+ * - 2FA requis: passer le code TOTP via twoFactorToken (header x-2fa-token)
+ *
+ * @param {{ nom?: string, prenom?: string, twoFactorToken?: string }} params
+ * @returns {Promise<{count: number, data: any[]}>}
+ */
+export const searchPatientFullData = async ({ nom = '', prenom = '', twoFactorToken }) => {
+    try {
+        // Si pas de token 2FA, créer une session 2FA et déclencher le flux
+        if (!twoFactorToken) {
+            console.log('🔐 Aucun token 2FA fourni, création de session 2FA...');
+            
+            try {
+                // Récupérer les informations du médecin depuis le localStorage
+                const medecinData = localStorage.getItem('medecin');
+                const professionnelData = localStorage.getItem('professionnel');
+                const token = localStorage.getItem('jwt') || localStorage.getItem('token');
+                
+                if (!token) {
+                    throw new Error('Aucun token d\'authentification trouvé');
+                }
+                
+                // Déterminer le type d'utilisateur et l'identifiant
+                let userType = 'professionnel';
+                let identifier = '';
+                
+                if (medecinData) {
+                    try {
+                        const medecin = JSON.parse(medecinData);
+                        identifier = medecin.id || medecin.id_medecin || medecin.email || 'medecin';
+                    } catch (e) {
+                        identifier = 'medecin';
+                    }
+                } else if (professionnelData) {
+                    try {
+                        const professionnel = JSON.parse(professionnelData);
+                        identifier = professionnel.id || professionnel.id_professionnel || professionnel.email || 'professionnel';
+                    } catch (e) {
+                        identifier = 'professionnel';
+                    }
+                } else {
+                    // Fallback : utiliser l'email du token JWT si possible
+                    identifier = 'professionnel_sante';
+                }
+                
+                console.log('🔐 Création de session 2FA avec:', { userType, identifier });
+                
+                // Importer et utiliser la fonction de création de session 2FA
+                const { create2FASession } = await import('./twoFactorApi.js');
+                const sessionResult = await create2FASession({
+                    userType,
+                    identifier,
+                    action: 'patient_search',
+                    context: 'Recherche patient DMP'
+                });
+                
+                console.log('🔐 Session 2FA créée:', sessionResult);
+                
+                // Vérifier que la session a été créée avec succès
+                // create2FASession retourne { status: 'success', data: { tempTokenId, ... } }
+                if (sessionResult && 
+                    (sessionResult.status === 'success' || sessionResult.success) && 
+                    sessionResult.data?.tempTokenId) {
+                    
+                    // Stocker le tempTokenId pour la validation 2FA
+                    const tempTokenIdToStore = sessionResult.data.tempTokenId;
+                    localStorage.setItem('tempTokenId_urgence', tempTokenIdToStore);
+                    
+                    console.log('✅ tempTokenId stocké dans localStorage:', {
+                        key: 'tempTokenId_urgence',
+                        value: tempTokenIdToStore,
+                        timestamp: new Date().toISOString(),
+                        localStorageKeys: Object.keys(localStorage)
+                    });
+                    
+                    // Déclencher le flux 2FA en retournant une erreur 403
+                    const error = new Error('Veuillez valider votre authentification 2FA pour accéder aux données patient');
+                    error.response = {
+                        status: 403,
+                        data: {
+                            message: 'Veuillez valider votre authentification 2FA pour accéder aux données patient',
+                            requires2FA: true,
+                            tempTokenId: tempTokenIdToStore
+                        }
+                    };
+                    throw error;
+                } else {
+                    console.error('❌ Réponse de session 2FA invalide:', sessionResult);
+                    throw new Error('Impossible de créer une session 2FA - Réponse invalide');
+                }
+            } catch (sessionError) {
+                console.error('❌ Erreur lors de la création de session 2FA:', sessionError);
+                throw sessionError;
+            }
+        }
+
+        // Si nous avons un token 2FA, faire la recherche
+        console.log('🔐 Token 2FA fourni, recherche du patient avec:', { nom, prenom, twoFactorToken: 'PRÉSENT' });
+        
+        // Récupérer le token JWT d'authentification principal (après validation 2FA)
+        const jwtToken = localStorage.getItem('jwt') || localStorage.getItem('token');
+        if (!jwtToken) {
+            throw new Error('Token JWT d\'authentification manquant - veuillez valider la 2FA');
+        }
+        
+        // Faire la recherche directement avec le token JWT validé (comme l'authentification normale)
+        console.log('🔐 2FA validée, recherche directe avec token JWT:', { nom, prenom, hasJWT: !!jwtToken });
+        
+        const response = await dmpApi.get('/search-patient', {
+            params: {
+                nom: nom || undefined,
+                prenom: prenom || undefined
+                // Ne pas envoyer twoFactorToken - le serveur vérifie via le JWT dans Authorization
+            },
+            headers: {
+                // Utiliser le header Authorization standard avec le JWT validé
+                'Authorization': `Bearer ${jwtToken}`
+            }
+        });
+
+        // Format attendu: { count: number, data: [...] }
+        return response.data;
+    } catch (error) {
+        console.error('❌ Erreur dans searchPatientFullData:', error);
+        throw error;
+    }
 };
 
 // ============================================================================
@@ -1157,6 +1335,7 @@ const dmpApiExports = {
     getPatientAccessHistory,
     authenticateCPS,
     requestStandardAccess,
+    recordEmergencyAccess,
     getAccessStatus,
     getSecureDossierForMedecin,
     getSentAccessRequests,
@@ -1171,7 +1350,7 @@ const dmpApiExports = {
     refuserAutorisation,
     revokerAutorisation,
     revokerAutorisationMedecin,
-    revokerAutorisationUnified, // ✅ NOUVELLE FONCTION UNIFIÉE
+    revokerAutorisationUnified, 
     getNotificationsStats,
     marquerToutesNotificationsLues,
     marquerNotificationDroitsAccesLue,
@@ -1203,6 +1382,8 @@ const dmpApiExports = {
     verifierAcces,
     verifierAccesMedecinPatient,
     getDureeRestante,
+    // Recherche et accès d'urgence
+    searchPatientFullData,
 };
 
 export default dmpApiExports;

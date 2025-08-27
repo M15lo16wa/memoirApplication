@@ -327,6 +327,13 @@ export const use2FA = () => {
         return await action(...args);
 
       } catch (error) {
+        console.log('🔍 with2FAProtection - Erreur interceptée:', {
+          status: error.response?.status,
+          message: error.response?.data?.message,
+          errorType: error.constructor.name,
+          fullError: error
+        });
+        
         // On vérifie si l'erreur est bien celle que le backend nous envoie pour demander la 2FA.
         // On se base sur le statut 403 et un mot-clé dans le message pour être précis.
         if (error.response?.status === 403 && error.response?.data?.message?.includes('Veuillez valider')) {
@@ -342,7 +349,7 @@ export const use2FA = () => {
 
         } else {
           // Si ce n'est pas une erreur de 2FA, on ne la gère pas ici et on la relance.
-          console.error('Une erreur non liée à la 2FA est survenue:', error);
+          console.error('❌ Une erreur non liée à la 2FA est survenue:', error);
           throw error;
         }
       }
@@ -393,5 +400,8 @@ export const use2FA = () => {
     sendTOTPCode,       // Pour envoyer le code TOTP
     handleResendEmail,  // Pour renvoyer le code TOTP
     reset2FAState,      // Pour réinitialiser complètement l'état
+    
+    // Fonction pour définir les données utilisateur
+    setUserDataFor2FA,  // Pour définir les données utilisateur nécessaires à la 2FA
   };
 };

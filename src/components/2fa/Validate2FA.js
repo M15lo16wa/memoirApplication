@@ -14,7 +14,8 @@ const Validate2FA = ({
   isRequired = true, 
   message = "Vérification 2FA requise pour accéder aux dossiers patients",
   userData = null,
-  tempTokenId = null 
+  tempTokenId = null,
+  simpleMode = false // Mode simple pour l'accès d'urgence
 }) => {
   const [code2FA, setCode2FA] = useState('');
   const [loading, setLoading] = useState(false);
@@ -47,6 +48,12 @@ const Validate2FA = ({
 
   // Fonction pour envoyer le code TOTP par email
   const sendTOTPCode = async () => {
+    // En mode simple, ne pas envoyer de TOTP
+    if (simpleMode) {
+      console.log('🔒 Mode simple activé - pas d\'envoi de TOTP');
+      return;
+    }
+    
     if (!userData) {
       setEmailError('Données utilisateur manquantes');
       return;
@@ -141,10 +148,16 @@ const Validate2FA = ({
 
   // Envoyer automatiquement le code TOTP au montage du composant
   useEffect(() => {
+    // En mode simple, ne pas envoyer automatiquement le TOTP
+    if (simpleMode) {
+      console.log('🔒 Mode simple activé - pas d\'envoi automatique de TOTP');
+      return;
+    }
+    
     if (userData && !emailSent && !emailLoading) {
       sendTOTPCode();
     }
-  }, [userData]);
+  }, [userData, simpleMode]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -178,6 +191,13 @@ const Validate2FA = ({
       if (!tempTokenId) {
         throw new Error('Session temporaire 2FA manquante - veuillez vous reconnecter');
       }
+      
+      console.log('🔐 Validate2FA - tempTokenId reçu:', {
+        tempTokenId,
+        timestamp: new Date().toISOString(),
+        localStorageKeys: Object.keys(localStorage),
+        tempTokenIdFromStorage: localStorage.getItem('tempTokenId_urgence')
+      });
       
       // ✅ CORRECTION : Inclure userType et identifier requis par le serveur
       const userParams = buildUserParams(userData);
@@ -289,8 +309,8 @@ const Validate2FA = ({
           </p>
         </div>
 
-        {/* Informations sur l'envoi du code TOTP */}
-        {emailSent && (
+        {/* Informations sur l'envoi du code TOTP - masqué en mode simple */}
+        {!simpleMode && emailSent && (
           <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
             <div className="flex items-center justify-center space-x-2 mb-2">
               <FaEnvelope className="text-blue-600" />
@@ -344,7 +364,10 @@ const Validate2FA = ({
               autoFocus
             />
             <p className="text-xs text-gray-500 mt-1 text-center">
-              Saisissez le code à 6 chiffres reçu par email
+              {simpleMode 
+                ? "Saisissez le code à 6 chiffres de votre application 2FA"
+                : "Saisissez le code à 6 chiffres reçu par email"
+              }
             </p>
           </div>
 
@@ -355,8 +378,8 @@ const Validate2FA = ({
             </div>
           )}
 
-          {/* Message d'erreur email */}
-          {emailError && (
+          {/* Message d'erreur email - masqué en mode simple */}
+          {!simpleMode && emailError && (
             <div className="p-3 bg-orange-50 border border-orange-200 rounded-lg">
               <p className="text-sm text-orange-600 text-center">{emailError}</p>
             </div>
