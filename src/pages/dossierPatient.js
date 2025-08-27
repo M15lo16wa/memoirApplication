@@ -1600,96 +1600,49 @@ const loadOrdonnancesRecentes = useCallback(async () => {
               </div>
 
               {/* Grille des patients */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {Array.isArray(dataState.patients) && dataState.patients.length > 0 ? (
                   dataState.patients.map((p, idx) => (
-                    <div key={idx} className="group bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 border border-gray-100 overflow-hidden">
-                      {/* Header de la carte */}
-                      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 border-b border-gray-100">
-                        <div className="flex justify-between items-start mb-3">
-                          <div className="flex-1">
-                            <h3 className="font-bold text-lg text-gray-800 truncate">{p.name || 'Nom inconnu'}</h3>
-                            <p className="text-gray-600 text-sm flex items-center space-x-1 mt-1">
-                              <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                              </svg>
-                              <span>{p.birth || 'Date inconnue'}</span>
-                            </p>
-                          </div>
-                          <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                            p.statusColor === 'green' ? 'bg-green-100 text-green-800' :
-                            p.statusColor === 'red' ? 'bg-red-100 text-red-800' :
-                            'bg-gray-100 text-gray-800'
-                          }`}>
-                            {p.status || 'Inconnu'}
-                          </span>
+                    <div key={idx} className="bg-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 border border-gray-100 overflow-hidden">
+                      {/* Photo de profil */}
+                      <div className="p-6 text-center">
+                        <div className="w-20 h-20 bg-gradient-to-r from-purple-400 to-blue-500 rounded-full mx-auto mb-4 flex items-center justify-center text-white text-2xl font-bold">
+                          {(p.name || 'P').charAt(0).toUpperCase()}
                         </div>
                         
-                        {/* Informations du patient */}
+                        {/* Informations principales */}
+                        <div className="mb-4">
+                          <h3 className="font-bold text-lg text-gray-800 mb-1">{p.name || 'Nom inconnu'}</h3>
+                          <p className="text-gray-600 text-sm">{p.email || 'email@example.com'}</p>
+                        </div>
+                        
+                        {/* Département et statut */}
                         <div className="space-y-2">
-                          <div className="flex items-center space-x-2 text-sm text-gray-600">
-                            <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                            </svg>
-                            <span>{p.gender || 'Non spécifié'}</span>
+                          <div className="text-sm text-gray-600">
+                            {p.service ? getServiceNameById(p.service) : 'Département non spécifié'}
                           </div>
-                          {p.phone && (
-                            <div className="flex items-center space-x-2 text-sm text-gray-600">
-                              <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                              </svg>
-                              <span>{p.phone}</span>
-                            </div>
-                          )}
+                          <div className="flex justify-center">
+                            <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                              p.status === 'active' || p.statusColor === 'green' ? 'bg-purple-100 text-purple-800' :
+                              p.status === 'inactive' || p.statusColor === 'red' ? 'bg-blue-100 text-blue-800' :
+                              'bg-orange-100 text-orange-800'
+                            }`}>
+                              {p.status === 'active' || p.statusColor === 'green' ? 'Full time' :
+                               p.status === 'inactive' || p.statusColor === 'red' ? 'Part time' :
+                               'Weekend'}
+                            </span>
+                          </div>
+                        </div>
+                        
+                        {/* ID patient */}
+                        <div className="mt-4 text-xs text-gray-500">
+                          ID: {p.id || p.numero_dossier || 'N/A'}
                         </div>
                       </div>
-
+                      
                       {/* Actions */}
-                      <div className="p-4">
+                      <div className="bg-gray-50 p-4 border-t border-gray-100">
                         <div className="flex justify-between items-center">
-                          <button 
-                            className="text-blue-600 hover:text-blue-800 p-2 rounded-lg hover:bg-blue-50 transition-colors duration-200" 
-                            onClick={() => selectPatientForPrescription(p)}
-                            title="Sélectionner pour prescriptions"
-                          >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                          </button>
-                          <button 
-                            className="text-green-600 hover:text-green-800 p-2 rounded-lg hover:bg-green-50 transition-colors duration-200" 
-                            onClick={() => {
-                              console.log('🔍 DEBUG - Navigation DMP pour patient:', {
-                                patient: p,
-                                patient_id: p.id,
-                                rawData: p.rawData,
-                                nom: p.name,
-                                numero_dossier: p.numero_dossier
-                              });
-                              
-                              // Log spécial pour le patient 6
-                              if (p.name && p.name.includes('6')) {
-                                console.log('🎯 DEBUG SPÉCIAL - Bouton DMP cliqué pour Patient 6!');
-                                console.log('  - ID final:', p.id);
-                                console.log('  - Type ID:', typeof p.id);
-                                console.log('  - Raw data complet:', p.rawData);
-                              }
-                              
-                              if (p.id && p.id !== 'unknown' && p.id !== 'null' && p.id !== 'undefined') {
-                                console.log('✅ SUCCESS - Navigation vers DMP pour patient:', p.name, 'ID:', p.id);
-                                navigate(`/dmp-access/${p.id}`);
-                              } else {
-                                console.error('❌ ERROR - ID patient invalide pour navigation DMP:', p.name, 'ID:', p.id);
-                                console.error('  - Raw data:', p.rawData);
-                                alert(`Impossible d'accéder au DMP pour ${p.name}: ID patient invalide (${p.id})`);
-                              }
-                            }}
-                            title="Accès DMP"
-                          >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                            </svg>
-                          </button>
                           <button 
                             className="text-purple-600 hover:text-purple-800 p-2 rounded-lg hover:bg-purple-50 transition-colors duration-200" 
                             onClick={() => openPatientModal(p)}
@@ -1701,21 +1654,27 @@ const loadOrdonnancesRecentes = useCallback(async () => {
                             </svg>
                           </button>
                           <button 
-                            className="text-yellow-600 hover:text-yellow-800 p-2 rounded-lg hover:bg-yellow-50 transition-colors duration-200" 
-                            onClick={() => openEditModal(p)}
-                            title="Modifier"
+                            className="text-blue-600 hover:text-blue-800 p-2 rounded-lg hover:bg-blue-50 transition-colors duration-200" 
+                            onClick={() => {
+                              if (p.id && p.id !== 'unknown' && p.id !== 'null' && p.id !== 'undefined') {
+                                navigate(`/dmp-access/${p.id}`);
+                              } else {
+                                alert(`Impossible d'accéder au DMP pour ${p.name}: ID patient invalide`);
+                              }
+                            }}
+                            title="Accès DMP"
                           >
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                             </svg>
                           </button>
                           <button 
-                            className="text-indigo-600 hover:text-indigo-800 p-2 rounded-lg hover:bg-indigo-50 transition-colors duration-200" 
-                            onClick={() => openShareModal(p)}
-                            title="Partager"
+                            className="text-green-600 hover:text-green-800 p-2 rounded-lg hover:bg-green-50 transition-colors duration-200" 
+                            onClick={() => selectPatientForPrescription(p)}
+                            title="Sélectionner pour prescriptions"
                           >
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
                           </button>
                         </div>

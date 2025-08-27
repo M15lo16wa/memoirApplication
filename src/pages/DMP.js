@@ -35,11 +35,74 @@ import { uploadDocument } from "../services/api/medicalApi";
 // Protection 2FA
 import Validate2FA from "../components/2fa/Validate2FA";
 
+// Fonctions utilitaires pour sécuriser l'affichage des données
+const safeDisplay = (value, fallback = 'N/A') => {
+  if (value === null || value === undefined) return fallback;
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number') return value.toString();
+  if (typeof value === 'boolean') return value ? 'Oui' : 'No';
+  if (Array.isArray(value)) return value.length > 0 ? `${value.length} élément(s)` : fallback;
+  if (typeof value === 'object') {
+    // Si c'est un objet avec des propriétés nom/prénom, les extraire
+    if (value.nom || value.prenom) {
+      return `${value.prenom || ''} ${value.nom || ''}`.trim() || fallback;
+    }
+    // Si c'est un objet avec une propriété nom, l'utiliser
+    if (value.nom) return value.nom;
+    // Si c'est un objet avec une propriété code, l'utiliser
+    if (value.code) return value.code;
+    // Sinon, retourner le fallback
+    return fallback;
+  }
+  return fallback;
+};
+
+const safeProfessionalName = (professional, prefix = 'Dr.') => {
+  if (!professional) return 'Professionnel non spécifié';
+  if (typeof professional === 'string') return `${prefix} ${professional}`;
+  if (typeof professional === 'object') {
+    if (professional.nom_complet) return `${prefix} ${professional.nom_complet}`;
+    if (professional.nom && professional.prenom) return `${prefix} ${professional.prenom} ${professional.nom}`;
+    if (professional.nom) return `${prefix} ${professional.nom}`;
+    if (professional.prenom) return `${prefix} ${professional.prenom}`;
+    return 'Professionnel non spécifié';
+  }
+  return 'Professionnel non spécifié';
+};
 
 
-// Composant HistoriqueMedical qui utilise les fonctions de patientApi
+
+// Composant HistoriqueMedical qui utilise les fonctions de patientApi et dmpApi
 const HistoriqueMedical = ({ patientProfile }) => {
+  // Fonction utilitaire pour sécuriser l'affichage des données
+  const safeDisplay = (value, fallback = 'N/A', maxLength = null) => {
+    if (value === null || value === undefined) return fallback;
+    if (typeof value === 'string') {
+      if (maxLength && value.length > maxLength) {
+        return value.substring(0, maxLength) + '...';
+      }
+      return value;
+    }
+    if (typeof value === 'number') return value.toString();
+    if (typeof value === 'boolean') return value ? 'Oui' : 'Non';
+    if (Array.isArray(value)) return value.length > 0 ? `${value.length} élément(s)` : fallback;
+    if (typeof value === 'object') {
+      // Si c'est un objet avec des propriétés nom/prénom, les extraire
+      if (value.nom || value.prenom) {
+        return `${value.prenom || ''} ${value.nom || ''}`.trim() || fallback;
+      }
+      // Si c'est un objet avec une propriété nom, l'utiliser
+      if (value.nom) return value.nom;
+      // Si c'est un objet avec une propriété code, l'utiliser
+      if (value.code) return value.code;
+      // Sinon, retourner le fallback
+      return fallback;
+    }
+    return fallback;
+  };
+
   const [prescriptions, setPrescriptions] = useState([]);
+  const [consultations, setConsultations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [activeFilter, setActiveFilter] = useState('all');
@@ -82,7 +145,22 @@ const HistoriqueMedical = ({ patientProfile }) => {
       if (result.success) {
         setPrescriptions(result.prescriptions || []);
         setStats(result.stats);
-        console.log(' Historique mdical charg:', result.prescriptions.length, 'prescriptions');
+        console.log(' Historique médical chargé:', result.prescriptions.length, 'prescriptions');
+        
+        // Charger aussi les consultations du patient
+        try {
+          const consultationsResult = await dmpApi.getConsultationsHistoriqueMedical(currentPatientId);
+          if (consultationsResult.status === 'success') {
+            setConsultations(consultationsResult.data || []);
+            console.log(' Consultations chargées:', consultationsResult.data.length, 'consultations');
+          } else {
+            console.warn(' Erreur lors du chargement des consultations:', consultationsResult.message);
+            setConsultations([]);
+          }
+        } catch (consultationError) {
+          console.warn(' Erreur lors du chargement des consultations:', consultationError);
+          setConsultations([]);
+        }
         
         //  DEBUG : Vrifier la structure des prescriptions et des infos mdecin
         if (result.prescriptions && result.prescriptions.length > 0) {
@@ -245,9 +323,23 @@ prescription.redacteur.id_professionnel || prescription.redacteur.id_medecin)) {
               }
             }
             
+            // Créer une structure normalisée pour le rédacteur
+            let redacteurInfo = null;
+            if (prescription.redacteur && typeof prescription.redacteur === 'object') {
+              redacteurInfo = {
+                id: prescription.redacteur.id || prescription.redacteur.id_professionnel || prescription.redacteur.id_medecin,
+                nom: prescription.redacteur.nom || 'Rédacteur',
+                prenom: prescription.redacteur.prenom || 'Inconnu',
+                nom_complet: prescription.redacteur.nom_complet || `${prescription.redacteur.prenom || ''} ${prescription.redacteur.nom || ''}`.trim() || 'N/A',
+                specialite: prescription.redacteur.specialite || 'Généraliste',
+                numero_adeli: prescription.redacteur.numero_adeli || null
+              };
+            }
+            
             return {
               ...prescription,
-              medecinInfo: medecinInfo
+              medecinInfo: medecinInfo,
+              redacteurInfo: redacteurInfo
             };
           });
           
@@ -260,51 +352,8 @@ prescription.redacteur.id_professionnel || prescription.redacteur.id_medecin)) {
             console.warn(' [DMP] Aucune prescription avec informations mdecin trouve');
             console.warn(' [DMP] Cela peut empcher la messagerie de fonctionner correctement');
             
-            //  FALLBACK : Essayer de rcuprer les informations mdecin depuis l'API
-            console.log(" [DMP] Tentative de rcupration des informations mdecin depuis l'API...");
-            try {
-              // Essayer de rcuprer les informations du mdecin depuis l'API de messagerie
-              const messagingApi = await import('../../services/api/messagingApi');
-              const messagingService = messagingApi.default;
-              
-              // Pour chaque prescription sans mdecin, essayer de rcuprer les infos
-              for (const prescription of normalizedPrescriptions) {
-                const prescriptionId = prescription.id_prescription || prescription.id || 
-prescription.prescription_id;
-                
-                // Essayer de rcuprer les informations du mdecin depuis l'API
-                try {
-                  const medecinInfo = await messagingService.getUserInfo(prescription.medecin_id || 
-prescription.redacteur_id, 'medecin');
-                  if (medecinInfo) {
-                    prescription.medecinInfo = {
-                      id: medecinInfo.id,
-                      id_professionnel: medecinInfo.id,
-                      id_medecin: medecinInfo.id,
-                      nom: medecinInfo.nom || 'Mdecin',
-                      prenom: medecinInfo.prenom || 'Inconnu',
-                      specialite: medecinInfo.specialite || 'Gnraliste',
-                      prescriptionId: prescriptionId,
-                      prescriptionType: prescription.type_prescription || 'ordonnance'
-                    };
-                    console.log(" [DMP] Informations mdecin rcupres depuis l'API pour prescription:", prescriptionId);
-                  }
-                } catch (error) {
-                  console.warn(" [DMP] Impossible de rcuprer les infos mdecin pour prescription:", prescriptionId, error.message);
-                }
-              }
-              
-              // Mettre  jour la liste des prescriptions avec mdecin
-              const updatedPrescriptionsWithMedecin = normalizedPrescriptions.filter(p => 
-p.medecinInfo);
-              if (updatedPrescriptionsWithMedecin.length > 0) {
-                console.log(' [DMP] Aprs fallback API:', updatedPrescriptionsWithMedecin.length, 
-'prescriptions avec mdecin');
-              }
-            } catch (error) {
-              console.error(' [DMP] Erreur lors du fallback API pour les informations mdecin:', 
-error);
-            }
+            // Note: Fallback API non disponible - messagingApi.js n'existe pas
+            console.log(' [DMP] Fallback API non disponible - messagingApi.js manquant');
           } else {
             console.log(' [DMP] Prescriptions avec mdecin:', prescriptionsWithMedecin.length, 
 '/', normalizedPrescriptions.length);
@@ -337,7 +386,7 @@ error);
       }
 
     } catch (error) {
-      console.error('Erreur lors du chargement de l\'historique mdical:', error);
+      console.error('Erreur lors du chargement de l\'historique médical:', error);
       setError(error.message);
     } finally {
       setLoading(false);
@@ -350,21 +399,32 @@ error);
       setActiveFilter(filter);
 
       let result;
+      let consultationsResult;
+      
       switch (filter) {
         case 'all':
           result = await patientApi.getAllPrescriptionsByPatient(patientId);
+          consultationsResult = await dmpApi.getConsultationsHistoriqueMedical(patientId);
           break;
         case 'active':
           result = await patientApi.getActivePrescriptionsByPatient(patientId);
+          consultationsResult = await dmpApi.getConsultationsHistoriqueMedical(patientId);
           break;
         case 'ordonnances':
           result = await patientApi.getOrdonnancesByPatient(patientId);
+          consultationsResult = { data: [] }; // Pas de consultations pour les ordonnances
           break;
         case 'examens':
           result = await patientApi.getExamensByPatient(patientId);
+          consultationsResult = { data: [] }; // Pas de consultations pour les examens
+          break;
+        case 'consultations':
+          result = { success: true, prescriptions: [], stats: null };
+          consultationsResult = await dmpApi.getConsultationsHistoriqueMedical(patientId);
           break;
         default:
           result = await patientApi.getAllPrescriptionsByPatient(patientId);
+          consultationsResult = await dmpApi.getConsultationsHistoriqueMedical(patientId);
       }
 
       if (result.success) {
@@ -372,6 +432,13 @@ error);
         setStats(result.stats);
       } else {
         throw new Error(result.message || 'Erreur lors du filtrage');
+      }
+      
+      // Mettre à jour les consultations
+      if (consultationsResult && consultationsResult.status === 'success') {
+        setConsultations(consultationsResult.data || []);
+      } else {
+        setConsultations([]);
       }
 
     } catch (error) {
@@ -559,13 +626,13 @@ error);
     };
   }, [showPrescriptionModal]);
 
-  if (loading) {
-    return (
-      <div className="bg-white rounded-lg shadow">
-        <div className="p-6 border-b">
-          <h2 className="text-xl font-semibold">Historique mdical</h2>
-          <p className="text-gray-600">Consultez votre historique mdical complet</p>
-        </div>
+        if (loading) {
+        return (
+          <div className="bg-white rounded-lg shadow">
+            <div className="p-6 border-b">
+              <h2 className="text-xl font-semibold">Historique médical</h2>
+              <p className="text-gray-600">Consultez votre historique médical complet</p>
+            </div>
         <div className="p-6">
           <div className="flex justify-center items-center py-8">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -575,13 +642,13 @@ error);
     );
   }
 
-  if (error) {
-    return (
-      <div className="bg-white rounded-lg shadow">
-        <div className="p-6 border-b">
-          <h2 className="text-xl font-semibold">Historique mdical</h2>
-          <p className="text-gray-600">Consultez votre historique mdical complet</p>
-        </div>
+        if (error) {
+        return (
+          <div className="bg-white rounded-lg shadow">
+            <div className="p-6 border-b">
+              <h2 className="text-xl font-semibold">Historique médical</h2>
+              <p className="text-gray-600">Consultez votre historique médical complet</p>
+            </div>
         <div className="p-6">
           <div className="text-center py-8">
             <div className="text-red-600 mb-4">
@@ -606,11 +673,11 @@ error);
       <div className="p-6 border-b">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h2 className="text-xl font-semibold">Historique mdical</h2>
-            <p className="text-gray-600">Consultez votre historique mdical complet</p>
+            <h2 className="text-xl font-semibold">Historique médical</h2>
+            <p className="text-gray-600">Consultez votre historique médical complet</p>
             {stats && (
               <p className="text-sm text-gray-500 mt-1">
-                {stats.totalPrescriptions} prescription(s) au total
+                {stats.totalPrescriptions} prescription(s) et {consultations.length} consultation(s) au total
               </p>
             )}
           </div>
@@ -661,10 +728,11 @@ rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed tr
 mb-4">
           <div className="flex flex-wrap gap-2">
             {[
-              { key: 'all', label: 'Toutes', count: prescriptions.length },
+              { key: 'all', label: 'Toutes', count: prescriptions.length + consultations.length },
               { key: 'active', label: 'Actives', count: stats?.parStatut?.active || 0 },
               { key: 'ordonnances', label: 'Ordonnances', count: stats?.parType?.ordonnance || 0 },
-              { key: 'examens', label: 'Examens', count: stats?.parType?.examen || 0 }
+              { key: 'examens', label: 'Examens', count: stats?.parType?.examen || 0 },
+              { key: 'consultations', label: 'Consultations', count: consultations.length }
             ].map((filter) => (
               <button
                 key={filter.key}
@@ -712,8 +780,9 @@ text-xs">
       </div>
 
       <div className="p-6">
-        {prescriptions.length > 0 ? (
+        {(prescriptions.length > 0 || consultations.length > 0) ? (
           <div className="space-y-4">
+            {/* Affichage des prescriptions */}
             {prescriptions.map((prescription, index) => (
               <div
                 key={index}
@@ -1123,37 +1192,34 @@ text-gray-900">{formatDate(prescription.date_arret)}</span>
 
                         {/* Deuxime colonne - Mdecin et tablissement */}
                         <div className="space-y-2">
-                          {prescription.medecin && (
+                          {prescription.medecinInfo && (
                             <div className="flex items-center gap-2">
                               <span className="text-xs font-medium text-gray-600">Mdecin :</span>
                               <span className="text-xs text-gray-900">
-                                Dr. {prescription.medecin.prenom} {prescription.medecin.nom}
+                                Dr. {prescription.medecinInfo.prenom} {prescription.medecinInfo.nom}
                               </span>
                             </div>
                           )}
 
-                          {prescription.redacteur && (
+                          {prescription.redacteurInfo && (
                             <div className="space-y-1">
                               <div className="flex items-center gap-2">
                                 <span className="text-xs font-medium text-gray-600">Rdacteur 
 :</span>
                                 <span className="text-xs text-gray-900">
-                                  Dr. {prescription.redacteur.nom_complet || 
-`${prescription.redacteur.prenom || ''} ${prescription.redacteur.nom || ''}`.trim() || 'N/A'}
+                                  Dr. {prescription.redacteurInfo.nom_complet}
                                 </span>
                               </div>
-                              {prescription.redacteur.specialite && (
+                              {prescription.redacteurInfo.specialite && (
                                 <div className="flex items-center gap-2 ml-4">
                                   <span className="text-xs text-gray-500">Spcialit :</span>
-                                  <span className="text-xs 
-text-gray-700">{prescription.redacteur.specialite}</span>
+                                  <span className="text-xs text-gray-700">{prescription.redacteurInfo.specialite}</span>
                                 </div>
                               )}
-                              {prescription.redacteur.numero_adeli && (
+                              {prescription.redacteurInfo.numero_adeli && (
                                 <div className="flex items-center gap-2 ml-4">
                                   <span className="text-xs text-gray-500">N ADELI :</span>
-                                  <span className="text-xs text-gray-700 
-font-mono">{prescription.redacteur.numero_adeli}</span>
+                                  <span className="text-xs text-gray-700 font-mono">{prescription.redacteurInfo.numero_adeli}</span>
                                 </div>
                               )}
                             </div>
@@ -1163,8 +1229,7 @@ font-mono">{prescription.redacteur.numero_adeli}</span>
                             <div className="flex items-center gap-2">
                               <span className="text-xs font-medium text-gray-600">tablissement 
 :</span>
-                              <span className="text-xs 
-text-gray-900">{prescription.etablissement}</span>
+                              <span className="text-xs text-gray-900">{safeDisplay(prescription.etablissement, 'Établissement')}</span>
                             </div>
                           )}
                         </div>
@@ -1304,17 +1369,87 @@ hover:bg-indigo-50 text-xs"
                 </div>
               </div>
             ))}
+            
+            {/* Affichage des consultations */}
+            {consultations.length > 0 && (
+              <div className="mt-8">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                  <FaUser className="text-purple-600" />
+                  Consultations médicales
+                </h3>
+                <div className="space-y-4">
+                  {consultations.map((consultation, index) => (
+                    <div
+                      key={`consultation-${index}`}
+                      className="border rounded-lg p-4 hover:shadow-md transition-shadow bg-purple-50 border-purple-200"
+                    >
+                      <div className="flex items-center gap-3 mb-3">
+                        <FaUser className="text-purple-600 text-xl" />
+                        <div>
+                          <h4 className="font-medium text-gray-900">
+                            Consultation du {formatDate(consultation.date)}
+                          </h4>
+                          <p className="text-sm text-gray-600">
+                            {consultation.motif || 'Consultation médicale'}
+                          </p>
+                        </div>
+                        <span className={`ml-auto px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(consultation.statut)}`}>
+                          {consultation.statut || 'Terminée'}
+                        </span>
+                      </div>
+                      
+                      {/* Détails de la consultation */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          {consultation.observations && (
+                            <div>
+                              <span className="text-xs font-medium text-gray-600">Observations :</span>
+                              <p className="text-sm text-gray-700 mt-1">{consultation.observations}</p>
+                            </div>
+                          )}
+                          
+                          {consultation.professionnel && (
+                            <div>
+                              <span className="text-xs font-medium text-gray-600">Professionnel :</span>
+                              <p className="text-sm text-gray-700 mt-1">{safeDisplay(consultation.professionnel, 'Non spécifié')}</p>
+                            </div>
+                          )}
+                        </div>
+                        
+                        <div className="space-y-2">
+                          {consultation.service && (
+                            <div>
+                              <span className="text-xs font-medium text-gray-600">Service :</span>
+                              <p className="text-sm text-gray-700 mt-1">{safeDisplay(consultation.service, 'Non spécifié')}</p>
+                            </div>
+                          )}
+                          
+                          {consultation.type && consultation.type !== 'consultation' && (
+                            <div>
+                              <span className="text-xs font-medium text-gray-600">Type :</span>
+                              <p className="text-sm text-gray-700 mt-1">{consultation.type}</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           <div className="text-center py-8">
             <FaFileMedical className="text-4xl text-gray-400 mx-auto mb-4" />
             <p className="text-gray-500 text-lg font-medium mb-2">
-              Aucune prescription trouve
+              Aucun élément trouvé
             </p>
             <p className="text-gray-400">
               {activeFilter === 'all'
-                ? 'Vous n\'avez pas encore de prescriptions dans votre historique mdical.'
-                : `Aucune prescription de type "${activeFilter}" trouve.`
+                ? 'Vous n\'avez pas encore de prescriptions ou consultations dans votre historique médical.'
+                : activeFilter === 'consultations'
+                ? 'Aucune consultation trouvée.'
+                : `Aucune prescription de type "${activeFilter}" trouvée.`
               }
             </p>
           </div>
@@ -1462,11 +1597,11 @@ ${getStatusColor(selectedPrescription.statut)}`}>
                         {selectedPrescription.statut || 'Statut inconnu'}
                       </span>
                     </div>
-                    {selectedPrescription.medecin && (
+                    {selectedPrescription.medecinInfo && (
                       <div className="flex items-center justify-between">
                         <span className="text-gray-600">Mdecin :</span>
                         <span className="text-gray-900 font-medium">
-                          Dr. {selectedPrescription.medecin.prenom} {selectedPrescription.medecin.nom}
+                          Dr. {selectedPrescription.medecinInfo.prenom} {selectedPrescription.medecinInfo.nom}
                         </span>
                       </div>
                     )}
@@ -1474,7 +1609,7 @@ ${getStatusColor(selectedPrescription.statut)}`}>
                       <div className="flex items-center justify-between">
                         <span className="text-gray-600">tablissement :</span>
                         <span className="text-gray-900 font-medium">
-                          {selectedPrescription.etablissement}
+                          {safeDisplay(selectedPrescription.etablissement, 'Établissement')}
                         </span>
                       </div>
                     )}
@@ -2060,7 +2195,7 @@ const DMP = () => {
     }
   }, []);
 
-  const rafraichirNotifications = async () => {
+  const rafraichirNotifications = useCallback(async () => {
     try {
       setLoading(true);
       const storedPatient = getStoredPatient();
@@ -2085,7 +2220,7 @@ const DMP = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filterAccessByPatient]);
 
   const handleRepondreDemandeAcces = useCallback(async (request, reponse) => {
     try {

@@ -9,8 +9,6 @@ const MessagingWidget = ({ userId, role, token, conversationId, toUserId, onClos
   const [error, setError] = useState(null);
 
   // Initialiser la connexion
-  // 
-  // Initialiser la connexion
   useEffect(() => {
     if (userId && role && token) {
       signalingService.connect();

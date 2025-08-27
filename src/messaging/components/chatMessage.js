@@ -6,8 +6,29 @@ export default function ChatMessage() {
   const [isLoading, setIsLoading] = useState(false);
   const [conversations, setConversations] = useState([]);
   const [selectedConversation, setSelectedConversation] = useState(null);
-  const [userId, setUserId] = useState(null);
-  const [userRole, setUserRole] = useState('patient');
+  // Initialisation de l'ID utilisateur et du rôle depuis le localStorage
+  const [userId, setUserId] = useState(() => {
+    const patientData = localStorage.getItem('patient');
+    if (patientData) {
+      try {
+        const patient = JSON.parse(patientData);
+        return patient.id_patient || patient.id || null;
+      } catch (e) {}
+    }
+    const medecinData = localStorage.getItem('medecin');
+    if (medecinData) {
+      try {
+        const medecin = JSON.parse(medecinData);
+        return medecin.id_professionnel || medecin.id || null;
+      } catch (e) {}
+    }
+    return null;
+  });
+  const [userRole, setUserRole] = useState(() => {
+    if (localStorage.getItem('patient')) return 'patient';
+    if (localStorage.getItem('medecin')) return 'medecin';
+    return 'patient';
+  });
 
   const loadUserConversations = async () => {
     try {

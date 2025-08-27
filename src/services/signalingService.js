@@ -1,153 +1,293 @@
 import { io } from 'socket.io-client';
 
-// Fonction améliorée pour récupérer le token d'authentification valide
-const getValidAuthToken = () => {
-    // Priorité 1: Token principal (token ou jwt)
-    const mainToken = localStorage.getItem('token') || localStorage.getItem('jwt');
-    if (mainToken) {
-        console.log('🔑 SignalingService - Token principal trouvé:', mainToken.substring(0, 20) + '...');
-        return mainToken;
-    }
-    
-    // Priorité 2: Vérifier s'il y a un patient connecté avec son token
-    const patientData = localStorage.getItem('patient');
-    if (patientData) {
-        try {
+/**
+ * Récupération COMPLÈTE de tous les tokens disponibles
+ */
+const getAllAvailableTokens = () => {
+    const tokens = {
+        // Tokens généraux
+        jwt: localStorage.getItem('jwt'),
+        token: localStorage.getItem('token'),
+        
+        // Token patient
+        patient: null,
+        patientId: null,
+        patientRole: 'patient',
+        
+        // Token médecin
+        medecin: null,
+        medecinId: null,
+        medecinRole: 'medecin',
+        
+        // Token professionnel de santé
+        professionnel: null,
+        professionnelId: null,
+        professionnelRole: null,
+        
+        // Informations utilisateur
+        userType: null,
+        userId: null,
+        primaryToken: null
+    };
+
+    // Récupérer les données patient
+    try {
+        const patientData = localStorage.getItem('patient');
+        if (patientData) {
             const patient = JSON.parse(patientData);
-            if (patient.token) {
-                console.log('🔑 SignalingService - Token patient trouvé:', patient.token.substring(0, 20) + '...');
-                return patient.token;
-            }
-        } catch (error) {
-            console.warn('⚠️ SignalingService - Erreur parsing données patient:', error);
+            tokens.patient = patient;
+            tokens.patientId = patient.id_patient;
+            tokens.userType = 'patient';
+            tokens.userId = patient.id_patient;
+            tokens.professionnelRole = 'patient';
         }
+    } catch (e) {
+        console.error('Erreur parsing patient data:', e);
     }
-    
-    // Priorité 3: Vérifier s'il y a un médecin connecté avec son token
-    const medecinData = localStorage.getItem('medecin');
-    if (medecinData) {
-        try {
+
+    // Récupérer les données médecin
+    try {
+        const medecinData = localStorage.getItem('medecin');
+        if (medecinData) {
             const medecin = JSON.parse(medecinData);
-            if (medecin.token) {
-                console.log('🔑 SignalingService - Token médecin trouvé:', medecin.token.substring(0, 20) + '...');
-                return medecin.token;
-            }
-        } catch (error) {
-            console.warn('⚠️ SignalingService - Erreur parsing données médecin:', error);
+            tokens.medecin = medecin;
+            tokens.medecinId = medecin.id_professionnel;
+            tokens.userType = 'medecin';
+            tokens.userId = medecin.id_professionnel;
+            tokens.professionnelRole = 'medecin';
         }
+    } catch (e) {
+        console.error('Erreur parsing medecin data:', e);
     }
-    
-    console.warn('⚠️ SignalingService - Aucun token valide trouvé');
-    return null;
+
+    // Déterminer le token principal à utiliser
+    if (tokens.jwt) {
+        tokens.primaryToken = tokens.jwt;
+    } else if (tokens.token) {
+        tokens.primaryToken = tokens.token;
+    } else if (tokens.patient?.token) {
+        tokens.primaryToken = tokens.patient.token;
+    } else if (tokens.medecin?.token) {
+        tokens.primaryToken = tokens.medecin.token;
+    }
+
+    // Log de diagnostic
+    console.log('�� TOKENS DISPONIBLES:', {
+        jwt: tokens.jwt ? '✅ Présent' : '❌ Absent',
+        token: tokens.token ? '✅ Présent' : '❌ Absent',
+        patient: tokens.patient ? `✅ ID: ${tokens.patientId}` : '❌ Absent',
+        medecin: tokens.medecin ? `✅ ID: ${tokens.medecinId}` : '❌ Absent',
+        userType: tokens.userType || '❌ Non déterminé',
+        primaryToken: tokens.primaryToken ? '✅ Disponible' : '❌ Absent'
+    });
+
+    return tokens;
 };
 
+/**
+ * Service de signalisation avec récupération complète des tokens
+ */
 class SignalingService {
     socket = null;
     baseURL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
+    tokens = null;
+    userInfo = null;
 
+    /**
+     * Initialiser le service avec tous les tokens disponibles
+     */
+    initialize() {
+        this.tokens = getAllAvailableTokens();
+        this.userInfo = {
+            userType: this.tokens.userType,
+            userId: this.tokens.userId,
+            role: this.tokens.professionnelRole,
+            primaryToken: this.tokens.primaryToken
+        };
+
+        console.log('🚀 Service de signalisation initialisé avec:', this.userInfo);
+        return this;
+    }
+
+    /**
+     * Se connecter au WebSocket avec le token approprié
+     */
     connect() {
-        // Ne crée qu'une seule instance de socket
         if (this.socket) {
-            console.log('🔍 SignalingService - Socket déjà connecté, réutilisation de l\'instance existante');
-            return this.socket;
+            console.log('🔄 Reconnexion du service de signalisation...');
+            this.socket.disconnect();
         }
 
-        const token = getValidAuthToken();
-        if (!token) {
-            console.error("❌ SignalingService - Connexion impossible, token manquant.");
-            return null;
+        if (!this.tokens.primaryToken) {
+            console.error('❌ Aucun token valide disponible pour la connexion');
+            return false;
         }
+
+        console.log('🔌 Tentative de connexion WebSocket...');
         
-        // Déterminer le type d'utilisateur pour les logs
-        let userType = 'inconnu';
-        let userId = 'inconnu';
-        
-        const patientData = localStorage.getItem('patient');
-        const medecinData = localStorage.getItem('medecin');
-        
-        if (patientData) {
-            try {
-                const patient = JSON.parse(patientData);
-                userType = 'patient';
-                userId = patient.id_patient || patient.id || 'inconnu';
-            } catch (error) {
-                console.warn('⚠️ SignalingService - Erreur parsing patient data:', error);
-            }
-        } else if (medecinData) {
-            try {
-                const medecin = JSON.parse(medecinData);
-                userType = 'médecin';
-                userId = medecin.id_professionnel || medecin.id || 'inconnu';
-            } catch (error) {
-                console.warn('⚠️ SignalingService - Erreur parsing medecin data:', error);
-            }
-        }
-        
-        console.log(`🚀 SignalingService - Tentative de connexion Socket.IO pour ${userType} (ID: ${userId}) à:`, this.baseURL);
-        console.log(`🔑 SignalingService - Token utilisé: ${token.substring(0, 20)}...`);
-        
-        // Connexion Socket.IO à l'endpoint principal
-        this.socket = io(this.baseURL, { 
-            auth: { token },
-            transports: ['websocket', 'polling'], // Fallback sur polling si websocket échoue
-            path: '/socket.io/', // Chemin par défaut de Socket.IO
-            timeout: 20000, // Timeout de 20 secondes
-            forceNew: true // Forcer une nouvelle connexion
+        this.socket = io(`${this.baseURL}/messaging`, {
+            auth: {
+                token: this.tokens.primaryToken,
+                userType: this.userInfo.userType,
+                userId: this.userInfo.userId,
+                role: this.userInfo.role
+            },
+            transports: ['websocket'],
+            timeout: 10000
         });
 
-        this.socket.on('connect', () => {
-            console.log('✅ Service de signalisation connecté avec succès');
-            console.log('  - Socket ID:', this.socket.id);
-            console.log('  - URL:', this.baseURL);
-            console.log('  - Transport:', this.socket.io.engine.transport.name);
-        });
-        
-        this.socket.on('disconnect', (reason) => {
-            console.log('🔌 Service de signalisation déconnecté:', reason);
-        });
-        
-        this.socket.on('connect_error', (err) => {
-            console.error('❌ Erreur de connexion au service:', err.message);
-            console.error('  - Détails:', err);
-            console.error('  - Vérifiez que le serveur supporte Socket.IO');
-        });
+        this.setupSocketListeners();
+        return true;
+    }
 
+    /**
+     * Se connecter au WebSocket avec des paramètres spécifiques
+     * Compatible avec l'ancien code qui appelle connectSocket
+     */
+    connectSocket(userId, role, token) {
+        // Initialiser le service si ce n'est pas déjà fait
+        if (!this.tokens) {
+            this.initialize();
+        }
+
+        // Si des paramètres spécifiques sont fournis, les utiliser
+        if (userId && role && token) {
+            this.userInfo = {
+                userType: role === 'patient' ? 'patient' : 'medecin',
+                userId: userId,
+                role: role,
+                primaryToken: token
+            };
+            this.tokens.primaryToken = token;
+        }
+
+        // Se connecter
+        this.connect();
+        
+        // Retourner le socket pour compatibilité
         return this.socket;
     }
 
-    // Méthode générique pour envoyer un événement
-    emit(event, data) {
-        if (this.socket) {
-            this.socket.emit(event, data);
-        } else {
-            console.error(`Impossible d'émettre l'événement '${event}', le socket n'est pas connecté.`);
+    /**
+     * Configurer tous les écouteurs d'événements
+     */
+    setupSocketListeners() {
+        this.socket.on('connect', () => {
+            console.log('✅ Service de signalisation connecté pour:', {
+                userType: this.userInfo.userType,
+                userId: this.userInfo.userId,
+                role: this.userInfo.role
+            });
+            
+            // Émettre l'événement de présence
+            this.emit('user_online', {
+                userId: this.userInfo.userId,
+                userType: this.userInfo.userType,
+                role: this.userInfo.role
+            });
+        });
+
+        this.socket.on('disconnect', (reason) => {
+            console.log('🔌 Service de signalisation déconnecté:', reason);
+        });
+
+        this.socket.on('connect_error', (error) => {
+            console.error('❌ Erreur de connexion WebSocket:', error.message);
+            
+            // Tentative de reconnexion automatique
+            if (error.message.includes('token') || error.message.includes('auth')) {
+                console.log('�� Tentative de reconnexion avec nouveau token...');
+                setTimeout(() => {
+                    this.refreshTokensAndReconnect();
+                }, 2000);
+            }
+        });
+
+        // Écouter les événements de messagerie
+        this.socket.on('new_message', (data) => {
+            console.log('�� Nouveau message reçu:', data);
+            this.handleNewMessage(data);
+        });
+
+        this.socket.on('notification', (data) => {
+            console.log('�� Notification reçue:', data);
+            this.handleNotification(data);
+        });
+
+        this.socket.on('user_status_change', (data) => {
+            console.log('�� Changement de statut utilisateur:', data);
+            this.handleUserStatusChange(data);
+        });
+    }
+
+    /**
+     * Rafraîchir les tokens et se reconnecter
+     */
+    refreshTokensAndReconnect() {
+        console.log('🔄 Rafraîchissement des tokens...');
+        this.tokens = getAllAvailableTokens();
+        this.userInfo = {
+            userType: this.tokens.userType,
+            userId: this.tokens.userId,
+            role: this.tokens.professionnelRole,
+            primaryToken: this.tokens.primaryToken
+        };
+        
+        if (this.tokens.primaryToken) {
+            this.connect();
         }
     }
 
-    // Méthode générique pour écouter un événement
+    /**
+     * Émettre un événement WebSocket
+     */
+    emit(event, data) {
+        if (this.socket && this.socket.connected) {
+            this.socket.emit(event, data);
+        } else {
+            console.error(`❌ Impossible d'émettre '${event}', socket non connecté`);
+        }
+    }
+
+    /**
+     * Écouter un événement WebSocket
+     */
     on(event, callback) {
         if (this.socket) {
             this.socket.on(event, callback);
         }
     }
 
-    // Méthode pour nettoyer un listener
+    /**
+     * Arrêter d'écouter un événement
+     */
     off(event, callback) {
         if (this.socket) {
             this.socket.off(event, callback);
         }
     }
 
-    // ===== NOUVELLES MÉTHODES POUR L'API MESSAGING =====
+    /**
+     * Déconnecter le WebSocket
+     */
+    disconnect() {
+        if (this.socket) {
+            this.socket.disconnect();
+            this.socket = null;
+        }
+    }
 
-    // Récupérer les conversations de l'utilisateur
+    // ===== MÉTHODES DE MESSAGERIE =====
+
+    /**
+     * Récupérer les conversations de l'utilisateur connecté
+     */
     async getUserConversations() {
         try {
-            const token = getValidAuthToken();
             const response = await fetch(`${this.baseURL}/api/messaging/conversations`, {
                 method: 'GET',
                 headers: {
-                    'Authorization': `Bearer ${token}`,
+                    'Authorization': `Bearer ${this.tokens.primaryToken}`,
                     'Content-Type': 'application/json'
                 }
             });
@@ -162,7 +302,7 @@ class SignalingService {
                 conversations: data.data?.conversations || []
             };
         } catch (error) {
-            console.error('Erreur lors de la récupération des conversations:', error);
+            console.error('❌ Erreur lors de la récupération des conversations:', error);
             return {
                 success: false,
                 error: error.message
@@ -170,50 +310,17 @@ class SignalingService {
         }
     }
 
-    // Récupérer les messages d'une conversation
-    async getConversationMessages(conversationId, page = 1, limit = 50) {
-        try {
-            const token = getValidAuthToken();
-            const response = await fetch(
-                `${this.baseURL}/api/messaging/conversations/${conversationId}/messages?page=${page}&limit=${limit}`,
-                {
-                    method: 'GET',
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    }
-                }
-            );
-
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-
-            const data = await response.json();
-            return {
-                success: true,
-                messages: data.data?.messages || [],
-                pagination: data.data?.pagination || {}
-            };
-        } catch (error) {
-            console.error('Erreur lors de la récupération des messages:', error);
-            return {
-                success: false,
-                error: error.message
-            };
-        }
-    }
-
-    // Envoyer un message dans une conversation
+    /**
+     * Envoyer un message
+     */
     async sendMessage(conversationId, content, type = 'texte', metadata = {}) {
         try {
-            const token = getValidAuthToken();
             const response = await fetch(
                 `${this.baseURL}/api/messaging/conversations/${conversationId}/messages`,
                 {
                     method: 'POST',
                     headers: {
-                        'Authorization': `Bearer ${token}`,
+                        'Authorization': `Bearer ${this.tokens.primaryToken}`,
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
@@ -230,7 +337,7 @@ class SignalingService {
 
             const data = await response.json();
             
-            // Émettre l'événement WebSocket pour la diffusion en temps réel
+            // Émettre l'événement WebSocket
             this.emit('message_sent', {
                 conversationId,
                 message: data.data?.message
@@ -241,7 +348,7 @@ class SignalingService {
                 message: data.data?.message
             };
         } catch (error) {
-            console.error('Erreur lors de l\'envoi du message:', error);
+            console.error('❌ Erreur lors de l\'envoi du message:', error);
             return {
                 success: false,
                 error: error.message
@@ -249,23 +356,112 @@ class SignalingService {
         }
     }
 
-    // Créer une nouvelle conversation
-    async createConversation(participants, type = 'patient_medecin', titre = null) {
+    // ===== GESTION DES ÉVÉNEMENTS =====
+
+    handleNewMessage(data) {
+        // Gérer les nouveaux messages
+        console.log('�� Traitement nouveau message:', data);
+    }
+
+    handleNotification(data) {
+        // Gérer les notifications
+        console.log('🔔 Traitement notification:', data);
+    }
+
+    handleUserStatusChange(data) {
+        // Gérer les changements de statut
+        console.log('👤 Traitement changement statut:', data);
+    }
+
+    // ===== MÉTHODES UTILITAIRES =====
+
+    /**
+     * Obtenir les informations de l'utilisateur connecté
+     */
+    getUserInfo() {
+        return this.userInfo;
+    }
+
+    /**
+     * Vérifier si le service est connecté
+     */
+    isConnected() {
+        return this.socket && this.socket.connected;
+    }
+
+    /**
+     * Obtenir le statut de connexion
+     */
+    getConnectionStatus() {
+        if (!this.socket) return 'disconnected';
+        if (this.socket.connected) return 'connected';
+        return 'connecting';
+    }
+
+    /**
+     * Nettoyer les ressources
+     */
+    cleanup() {
+        this.disconnect();
+        this.tokens = null;
+        this.userInfo = null;
+    }
+
+    // ===== MÉTHODES DE COMPATIBILITÉ =====
+
+    /**
+     * Rejoindre une conversation
+     */
+    joinConversation(conversationId) {
+        if (this.socket && this.socket.connected) {
+            this.socket.emit('join_conversation', { conversationId });
+            console.log('✅ Rejoint la conversation:', conversationId);
+        }
+    }
+
+    /**
+     * Quitter une conversation
+     */
+    leaveConversation(conversationId) {
+        if (this.socket && this.socket.connected) {
+            this.socket.emit('leave_conversation', { conversationId });
+            console.log('✅ Quitté la conversation:', conversationId);
+        }
+    }
+
+    /**
+     * Fermer la connexion
+     */
+    closeConnection() {
+        if (this.socket) {
+            this.socket.disconnect();
+            console.log('🔌 Connexion fermée');
+        }
+    }
+
+    /**
+     * Écouter les messages reçus
+     */
+    onMessageReceived(callback) {
+        if (this.socket) {
+            this.socket.on('receive_message', callback);
+        }
+    }
+
+    /**
+     * Créer une conversation
+     */
+    async createConversation(participants, type = 'private') {
         try {
-            const token = getValidAuthToken();
-            const { patient_id, professionnel_id } = participants;
-            
             const response = await fetch(`${this.baseURL}/api/messaging/conversations`, {
                 method: 'POST',
                 headers: {
-                    'Authorization': `Bearer ${token}`,
+                    'Authorization': `Bearer ${this.tokens.primaryToken}`,
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    patient_id,
-                    professionnel_id,
-                    type_conversation: type,
-                    titre: titre || `Conversation ${patient_id}-${professionnel_id}`
+                    participants,
+                    type
                 })
             });
 
@@ -279,7 +475,7 @@ class SignalingService {
                 conversation: data.data?.conversation
             };
         } catch (error) {
-            console.error('Erreur lors de la création de conversation:', error);
+            console.error('❌ Erreur lors de la création de la conversation:', error);
             return {
                 success: false,
                 error: error.message
@@ -287,47 +483,16 @@ class SignalingService {
         }
     }
 
-    // Récupérer les conversations avec messages non lus
-    async getUnreadConversations() {
+    /**
+     * Obtenir les messages d'une conversation
+     */
+    async getConversationMessages(conversationId, page = 1, limit = 50) {
         try {
-            const token = getValidAuthToken();
-            const response = await fetch(`${this.baseURL}/api/messaging/conversations/unread`, {
-                method: 'GET',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                }
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-
-            const data = await response.json();
-            return {
-                success: true,
-                conversations: data.data?.conversations || []
-            };
-        } catch (error) {
-            console.error('Erreur lors de la récupération des conversations non lues:', error);
-            return {
-                success: false,
-                error: error.message
-            };
-        }
-    }
-
-    // Marquer un message comme lu
-    async markMessageAsRead(messageId) {
-        try {
-            const token = getValidAuthToken();
             const response = await fetch(
-                `${this.baseURL}/api/messaging/messages/${messageId}/read`,
+                `${this.baseURL}/api/messaging/conversations/${conversationId}/messages?page=${page}&limit=${limit}`,
                 {
-                    method: 'PATCH',
                     headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
+                        'Authorization': `Bearer ${this.tokens.primaryToken}`
                     }
                 }
             );
@@ -336,9 +501,13 @@ class SignalingService {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
 
-            return { success: true };
+            const data = await response.json();
+            return {
+                success: true,
+                messages: data.data?.messages || []
+            };
         } catch (error) {
-            console.error('Erreur lors du marquage du message:', error);
+            console.error('❌ Erreur lors de la récupération des messages:', error);
             return {
                 success: false,
                 error: error.message
@@ -346,110 +515,11 @@ class SignalingService {
         }
     }
 
-    // Méthodes WebSocket pour la messagerie
-    joinConversation(conversationId) {
-        this.emit('join_conversation', { conversationId });
-    }
 
-    leaveConversation(conversationId) {
-        this.emit('leave_conversation', { conversationId });
-    }
 
-    setUserPresence(status = 'online') {
-        this.emit('user_presence', { status });
-    }
 
-    // Méthodes pour la compatibilité avec l'ancien code
-    connectSocket(userId, userType, token) {
-        console.log('🔍 SignalingService - connectSocket appelé avec:', { 
-            userId, 
-            userType, 
-            token: !!token,
-            tokenLength: token ? token.length : 0
-        });
-        
-        // Vérifier si on a déjà un token valide
-        const currentToken = getValidAuthToken();
-        console.log('🔍 SignalingService - Token actuel disponible:', !!currentToken);
-        
-        try {
-            const socket = this.connect();
-            if (socket) {
-                console.log('✅ SignalingService - Connexion Socket.IO réussie');
-                console.log('  - Socket ID:', socket.id);
-                console.log('  - User Type:', userType);
-                console.log('  - User ID:', userId);
-                return socket;
-            } else {
-                console.error('❌ SignalingService - Échec de la connexion Socket.IO');
-                return null;
-            }
-        } catch (error) {
-            console.error('❌ SignalingService - Erreur lors de la connexion Socket.IO:', error);
-            return null;
-        }
-    }
-
-    closeConnection() {
-        if (this.socket) {
-            this.socket.disconnect();
-            this.socket = null;
-        }
-    }
-
-    // Méthode de diagnostic pour vérifier l'état de l'authentification
-    diagnoseAuthState() {
-        console.log('🔍 SignalingService - Diagnostic de l\'état d\'authentification:');
-        
-        const token = localStorage.getItem('token');
-        const jwt = localStorage.getItem('jwt');
-        const patientData = localStorage.getItem('patient');
-        const medecinData = localStorage.getItem('medecin');
-        
-        console.log('  - token principal:', token ? '✅ Présent' : '❌ Absent');
-        console.log('  - jwt:', jwt ? '✅ Présent' : '❌ Absent');
-        console.log('  - patient data:', patientData ? '✅ Présent' : '❌ Absent');
-        console.log('  - medecin data:', medecinData ? '✅ Présent' : '❌ Absent');
-        
-        if (patientData) {
-            try {
-                const patient = JSON.parse(patientData);
-                console.log('  - Patient ID:', patient.id_patient || patient.id);
-                console.log('  - Patient token:', patient.token ? '✅ Présent' : '❌ Absent');
-            } catch (error) {
-                console.warn('  - Erreur parsing patient data:', error);
-            }
-        }
-        
-        if (medecinData) {
-            try {
-                const medecin = JSON.parse(medecinData);
-                console.log('  - Médecin ID:', medecin.id_professionnel || medecin.id);
-                console.log('  - Médecin token:', medecin.token ? '✅ Présent' : '❌ Absent');
-            } catch (error) {
-                console.warn('  - Erreur parsing medecin data:', error);
-            }
-        }
-        
-        const validToken = getValidAuthToken();
-        console.log('  - Token valide trouvé:', validToken ? '✅ Oui' : '❌ Non');
-        
-        return {
-            hasValidToken: !!validToken,
-            token: validToken,
-            userType: patientData ? 'patient' : medecinData ? 'medecin' : 'unknown'
-        };
-    }
-
-    onMessageReceived(callback) {
-        this.on('new_message', callback);
-    }
-
-    onNotification(callback) {
-        this.on('notification', callback);
-    }
 }
 
-// Exporter une instance unique pour toute l'application
+// Exporter une instance unique
 const signalingService = new SignalingService();
 export default signalingService;

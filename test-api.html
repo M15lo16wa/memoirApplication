@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test API Rendez-vous</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        button { padding: 10px 15px; margin: 5px; background-color: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer; }
+        button:hover { background-color: #0056b3; }
+        pre { background-color: #f8f9fa; padding: 10px; border-radius: 3px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>🧪 Test de l'API Rendez-vous</h1>
+    
+    <div class="test-section">
+        <h3>1. Test du serveur</h3>
+        <button onclick="testServer()">Tester le serveur</button>
+        <div id="server-result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h3>2. Récupérer les professionnels de santé</h3>
+        <button onclick="getProfessionnels()">Charger les professionnels</button>
+        <div id="professionnels-result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h3>3. Créer un rendez-vous de test</h3>
+        <button onclick="createRendezVous()">Créer un rendez-vous</button>
+        <div id="rendez-vous-result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h3>4. Voir tous les rendez-vous</h3>
+        <button onclick="getRendezVous()">Charger les rendez-vous</button>
+        <div id="all-rendez-vous-result"></div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:3001/api';
+        
+        async function testServer() {
+            try {
+                const response = await fetch(`${API_BASE}/test`);
+                const data = await response.json();
+                document.getElementById('server-result').innerHTML = `
+                    <div class="success">
+                        <h4>✅ Serveur opérationnel</h4>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    </div>
+                `;
+            } catch (error) {
+                document.getElementById('server-result').innerHTML = `
+                    <div class="error">
+                        <h4>❌ Erreur de connexion</h4>
+                        <p>${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+        
+        async function getProfessionnels() {
+            try {
+                const response = await fetch(`${API_BASE}/professionnelSante`);
+                const data = await response.json();
+                document.getElementById('professionnels-result').innerHTML = `
+                    <div class="success">
+                        <h4>✅ Professionnels récupérés (${data.data.length})</h4>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    </div>
+                `;
+            } catch (error) {
+                document.getElementById('professionnels-result').innerHTML = `
+                    <div class="error">
+                        <h4>❌ Erreur</h4>
+                        <p>${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+        
+        async function createRendezVous() {
+            const testData = {
+                patient: {
+                    lastName: "Test",
+                    firstName: "Utilisateur",
+                    birthDate: "1990-01-01",
+                    gender: "male",
+                    email: "test@example.com",
+                    phone: "0123456789",
+                    address: "Adresse de test",
+                    hasInsurance: false,
+                    insuranceProvider: "",
+                    insuranceNumber: ""
+                },
+                appointment: {
+                    hospital: "hopital_principal",
+                    service: "cardiology",
+                    doctor: "",
+                    reason: "Consultation de test",
+                    appointmentDate: "Lun 10",
+                    appointmentTime: "09:00",
+                    status: "en_attente"
+                }
+            };
+            
+            try {
+                const response = await fetch(`${API_BASE}/rendez-vous`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(testData)
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    document.getElementById('rendez-vous-result').innerHTML = `
+                        <div class="success">
+                            <h4>✅ Rendez-vous créé avec succès</h4>
+                            <p><strong>Statut:</strong> ${data.status}</p>
+                            <p><strong>Temps de réponse:</strong> ${data.responseTime} ms</p>
+                            <p><strong>Taille:</strong> ${data.responseSize} bytes</p>
+                            <pre>${JSON.stringify(data, null, 2)}</pre>
+                        </div>
+                    `;
+                } else {
+                    document.getElementById('rendez-vous-result').innerHTML = `
+                        <div class="error">
+                            <h4>❌ Erreur lors de la création</h4>
+                            <pre>${JSON.stringify(data, null, 2)}</pre>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                document.getElementById('rendez-vous-result').innerHTML = `
+                    <div class="error">
+                        <h4>❌ Erreur de connexion</h4>
+                        <p>${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+        
+        async function getRendezVous() {
+            try {
+                const response = await fetch(`${API_BASE}/rendez-vous`);
+                const data = await response.json();
+                document.getElementById('all-rendez-vous-result').innerHTML = `
+                    <div class="success">
+                        <h4>✅ Rendez-vous récupérés (${data.data.length})</h4>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    </div>
+                `;
+            } catch (error) {
+                document.getElementById('all-rendez-vous-result').innerHTML = `
+                    <div class="error">
+                        <h4>❌ Erreur</h4>
+                        <p>${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+        
+        // Test automatique au chargement
+        window.onload = function() {
+            testServer();
+        };
+    </script>
+</body>
+</html>

@@ -37,6 +37,7 @@ export const getPendingAccessRequests = () => dmpApi.get('/access/patient/pendin
 export const respondToAccessRequest = (id, decision, comment) => dmpApi.patch(`/access/patient/response/${id}`, { response: decision, comment });
 export const getPatientAuthorizations = () => dmpApi.get('/access/patient/authorizations');
 export const getPatientAccessHistory = () => dmpApi.get('/access/patient/history');
+export const getPatientConsultations = (patientId) => dmpApi.get(`/consultation/patient/${patientId}`);
 
 // =================================================================
 //                 API POUR LES MÉDECINS
@@ -810,6 +811,159 @@ export const getHistoriqueMedical = async (patientId = null) => {
     return { data: dossier?.historique || dossier?.historiqueMedical || [] };
 };
 
+// --- Consultations dans l'historique médical ---
+export const getConsultationsHistoriqueMedical = async (patientId = null) => {
+    try {
+        console.log(`🔍 Récupération des consultations pour le patient ${patientId || 'connecté'}...`);
+        
+        // Utiliser directement l'API des consultations
+        const consultationsResponse = await dmpApi.get(`/consultation/patient/${patientId}`);
+        
+        // Extraire les consultations de la réponse
+        let consultations = [];
+        if (consultationsResponse?.data) {
+            consultations = Array.isArray(consultationsResponse.data) ? consultationsResponse.data : [consultationsResponse.data];
+        }
+        
+        console.log(`✅ ${consultations.length} consultations récupérées via l'API des consultations`);
+        
+        // Enrichir les consultations avec des informations supplémentaires si nécessaire
+        const consultationsEnrichies = consultations.map(consultation => {
+            // Gérer le professionnel de santé
+            let professionnel = consultation.professionnel;
+            if (!professionnel) {
+                if (consultation.medecin && typeof consultation.medecin === 'object') {
+                    // Si medecin est un objet, extraire le nom
+                    professionnel = consultation.medecin.nom && consultation.medecin.prenom 
+                        ? `${consultation.medecin.prenom} ${consultation.medecin.nom}`
+                        : consultation.medecin.nom || consultation.medecin.prenom || 'Professionnel de santé';
+                } else if (consultation.medecin) {
+                    professionnel = consultation.medecin;
+                } else if (consultation.professionnel_id) {
+                    professionnel = `Professionnel ID: ${consultation.professionnel_id}`;
+                }
+            }
+
+            // Gérer le service
+            let service = consultation.service;
+            if (!service && consultation.service_id) {
+                service = `Service ID: ${consultation.service_id}`;
+            }
+
+            return {
+                ...consultation,
+                type: consultation.type || 'consultation',
+                date: consultation.date || consultation.date_consultation || consultation.createdAt,
+                statut: consultation.statut || 'terminee',
+                motif: consultation.motif || consultation.raison || 'Consultation médicale',
+                observations: consultation.observations || consultation.commentaires || '',
+                professionnel: professionnel,
+                service: service
+            };
+        });
+        
+        return { 
+            data: consultationsEnrichies, 
+            status: 'success',
+            count: consultationsEnrichies.length,
+            patientId: patientId || 'patient_connecte'
+        };
+        
+    } catch (error) {
+        console.error('❌ Erreur lors de la récupération des consultations:', error);
+        return { 
+            data: [], 
+            status: 'error',
+            message: 'Impossible de récupérer les consultations',
+            count: 0,
+            patientId: patientId || 'patient_connecte'
+        };
+    }
+};
+
+// --- Récupération des consultations par période ---
+export const getConsultationsByPeriod = async (patientId, dateDebut, dateFin) => {
+    try {
+        console.log(`🔍 Récupération des consultations entre ${dateDebut} et ${dateFin} pour le patient ${patientId}...`);
+        
+        // Récupérer toutes les consultations
+        const consultationsResponse = await getConsultationsHistoriqueMedical(patientId);
+        const consultations = consultationsResponse.data;
+        
+        if (!Array.isArray(consultations)) {
+            console.warn('⚠️ Aucune consultation disponible pour le filtrage par période');
+            return { data: [], status: 'no_data', count: 0 };
+        }
+        
+        // Filtrer par période
+        const consultationsFiltrees = consultations.filter(consultation => {
+            const dateConsultation = new Date(consultation.date || consultation.date_consultation || consultation.createdAt);
+            const debut = new Date(dateDebut);
+            const fin = new Date(dateFin);
+            
+            return dateConsultation >= debut && dateConsultation <= fin;
+        });
+        
+        console.log(`✅ ${consultationsFiltrees.length} consultations trouvées pour la période spécifiée`);
+        
+        return { 
+            data: consultationsFiltrees, 
+            status: 'success',
+            count: consultationsFiltrees.length,
+            periode: { debut: dateDebut, fin: dateFin }
+        };
+        
+    } catch (error) {
+        console.error('❌ Erreur lors de la récupération des consultations par période:', error);
+        return { 
+            data: [], 
+            status: 'error',
+            message: 'Erreur lors du filtrage par période',
+            count: 0
+        };
+    }
+};
+
+// --- Récupération des consultations par type ---
+export const getConsultationsByType = async (patientId, typeConsultation) => {
+    try {
+        console.log(`🔍 Récupération des consultations de type "${typeConsultation}" pour le patient ${patientId}...`);
+        
+        // Récupérer toutes les consultations
+        const consultationsResponse = await getConsultationsHistoriqueMedical(patientId);
+        const consultations = consultationsResponse.data;
+        
+        if (!Array.isArray(consultations)) {
+            console.warn('⚠️ Aucune consultation disponible pour le filtrage par type');
+            return { data: [], status: 'no_data', count: 0 };
+        }
+        
+        // Filtrer par type
+        const consultationsFiltrees = consultations.filter(consultation => {
+            const type = consultation.type || consultation.categorie || consultation.nature || '';
+            return type.toLowerCase().includes(typeConsultation.toLowerCase());
+        });
+        
+        console.log(`✅ ${consultationsFiltrees.length} consultations de type "${typeConsultation}" trouvées`);
+        
+        return { 
+            data: consultationsFiltrees, 
+            status: 'success',
+            count: consultationsFiltrees.length,
+            type: typeConsultation
+        };
+        
+    } catch (error) {
+        console.error('❌ Erreur lors de la récupération des consultations par type:', error);
+        return { 
+            data: [], 
+            status: 'error',
+            message: 'Erreur lors du filtrage par type',
+            count: 0
+        };
+    }
+};
+
 export const addHistoriqueEntry = async (patientId, entry) => {
     // Ajouter l'entrée à l'historique du dossier médical
     const response = await dmpApi.put(`/dossierMedical/${patientId}`, { 
@@ -1010,7 +1164,8 @@ const dmpApiExports = {
     // gestion des acces patient
     getPatientSentAccessRequests,
     getPatientAccessStatus,
-    getPatientInfo, // Ajout de la nouvelle fonction
+    getPatientConsultations,
+    getPatientInfo,
     getAutorisations,
     accepterAutorisation,
     refuserAutorisation,
@@ -1029,6 +1184,9 @@ const dmpApiExports = {
     getDMP,
     updateDMP,
     getHistoriqueMedical,
+    getConsultationsHistoriqueMedical,
+    getConsultationsByPeriod,
+    getConsultationsByType,
     addHistoriqueEntry,
     getJournalActivite,
     getDroitsAcces,

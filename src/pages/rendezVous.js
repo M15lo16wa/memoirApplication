@@ -1,6 +1,9 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import FooterRendezVous from "../components/layout/FooterRendezVous";
 import Header from "../components/layout/Header";
+
+// importation des fonctions de rendez-vous
+import rendezVousApi from "../services/api/rendezVous";
 
 function RendezVous() {
     // Gestion des étapes
@@ -29,10 +32,46 @@ function RendezVous() {
 
     // Gestion des erreurs
     const [errors, setErrors] = useState({});
+    
+    // Gestion du chargement
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    
+    // Gestion des messages de succès
+    const [successMessage, setSuccessMessage] = useState("");
+
+    // Gestion des professionnels de santé
+    const [professionnels, setProfessionnels] = useState([]);
+    const [loadingProfessionnels, setLoadingProfessionnels] = useState(false);
 
     // Gestion de la sélection de date et heure
     const days = ["Lun 10", "Mar 11", "Mer 12", "Jeu 13", "Ven 14", "Sam 15", "Dim 16"];
     const times = ["09:00", "10:15", "11:30", "14:00"];
+
+    // Charger les professionnels de santé au montage du composant
+    useEffect(() => {
+        const loadProfessionnels = async () => {
+            setLoadingProfessionnels(true);
+            try {
+                const result = await rendezVousApi.getAllProfessionnelsSante();
+                if (result.success && Array.isArray(result.data)) {
+                    setProfessionnels(result.data);
+                } else if (result.success && result.data && Array.isArray(result.data.data)) {
+                    // Si l'API retourne { data: { data: [...] } }
+                    setProfessionnels(result.data.data);
+                } else {
+                    console.error('Erreur lors du chargement des professionnels:', result.error || 'Format de données invalide');
+                    setProfessionnels([]); // Initialiser avec un tableau vide en cas d'erreur
+                }
+            } catch (error) {
+                console.error('Erreur lors du chargement des professionnels:', error);
+                setProfessionnels([]); // Initialiser avec un tableau vide en cas d'erreur
+            } finally {
+                setLoadingProfessionnels(false);
+            }
+        };
+
+        loadProfessionnels();
+    }, []);
 
     // Handlers génériques
     const handleChange = (e) => {
@@ -57,7 +96,11 @@ function RendezVous() {
 
     // Navigation entre étapes
     const nextStep = () => {
-        if (validateStep(step)) setStep(step + 1);
+        if (validateStep(step)) {
+            setStep(step + 1);
+            // Effacer les messages lors du passage à l'étape suivante
+            if (successMessage) setSuccessMessage("");
+        }
     };
     const prevStep = () => setStep(step - 1);
 
@@ -87,34 +130,107 @@ function RendezVous() {
     };
 
     // Soumission finale
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
         if (!form.consent) {
             setErrors({ consent: "Vous devez accepter les conditions" });
             return;
         }
-        alert("Votre rendez-vous a été confirmé. Vous recevrez un email de confirmation sous peu.");
-        setStep(1);
-        setForm({
-            lastName: "",
-            firstName: "",
-            birthDate: "",
-            gender: "",
-            email: "",
-            phone: "",
-            address: "",
-            hasInsurance: false,
-            insuranceProvider: "",
-            insuranceNumber: "",
-            service: "",
-            doctor: "",
-            reason: "",
-            appointmentDate: "",
-            appointmentTime: "",
-            hospital: "", // reset
-            consent: false,
-        });
-        setErrors({});
+
+        setIsSubmitting(true);
+        try {
+            // Préparer les données du rendez-vous
+            const rendezVousData = {
+                patient: {
+                    lastName: form.lastName,
+                    firstName: form.firstName,
+                    birthDate: form.birthDate,
+                    gender: form.gender,
+                    email: form.email,
+                    phone: form.phone,
+                    address: form.address,
+                    hasInsurance: form.hasInsurance,
+                    insuranceProvider: form.insuranceProvider,
+                    insuranceNumber: form.insuranceNumber
+                },
+                appointment: {
+                    hospital: form.hospital,
+                    service: form.service,
+                    doctor: form.doctor,
+                    reason: form.reason,
+                    appointmentDate: form.appointmentDate,
+                    appointmentTime: form.appointmentTime,
+                    status: 'en_attente'
+                },
+                createdAt: new Date().toISOString()
+            };
+
+            // Appeler l'API pour créer le rendez-vous
+            const result = await rendezVousApi.createRendezVous(rendezVousData);
+            
+            // Vérifier le statut de la réponse
+            if (result && (result.success || result.status === 201 || result.statusCode === 201)) {
+                // Récupérer les informations de statut du serveur
+                const statusCode = result.status || result.statusCode || 201;
+                const responseTime = result.responseTime || 'N/A';
+                const responseSize = result.responseSize || 'N/A';
+                
+                // Créer le message de succès avec les détails du serveur
+                const successDetails = `🎉 Rendez-vous créé avec succès !\n\n` +
+                    `📊 Statut serveur: ${statusCode}\n` +
+                    `⏱️ Temps de réponse: ${responseTime} ms\n` +
+                    `📦 Taille réponse: ${responseSize} bytes\n\n` +
+                    `✅ Vous recevrez un email de confirmation sous peu.`;
+                
+                setSuccessMessage(successDetails);
+                
+                // Afficher une alerte moderne et élégante
+                const alertMessage = `🎉 RENDEZ-VOUS CONFIRMÉ !\n\n` +
+                    `📊 Statut: ${statusCode}\n` +
+                    `⏱️ Temps de réponse: ${responseTime} ms\n` +
+                    `📦 Taille: ${responseSize} bytes\n\n` +
+                    `✅ Votre rendez-vous a été enregistré avec succès !\n\n` +
+                    `📧 Vous recevrez un email de confirmation sous peu.`;
+                alert(alertMessage);
+                
+                // Reset du formulaire
+                setStep(1);
+                setForm({
+                    lastName: "",
+                    firstName: "",
+                    birthDate: "",
+                    gender: "",
+                    email: "",
+                    phone: "",
+                    address: "",
+                    hasInsurance: false,
+                    insuranceProvider: "",
+                    insuranceNumber: "",
+                    service: "",
+                    doctor: "",
+                    reason: "",
+                    appointmentDate: "",
+                    appointmentTime: "",
+                    hospital: "",
+                    consent: false,
+                });
+                setErrors({});
+            } else {
+                const errorMessage = result?.message || result?.error || "Erreur inconnue";
+                // Afficher une alerte moderne au lieu d'un message d'erreur rouge
+                const alertMessage = `⚠️ Erreur lors de la création du rendez-vous\n\n${errorMessage}\n\nVeuillez réessayer ou contacter le support.`;
+                alert(alertMessage);
+                setSuccessMessage(""); // Effacer les succès précédents
+            }
+        } catch (error) {
+            console.error("Erreur lors de la création du rendez-vous:", error);
+            // Afficher une alerte moderne au lieu d'un message d'erreur rouge
+            const alertMessage = `⚠️ Erreur lors de la création du rendez-vous\n\nUne erreur inattendue s'est produite.\n\nVeuillez réessayer ou contacter le support.`;
+            alert(alertMessage);
+            setSuccessMessage(""); // Effacer les succès précédents
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     // Pour l'affichage du résumé de confirmation
@@ -133,12 +249,16 @@ function RendezVous() {
     };
 
     const getDoctorLabel = () => {
-        switch (form.doctor) {
-            case "dr_dupont": return "Dr. Dupont (Cardiologie)";
-            case "dr_martin": return "Dr. Martin (Dermatologie)";
-            case "dr_leclerc": return "Dr. Leclerc (Endocrinologie)";
-            default: return "Aucun médecin spécifique";
+        if (!form.doctor) return "Aucun médecin spécifique";
+        
+        if (!Array.isArray(professionnels)) return "Médecin sélectionné";
+        
+        const selectedProf = professionnels.find(prof => prof.id_professionnel === form.doctor);
+        if (selectedProf) {
+            return `${selectedProf.titre || 'Dr.'} ${selectedProf.nom} ${selectedProf.prenom}${selectedProf.specialite ? ` (${selectedProf.specialite})` : ''}`;
         }
+        
+        return "Médecin sélectionné";
     };
 
     return (
@@ -146,6 +266,31 @@ function RendezVous() {
             <Header />
             <main className="container mx-auto px-4 py-8 max-w-4xl">
                 <div className="bg-white rounded-lg shadow-lg overflow-hidden">
+                    {/* Message de succès */}
+                    {successMessage && (
+                        <div className="bg-green-50 border border-green-200 rounded-t-lg p-4">
+                            <div className="flex items-start">
+                                <svg className="w-5 h-5 text-green-400 mr-2 mt-1 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                </svg>
+                                <div className="flex-1">
+                                    <div className="text-green-800 whitespace-pre-line font-medium">
+                                        {successMessage}
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => setSuccessMessage("")}
+                                    className="ml-4 text-green-600 hover:opacity-75 flex-shrink-0"
+                                >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+
                     <div className="p-6 border-b">
                         <h2 className="text-2xl font-bold text-gray-800">Prendre un rendez-vous</h2>
                         <p className="text-gray-600 mt-2">Remplissez ce formulaire pour prendre rendez-vous avec nos spécialistes.</p>
@@ -277,12 +422,27 @@ function RendezVous() {
                                     </div>
                                     <div>
                                         <label htmlFor="doctor" className="block text-sm font-medium text-gray-700 mb-1">Médecin (optionnel)</label>
-                                        <select id="doctor" name="doctor" value={form.doctor} onChange={handleChange} className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
-                                            <option value="">Aucune préférence</option>
-                                            <option value="dr_dupont">Dr. Dupont (Cardiologie)</option>
-                                            <option value="dr_martin">Dr. Martin (Dermatologie)</option>
-                                            <option value="dr_leclerc">Dr. Leclerc (Endocrinologie)</option>
+                                        <select 
+                                            id="doctor" 
+                                            name="doctor" 
+                                            value={form.doctor} 
+                                            onChange={handleChange} 
+                                            className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                                            disabled={loadingProfessionnels}
+                                        >
+                                            <option value="">
+                                                {loadingProfessionnels ? 'Chargement...' : 'Aucune préférence'}
+                                            </option>
+                                                                                         {Array.isArray(professionnels) && professionnels.map((prof) => (
+                                                 <option key={prof.id_professionnel} value={prof.id_professionnel}>
+                                                     {prof.titre || 'Dr.'} {prof.nom} {prof.prenom} 
+                                                     {prof.specialite ? ` (${prof.specialite})` : ''}
+                                                 </option>
+                                             ))}
                                         </select>
+                                        {loadingProfessionnels && (
+                                            <p className="text-sm text-gray-500 mt-1">Chargement des professionnels...</p>
+                                        )}
                                     </div>
                                     <div>
                                         <label htmlFor="reason" className="block text-sm font-medium text-gray-700 mb-1">Motif de consultation *</label>
@@ -363,13 +523,25 @@ function RendezVous() {
                                     </div>
                                     <div className="mt-8 flex justify-between">
                                         <button type="button" onClick={prevStep} className="text-gray-600 hover:text-gray-800 px-6 py-2 rounded-lg border transition">Retour</button>
-                                        <button type="submit" className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg transition">Confirmer le rendez-vous</button>
+                                        <button 
+                                            type="submit" 
+                                            disabled={isSubmitting}
+                                            className={`px-6 py-2 rounded-lg transition ${
+                                                isSubmitting 
+                                                    ? 'bg-gray-400 cursor-not-allowed' 
+                                                    : 'bg-green-600 hover:bg-green-700'
+                                            } text-white`}
+                                        >
+                                            {isSubmitting ? 'Création en cours...' : 'Confirmer le rendez-vous'}
+                                        </button>
                                     </div>
                                 </div>
                             </div>
                         )}
                     </form>
                 </div>
+
+
             </main>
             <FooterRendezVous />
         </div>

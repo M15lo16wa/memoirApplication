@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { getDMPAccessHistory, getPatientInfo, getPatientAuthorizations } from '../../services/api/dmpApi';
+import { getDMPAccessHistory, getPatientInfo, getPatientAuthorizations, getPatientConsultations } from '../../services/api/dmpApi';
 import { useDMP } from '../../hooks/useDMP';
 import { use2FA } from '../../hooks/use2FA';
 
@@ -10,15 +10,42 @@ import MessagingWidget from '../../messaging/components/MessagingWidget'
 import MessagingButton from '../../messaging/components/MessagingButton'
 
 function DMPHistory({ patientId = null }) {
+  // Fonctions utilitaires pour sécuriser l'affichage des données
+  const safeDisplay = (value, fallback = 'N/A', maxLength = null) => {
+    if (value === null || value === undefined) return fallback;
+    if (typeof value === 'string') {
+      if (maxLength && value.length > maxLength) {
+        return value.substring(0, maxLength) + '...';
+      }
+      return value;
+    }
+    if (typeof value === 'number') return value.toString();
+    if (typeof value === 'boolean') return value ? 'Oui' : 'Non';
+    if (Array.isArray(value)) return value.length > 0 ? `${value.length} élément(s)` : fallback;
+    if (typeof value === 'object') {
+      // Si c'est un objet avec des propriétés nom/prénom, les extraire
+      if (value.nom || value.prenom) {
+        return `${value.prenom || ''} ${value.nom || ''}`.trim() || fallback;
+      }
+      // Si c'est un objet avec une propriété nom, l'utiliser
+      if (value.nom) return value.nom;
+      // Si c'est un objet avec une propriété code, l'utiliser
+      if (value.code) return value.code;
+      // Sinon, retourner le fallback
+      return fallback;
+    }
+    return fallback;
+  };
+
   // État pour afficher ou non le widget de messagerie
   const [showMessaging, setShowMessaging] = useState(false);
   const { state: dmpState } = useDMP();
-  
+
   // Récupérer les informations d'authentification
   const [userId, setUserId] = useState(null);
   const [role, setRole] = useState(null);
   const [jwtToken, setJwtToken] = useState(null);
-  
+
   // Utilisation du hook centralisé use2FA
   const {
     show2FAModal,
@@ -39,7 +66,7 @@ function DMPHistory({ patientId = null }) {
     handleResendEmail,
     reset2FAState
   } = use2FA();
-  
+
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -54,15 +81,15 @@ function DMPHistory({ patientId = null }) {
     const token = localStorage.getItem('token') || localStorage.getItem('jwt');
     const patientData = localStorage.getItem('patient');
     const medecinData = localStorage.getItem('medecin');
-    
+
     console.log('🔍 DMPHistory - Récupération des informations d\'authentification:');
     console.log('  - Token:', token ? '✅ Présent' : '❌ Absent');
     console.log('  - Patient data:', patientData ? '✅ Présent' : '❌ Absent');
     console.log('  - Médecin data:', medecinData ? '✅ Présent' : '❌ Absent');
-    
+
     if (token) {
       setJwtToken(token);
-      
+
       if (patientData) {
         try {
           const patient = JSON.parse(patientData);
@@ -94,39 +121,39 @@ function DMPHistory({ patientId = null }) {
     const jwtToken = localStorage.getItem('token') || localStorage.getItem('jwt');
     const patientData = localStorage.getItem('patient');
     const medecinData = localStorage.getItem('medecin');
-    
-    console.log('🔍 DEBUG - DMPHistory - Vérification autorisation:');
+
+    console.log('�� DEBUG - DMPHistory - Vérification autorisation:');
     console.log('  - Token:', jwtToken ? '✅ Présent' : '❌ Absent');
     console.log('  - Patient data:', patientData ? '✅ Présent' : '❌ Absent');
     console.log('  - Médecin data:', medecinData ? '✅ Présent' : '❌ Absent');
-    
+
     // Vérifier qu'il y a au moins un token et des données utilisateur
     if (!jwtToken || (!patientData && !medecinData)) {
       console.warn('⚠️ Accès refusé: Utilisateur non connecté ou données manquantes');
       return false;
     }
-    
+
     try {
       // Si c'est un patient connecté
       if (patientData) {
         const patient = JSON.parse(patientData);
-        
+
         // Si aucun patientId spécifique n'est demandé, le patient connecté peut voir son propre historique
         if (!patientId) {
           console.log('✅ Patient connecté autorisé à consulter son propre historique DMP');
           return true;
         }
-        
+
         // Vérifier que l'utilisateur connecté correspond au patient demandé
         if (patient.id !== patientId && patient.id_patient !== patientId) {
           console.warn('⚠️ Accès refusé: Patient tente d\'accéder à l\'historique d\'un autre patient');
           return false;
         }
-        
+
         console.log('✅ Patient autorisé à consulter son historique DMP');
         return true;
       }
-      
+
       // Si c'est un médecin connecté
       if (medecinData) {
         const medecin = JSON.parse(medecinData);
@@ -135,7 +162,7 @@ function DMPHistory({ patientId = null }) {
         console.log('  - Patient demandé:', patientId);
         return true;
       }
-      
+
       return false;
     } catch (error) {
       console.error('❌ Erreur lors de la vérification des autorisations:', error);
@@ -146,14 +173,14 @@ function DMPHistory({ patientId = null }) {
   // Vérifier si le patient a reçu des demandes d'accès
   const checkAccessRequests = useCallback(async () => {
     if (!isPatientAuthorized) return;
-    
+
     try {
-      console.log('🔍 Vérification des demandes d\'accès reçues...');
+      console.log('🔍 Vérification des demandes d\'accès reçues...'); // Dépendance correcte, rien à retirer ici
       const response = await getPatientAuthorizations();
       const authData = response?.data || response || [];
-      
+
       console.log('📋 Autorisations reçues:', authData);
-      
+
       if (Array.isArray(authData) && authData.length > 0) {
         setAuthorizations(authData);
         setHasAccessRequests(true);
@@ -172,7 +199,7 @@ function DMPHistory({ patientId = null }) {
   // Ajouter une validation pour s'assurer qu'on a un ID valide
   const effectivePatientId = useMemo(() => {
     let id = patientId || dmpState?.patientId;
-    
+
     // Si aucun ID n'est spécifié, essayer de récupérer l'ID du patient connecté
     if (!id) {
       try {
@@ -185,13 +212,13 @@ function DMPHistory({ patientId = null }) {
         console.warn('⚠️ Erreur lors de la récupération de l\'ID du patient connecté:', error);
       }
     }
-    
+
     // Validation que l'ID est un nombre valide
     if (id && !isNaN(id) && id > 0) {
       console.log('✅ effectivePatientId valide:', id);
       return id;
     }
-    
+
     console.warn('⚠️ effectivePatientId invalide:', id);
     return null;
   }, [patientId, dmpState?.patientId]);
@@ -200,7 +227,7 @@ function DMPHistory({ patientId = null }) {
   useEffect(() => {
     const authorized = checkPatientAuthorization;
     setIsPatientAuthorized(authorized);
-    
+
     if (!authorized) {
       setError('Accès non autorisé. Seuls les patients connectés peuvent consulter leur historique DMP.');
       setLoading(false);
@@ -212,37 +239,39 @@ function DMPHistory({ patientId = null }) {
   // Fonction utilitaire pour extraire les données d'historique (mémorisée)
   const extractHistoryData = useMemo(() => (data) => {
     console.log('Extraction des données d\'historique depuis:', data);
-    
+
     // Si data est directement un tableau
     if (Array.isArray(data)) {
       return data;
     }
-    
+
     // Si data est un objet, chercher un tableau dans ses propriétés
     if (data && typeof data === 'object') {
       // Propriétés possibles contenant l'historique
       const possibleKeys = ['data', 'historique', 'accessHistory', 'history', 'results', 'items'];
-      
+
       for (const key of possibleKeys) {
         if (data[key] && Array.isArray(data[key])) {
           console.log(`✅ Données trouvées dans la propriété: ${key}`);
           return data[key];
         }
       }
-      
+
       // Chercher dans toutes les valeurs de l'objet
       const allValues = Object.values(data);
       const arrays = allValues.filter(val => Array.isArray(val));
-      
+
       if (arrays.length > 0) {
         console.log(`✅ Tableau trouvé dans les valeurs de l'objet:`, arrays[0]);
         return arrays[0];
       }
     }
-    
+
     console.warn('⚠️ Aucun tableau trouvé dans les données reçues');
     return [];
   }, []);
+
+
 
   const loadHistory = useCallback(async (forceReload = false) => {
     // Vérifier l'autorisation avant de charger l'historique
@@ -253,7 +282,7 @@ function DMPHistory({ patientId = null }) {
 
     console.log('🔍 loadHistory appelé avec:', { effectivePatientId, forceReload, lastPatientId, historyLength: history.length, loading });
     console.log('🔍 État d\'autorisation:', { isPatientAuthorized, checkPatientAuthorization });
-    
+
     // Vérifier que nous avons un patientId valide
     if (!effectivePatientId) {
       console.error('❌ effectivePatientId est undefined ou null dans loadHistory');
@@ -276,26 +305,42 @@ function DMPHistory({ patientId = null }) {
 
     setLoading(true);
     setError(null);
-    
+
     try {
       console.log('🚀 Chargement de l\'historique DMP pour le patient:', effectivePatientId);
-      
+
       // Charger l'historique et les informations du patient en parallèle
       const [historyData, patientData] = await Promise.all([
         getDMPAccessHistory(effectivePatientId),
         getPatientInfo(effectivePatientId)
       ]);
-      
+
       console.log('📊 Données reçues de l\'API:', historyData);
       console.log('👤 Informations patient récupérées:', patientData);
-      
+
+      // Debug: Vérifier la structure des données d'historique
+      if (Array.isArray(historyData)) {
+        historyData.forEach((entry, index) => {
+          console.log(`🔍 Entry ${index}:`, {
+            statut: entry.statut,
+            action: entry.action,
+            type_ressource: entry.type_ressource,
+            details: entry.details,
+            id_ressource: entry.id_ressource,
+            adresse_ip: entry.adresse_ip,
+            user_agent: entry.user_agent
+          });
+        });
+      }
+
       // Extraire et valider les données d'historique
       const extractedHistoryData = extractHistoryData(historyData);
       console.log('📋 Données d\'historique extraites:', extractedHistoryData);
-      
+
       setHistory(extractedHistoryData);
       setPatientInfo(patientData);
       setLastPatientId(effectivePatientId);
+      
       console.log('✅ Historique et infos patient mis à jour avec succès');
     } catch (error) {
       console.error('❌ Erreur lors du chargement de l\'historique DMP:', error);
@@ -304,14 +349,14 @@ function DMPHistory({ patientId = null }) {
     } finally {
       setLoading(false);
     }
-  }, [effectivePatientId, extractHistoryData, lastPatientId, history.length, loading, isPatientAuthorized, checkPatientAuthorization]);
+  }, [effectivePatientId, extractHistoryData, isPatientAuthorized, checkPatientAuthorization, history.length, lastPatientId, loading]); // Ajout des dépendances nécessaires pour la cohérence des données et la messagerie
 
   // Utilisation du wrapper 2FA centralisé pour protéger les accès aux dossiers patients
   const protectedLoadHistory = useCallback(
     with2FAProtection(loadHistory, 'Chargement de l\'historique DMP'),
     [loadHistory, with2FAProtection]
   );
-  
+
   const protectedCheckAccessRequests = useCallback(
     with2FAProtection(checkAccessRequests, 'Vérification des demandes d\'accès'),
     [checkAccessRequests, with2FAProtection]
@@ -328,12 +373,12 @@ function DMPHistory({ patientId = null }) {
   // Effet pour gérer les changements de patientId
   useEffect(() => {
     console.log('🔍 useEffect - Changement de patient détecté:', { effectivePatientId, lastPatientId });
-    
+
     // Éviter les appels inutiles si les valeurs ne sont pas encore définies
     if (!effectivePatientId || !isPatientAuthorized) {
       return;
     }
-    
+
     // Vérifier si c'est vraiment un changement de patient
     if (effectivePatientId !== lastPatientId) {
       console.log('✅ Changement de patient détecté, rechargement de l\'historique');
@@ -348,19 +393,19 @@ function DMPHistory({ patientId = null }) {
   // Effet initial pour charger l'historique au montage du composant
   useEffect(() => {
     console.log('🔍 useEffect - Montage initial du composant DMPHistory');
-    
+
     // Éviter les appels inutiles si les conditions ne sont pas remplies
     if (!isPatientAuthorized || !effectivePatientId) {
       console.log('⚠️ Conditions non remplies pour le chargement initial:', { isPatientAuthorized, effectivePatientId });
       return;
     }
-    
+
     // Vérifier si on a déjà des données pour ce patient
     if (lastPatientId === effectivePatientId && history.length > 0) {
       console.log('✅ Données déjà disponibles pour ce patient, pas de rechargement');
       return;
     }
-    
+
     console.log('✅ Composant monté avec patientId valide, chargement initial de l\'historique');
     protectedLoadHistory(true);
   }, [isPatientAuthorized, effectivePatientId, protectedLoadHistory, lastPatientId, history.length]);
@@ -393,9 +438,12 @@ function DMPHistory({ patientId = null }) {
   }, [effectivePatientId, protectedLoadHistory]);
 
   const formatDate = (dateString) => {
-    if (!dateString) return 'Date inconnue';
+    // Utiliser safeDisplay pour gérer les objets
+    const dateValue = safeDisplay(dateString, '');
+
+    if (!dateValue) return 'Date inconnue';
     try {
-      return new Date(dateString).toLocaleDateString('fr-FR', {
+      return new Date(dateValue).toLocaleDateString('fr-FR', {
         year: 'numeric',
         month: 'long',
         day: 'numeric',
@@ -403,15 +451,18 @@ function DMPHistory({ patientId = null }) {
         minute: '2-digit'
       });
     } catch (error) {
-      console.warn('Erreur de formatage de date:', dateString, error);
+      console.warn('Erreur de formatage de date:', dateValue, error);
       return 'Date invalide';
     }
   };
 
   const getStatusColor = (status) => {
-    if (!status) return 'bg-gray-100 text-gray-800';
-    
-    switch (status.toLowerCase()) {
+    // Utiliser safeDisplay pour gérer les objets
+    const statusValue = safeDisplay(status, '');
+
+    if (!statusValue) return 'bg-gray-100 text-gray-800';
+
+    switch (statusValue.toLowerCase()) {
       case 'succes':
       case 'success':
         return 'bg-green-100 text-green-800';
@@ -427,8 +478,11 @@ function DMPHistory({ patientId = null }) {
   };
 
   const getActionLabel = (action) => {
-    if (!action) return 'Action inconnue';
-    
+    // Utiliser safeDisplay pour gérer les objets
+    const actionValue = safeDisplay(action, '');
+
+    if (!actionValue) return 'Action inconnue';
+
     const actionLabels = {
       'acces_patient_propre_dossier': 'Accès au dossier personnel',
       'acces_dossier_medical': 'Accès au dossier médical',
@@ -438,64 +492,67 @@ function DMPHistory({ patientId = null }) {
       'suppression_autorisation': 'Suppression d\'autorisation',
       'revocation_acces': 'Révocation d\'accès'
     };
-    
-    return actionLabels[action] || action.replace(/_/g, ' ');
+
+    return actionLabels[actionValue] || actionValue.replace(/_/g, ' ');
   };
 
   const getResourceTypeLabel = (type) => {
-    if (!type) return 'Type inconnu';
-    
+    // Utiliser safeDisplay pour gérer les objets
+    const typeValue = safeDisplay(type, '');
+
+    if (!typeValue) return 'Type inconnu';
+
     const typeLabels = {
       'DossierMedical': 'Dossier Médical',
       'AutorisationAcces': 'Autorisation d\'Accès',
       'Patient': 'Patient',
       'Utilisateur': 'Utilisateur'
     };
-    
-    return typeLabels[type] || type;
+
+    return typeLabels[typeValue] || typeValue;
   };
 
   // Fonction pour obtenir le nom complet du patient
   const getPatientDisplayName = () => {
     console.log('🔍 getPatientDisplayName appelé avec:', { effectivePatientId, patientInfo });
-    
+
     if (!effectivePatientId) {
       console.warn('⚠️ effectivePatientId est undefined ou null dans getPatientDisplayName');
       return 'Patient non sélectionné';
     }
-    
+
     // Vérifier que effectivePatientId est un nombre valide
     if (isNaN(effectivePatientId) || effectivePatientId <= 0) {
       console.warn('⚠️ effectivePatientId n\'est pas un ID valide:', effectivePatientId);
       return 'ID patient invalide';
     }
-    
+
     if (!patientInfo) {
       console.log('ℹ️ Pas d\'infos patient, utilisation du fallback pour ID:', effectivePatientId);
       // Si pas d'infos patient, générer un nom basé sur l'ID
       return generatePatientNameFromId(effectivePatientId);
     }
-    
+
     const nom = patientInfo.nom || patientInfo.name || '';
     const prenom = patientInfo.prenom || patientInfo.firstName || '';
-    
+
     if (nom || prenom) {
       const fullName = `${prenom} ${nom}`.trim();
       console.log('✅ Nom complet trouvé:', fullName);
       return fullName;
     }
-    
+
     // Si pas de nom/prénom mais qu'on a des données patient, essayer d'autres propriétés
     if (patientInfo.nom_complet) {
       console.log('✅ Nom complet trouvé dans nom_complet:', patientInfo.nom_complet);
       return patientInfo.nom_complet;
     }
-    
+
     if (patientInfo.patient_name) {
       console.log('✅ Nom complet trouvé dans patient_name:', patientInfo.patient_name);
       return patientInfo.patient_name;
     }
-    
+
     console.log('⚠️ Aucun nom trouvé dans patientInfo, utilisation du fallback');
     // Fallback vers un nom généré
     return generatePatientNameFromId(effectivePatientId);
@@ -504,12 +561,12 @@ function DMPHistory({ patientId = null }) {
   // Fonction de fallback pour générer un nom de patient basé sur l'ID
   const generatePatientNameFromId = (patientId) => {
     console.log('🔍 generatePatientNameFromId appelé avec patientId:', patientId);
-    
+
     if (!patientId) {
       console.warn('⚠️ patientId est undefined ou null dans generatePatientNameFromId');
       return 'Patient inconnu';
     }
-    
+
     // Retourner un nom générique basé sur l'ID (plus de noms hardcodés)
     return `Patient #${patientId}`;
   };
@@ -517,12 +574,12 @@ function DMPHistory({ patientId = null }) {
   // Fonction pour récupérer les informations du patient avec fallback
   const loadPatientInfo = useCallback(async (patientId) => {
     if (!patientId) return;
-    
+
     try {
       console.log('Chargement des informations du patient:', patientId);
       const patientData = await getPatientInfo(patientId);
       console.log('Informations patient récupérées:', patientData);
-      
+
       // Si on a des données valides, les utiliser
       if (patientData && (patientData.nom || patientData.prenom || patientData.name || patientData.firstName)) {
         setPatientInfo(patientData);
@@ -584,9 +641,9 @@ function DMPHistory({ patientId = null }) {
           </p>
           <div className="mt-4 p-4 bg-blue-50 rounded-md text-left">
             <p className="text-xs text-blue-800">
-              <strong>État actuel :</strong><br/>
-              • patientId passé en props : {patientId || 'non défini'}<br/>
-              • patientId du contexte DMP : {dmpState?.patientId || 'non défini'}<br/>
+              <strong>État actuel :</strong><br />
+              • patientId passé en props : {patientId || 'non défini'}<br />
+              • patientId du contexte DMP : {dmpState?.patientId || 'non défini'}<br />
               • effectivePatientId : {effectivePatientId || 'undefined'}
             </p>
           </div>
@@ -680,15 +737,15 @@ function DMPHistory({ patientId = null }) {
                   {/* En-tête avec statut et action */}
                   <div className="flex items-center space-x-2 mb-3">
                     <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(entry.statut)}`}>
-                      {entry.statut === 'SUCCES' ? 'Succès' :
-                      entry.statut === 'ERREUR' ? 'Erreur' :
-                      entry.statut === 'en_attente' ? 'En attente' : entry.statut}
+                      {safeDisplay(entry.statut) === 'SUCCES' ? 'Succès' :
+                        safeDisplay(entry.statut) === 'ERREUR' ? 'Erreur' :
+                          safeDisplay(entry.statut) === 'en_attente' ? 'En attente' : safeDisplay(entry.statut)}
                     </span>
                     <span className="text-sm font-medium text-gray-700">
-                      {getActionLabel(entry.action)}
+                      {getActionLabel(safeDisplay(entry.action))}
                     </span>
                   </div>
-                  
+
                   {/* Informations principales demandées */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                     <div className="space-y-3">
@@ -696,65 +753,65 @@ function DMPHistory({ patientId = null }) {
                         <span className="font-medium text-gray-700">Patient:</span>
                         <p className="text-gray-900 mt-1">{getPatientDisplayName()}</p>
                       </div>
-                      
+
                       <div>
                         <span className="font-medium text-gray-700">Action:</span>
-                        <p className="text-gray-900 mt-1">{getActionLabel(entry.action)}</p>
+                        <p className="text-gray-900 mt-1">{getActionLabel(safeDisplay(entry.action))}</p>
                       </div>
-                      
+
                       <div>
                         <span className="font-medium text-gray-700">Type de ressource:</span>
-                        <p className="text-gray-900 mt-1">{getResourceTypeLabel(entry.type_ressource)}</p>
+                        <p className="text-gray-900 mt-1">{getResourceTypeLabel(safeDisplay(entry.type_ressource))}</p>
                       </div>
                     </div>
-                    
+
                     <div className="space-y-3">
                       <div>
                         <span className="font-medium text-gray-700">Date de création:</span>
                         <p className="text-gray-900 mt-1">{formatDate(entry.createdAt)}</p>
                       </div>
-                      
+
                       <div>
                         <span className="font-medium text-gray-700">Date et heure d'accès:</span>
                         <p className="text-gray-900 mt-1">{formatDate(entry.date_heure_acces)}</p>
                       </div>
-                      
+
                       <div>
                         <span className="font-medium text-gray-700">Statut:</span>
                         <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ml-2 ${getStatusColor(entry.statut)}`}>
-                          {entry.statut === 'SUCCES' ? 'Succès' :
-                          entry.statut === 'ERREUR' ? 'Erreur' :
-                          entry.statut === 'en_attente' ? 'En attente' : entry.statut}
+                          {safeDisplay(entry.statut) === 'SUCCES' ? 'Succès' :
+                            safeDisplay(entry.statut) === 'ERREUR' ? 'Erreur' :
+                              safeDisplay(entry.statut) === 'en_attente' ? 'En attente' : safeDisplay(entry.statut)}
                         </span>
                       </div>
                     </div>
                   </div>
-                  
+
                   {/* Détails de l'accès */}
-                  {entry.details && (
+                  {safeDisplay(entry.details) && safeDisplay(entry.details) !== 'Aucun détail' && (
                     <div className="mt-4 p-3 bg-blue-50 rounded-md">
                       <span className="font-medium text-blue-800">Détails de l'accès:</span>
-                      <p className="text-blue-800 mt-1">{entry.details}</p>
+                      <p className="text-blue-800 mt-1">{safeDisplay(entry.details, 'Aucun détail')}</p>
                     </div>
                   )}
-                  
+
                   {/* Informations techniques supplémentaires */}
                   <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4 text-xs text-gray-600">
                     <div>
                       <span className="font-medium">ID ressource:</span>
-                      <p className="mt-1">{entry.id_ressource || 'N/A'}</p>
+                      <p className="mt-1">{safeDisplay(entry.id_ressource, 'N/A')}</p>
                     </div>
                     <div>
                       <span className="font-medium">Adresse IP:</span>
-                      <p className="mt-1">{entry.adresse_ip || 'N/A'}</p>
+                      <p className="mt-1">{safeDisplay(entry.adresse_ip, 'N/A')}</p>
                     </div>
                     <div>
                       <span className="font-medium">User Agent:</span>
-                      <p className="mt-1">{entry.user_agent ? entry.user_agent.substring(0, 40) + '...' : 'N/A'}</p>
+                      <p className="mt-1">{safeDisplay(entry.user_agent, 'N/A', 40)}</p>
                     </div>
                   </div>
                 </div>
-                
+
                 {/* Actions */}
                 <div className="flex flex-col space-y-2 ml-4">
                   <button
@@ -766,8 +823,8 @@ function DMPHistory({ patientId = null }) {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                     </svg>
                   </button>
-                  
-                  {entry.statut === 'SUCCES' && (
+
+                  {safeDisplay(entry.statut) === 'SUCCES' && (
                     <button
                       className="text-green-600 hover:text-green-800 text-sm p-2 rounded-md hover:bg-green-50"
                       title="Voir la ressource"
@@ -793,7 +850,7 @@ function DMPHistory({ patientId = null }) {
           </p>
           <div className="mt-4 p-4 bg-gray-100 rounded-md text-left">
             <p className="text-xs font-mono text-gray-600">
-              Type: {typeof history}<br/>
+              Type: {typeof history}<br />
               Valeur: {JSON.stringify(history, null, 2)}
             </p>
           </div>
@@ -807,8 +864,6 @@ function DMPHistory({ patientId = null }) {
           </div>
         </div>
       )}
-
-      
 
       {/* Section de messagerie */}
       <div className="mt-8 p-4 bg-blue-50 border border-blue-200 rounded-lg">
@@ -837,12 +892,12 @@ function DMPHistory({ patientId = null }) {
             <span className="font-mono">{isPatientAuthorized ? 'true' : 'false'}</span>
           </div>
         </div>
-        
+
         {/* Bouton d'ouverture de la messagerie */}
         {userId && role && jwtToken && !showMessaging && (
           <div className="mt-4 text-center">
             <h4 className="text-md font-semibold text-blue-800 mb-3">
-              {role === 'medecin' ? 'Messagerie avec les patients' : 'Messagerie sécurisée'}
+              {role === 'patient' ? 'Messagerie avec les patients' : 'Messagerie sécurisée'}
             </h4>
             <MessagingButton
               userId={userId}
@@ -854,14 +909,14 @@ function DMPHistory({ patientId = null }) {
               }}
             />
             <p className="text-sm text-blue-600 mt-2">
-              {role === 'medecin' 
+              {role === 'patient'
                 ? 'Communiquez de manière sécurisée avec vos patients'
                 : 'Communiquez de manière sécurisée avec votre médecin'
               }
             </p>
           </div>
         )}
-        
+
         {/* Message si conditions non remplies */}
         {(!userId || !role || !jwtToken) && (
           <div className="mt-4 text-center text-red-600">
