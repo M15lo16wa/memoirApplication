@@ -1,469 +1,1093 @@
 import React, { useEffect, useState } from "react";
-// import { getPatients, createPatient } from '../services/api/patientApi';
-import { register } from '../services/api/authApi';
-import { getProfSante, createProfSante } from '../services/api/profSante';
+import { 
+    getAllUsers, 
+    createUser, 
+    updateUser, 
+    deleteUser, 
+    toggleUserStatus,
+    updateUserRole,
+    getAllRoles,
+    getAllPatients,
+    getAllHealthcareProfessionals
+} from '../services/api/admin';
 
-// Rôles possibles
-const ROLES = ["patient", "secretaire", "medecin"];
+// Fonction utilitaire pour extraire le nom du rôle depuis un objet ou une chaîne
+const getRoleName = (role) => {
+    if (typeof role === 'string') return role;
+    if (role && typeof role === 'object') return role.nom || role.name || role.id || 'Inconnu';
+    return 'Inconnu';
+};
+
+// Fonction pour normaliser les valeurs de rôle pour la comparaison
+const normalizeRoleValue = (role) => {
+    return getRoleName(role).toLowerCase().trim();
+};
 
 function Utilisateurs() {
-    // États pour les patients
-    // const [patients, setPatients] = useState([]);
-    const [loadingPatients, setLoadingPatients] = useState(true);
-    const [errorPatients, setErrorPatients] = useState(null);
-    // const [formPatient, setFormPatient] = useState({
-    //     nom: "",
-    //     prenom: "",
-    //     email: "",
-    //     password: "",
-    //     numero_dossier: "",
-    //     date_naissance: "",
-    //     lieu_naissance:"",
-    //     sexe:"",
-    //     civilite:"",
-    //     numero_secu:"",
-    //     confirmPassword: "",
-    // });
-    // const [formPatientError, setFormPatientError] = useState("");
-    // const [formPatientSuccess, setFormPatientSuccess] = useState("");
-    // const [creatingPatient, setCreatingPatient] = useState(false);
-
-    // États pour les professionnels de santé (médecins)
-    const [medecins, setMedecins] = useState([]);
-    const [loadingMedecins, setLoadingMedecins] = useState(true);
-    const [errorMedecins, setErrorMedecins] = useState(null);
-    const [formMedecin, setFormMedecin] = useState({
-        nom: "",
-        prenom: "",
-        date_naissance: "",
-        lieu_naissance: "",
-        sexe: "",
-        adresse: "",
-        code_postal: "",
-        ville: "",
-        pays: "",
-        numero_pp: "",
-        numero_finess: "",
-        email: "",
-        password: "",
-        confirmPassword: "",
-        role: "medecin"
+    const [users, setUsers] = useState([]);
+    const [roles, setRoles] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+    const [searchTerm, setSearchTerm] = useState("");
+    const [selectedRole, setSelectedRole] = useState("all");
+    const [showModal, setShowModal] = useState(false);
+    const [editingUser, setEditingUser] = useState(null);
+    const [formData, setFormData] = useState({
+        nom: '',
+        prenom: '',
+        email: '',
+        role: 'patient',
+        statut: 'actif'
     });
-    const [formMedecinError, setFormMedecinError] = useState("");
-    const [formMedecinSuccess, setFormMedecinSuccess] = useState("");
-    const [creatingMedecin, setCreatingMedecin] = useState(false);
+    
+    // Nouveaux états pour les onglets et données
+    const [activeTab, setActiveTab] = useState("users");
+    const [patients, setPatients] = useState([]);
+    const [healthcareProfessionals, setHealthcareProfessionals] = useState([]);
+    const [loadingPatients, setLoadingPatients] = useState(false);
+    const [loadingProfessionals, setLoadingProfessionals] = useState(false);
 
-    // États pour les utilisateurs (secrétaires)
-    const [secretaires, setSecretaires] = useState([]);
-    const [loadingSecretaires, setLoadingSecretaires] = useState(true);
-    const [errorSecretaires, setErrorSecretaires] = useState(null);
-    const [formSecretaire, setFormSecretaire] = useState({
-        nom: "",
-        prenom: "",
-        email: "",
-        password: "",
-        confirmPassword: "",
-        role: "secretaire"
-    });
-    const [formSecretaireError, setFormSecretaireError] = useState("");
-    const [formSecretaireSuccess, setFormSecretaireSuccess] = useState("");
-    const [creatingSecretaire, setCreatingSecretaire] = useState(false);
-
-    // Récupération des patients
-    // useEffect(() => {
-    //     setLoadingPatients(true);
-    //     setErrorPatients(null);
-    //     getPatients()
-    //         .then(data => {
-    //             setPatients(data.data || data);
-    //             setLoadingPatients(false);
-    //         })
-    //         .catch(err => {
-    //             setErrorPatients("Erreur lors du chargement des patients");
-    //             setLoadingPatients(false);
-    //         });
-    // }, []);
-
-    // Récupération des médecins
     useEffect(() => {
-        setLoadingMedecins(true);
-        setErrorMedecins(null);
-        getProfSante()
-            .then(data => {
-                setMedecins(data.data || data);
-                setLoadingMedecins(false);
-            })
-            .catch(err => {
-                setErrorMedecins("Erreur lors du chargement des professionnels de santé");
-                setLoadingMedecins(false);
-            });
+        console.log('Component mounted');
+        loadUsers();
+        loadRoles();
+        loadPatients();
+        loadHealthcareProfessionals();
     }, []);
 
-    // Récupération des secrétaires
-    useEffect(() => {
-        setLoadingSecretaires(true);
-        setErrorSecretaires(null);
-        fetch("/auth/utilisateurs?role=secretaire")
-            .then(res => {
-                if (!res.ok) throw new Error("Erreur lors du chargement des secrétaires");
-                return res.json();
-            })
-            .then(data => {
-                setSecretaires(data);
-                setLoadingSecretaires(false);
-            })
-            .catch(err => {
-                setErrorSecretaires(err.message);
-                setLoadingSecretaires(false);
-            });
-    }, []);
-
-    // Gestion du changement de rôle
-    const handleRoleChange = (id, newRole) => {
-        // This function is no longer used for patients, medecins, or secretaires
-        // as they have their own specific forms and roles.
-        // Keeping it for now, but it will be removed if not used elsewhere.
-    };
-
-    // Gestion de l'activation/désactivation
-    const handleActivationToggle = (id) => {
-        // This function is no longer used for patients, medecins, or secretaires
-        // as they have their own specific forms and roles.
-        // Keeping it for now, but it will be removed if not used elsewhere.
-    };
-
-    // Gestion du formulaire patient
-    // const handleFormPatientChange = (e) => {
-    //     const { name, value } = e.target;
-    //     setFormPatient(f => ({ ...f, [name]: value }));
-    //     setFormPatientError("");
-    //     setFormPatientSuccess("");
-    // };
-    // const handleFormPatientSubmit = async (e) => {
-    //     e.preventDefault();
-    //     if (!formPatient.nom || !formPatient.prenom || !formPatient.email || !formPatient.password || !formPatient.confirmPassword) {
-    //         setFormPatientError("Tous les champs sont obligatoires.");
-    //         return;
-    //     }
-    //     if (formPatient.password !== formPatient.confirmPassword) {
-    //         setFormPatientError("Les mots de passe ne correspondent pas.");
-    //         return;
-    //     }
-    //     setCreatingPatient(true);
-    //     setFormPatientError("");
-    //     setFormPatientSuccess("");
-    //     try {
-    //         const newPatient = await createPatient({
-    //             nom: formPatient.nom,
-    //             prenom: formPatient.prenom,
-    //             email: formPatient.email,
-    //             mot_de_passe: formPatient.password
-    //         });
-    //         setPatients([newPatient, ...patients]);
-    //         setFormPatient({ nom: "", prenom: "", email: "", password: "", confirmPassword: "" });
-    //         setFormPatientSuccess("Patient créé avec succès !");
-    //     } catch (err) {
-    //         setFormPatientError("Erreur lors de la création du patient");
-    //     } finally {
-    //         setCreatingPatient(false);
-    //     }
-    // };
-
-    // Gestion du formulaire médecin
-    const handleFormMedecinChange = (e) => {
-        const { name, value } = e.target;
-        setFormMedecin(f => ({ ...f, [name]: value }));
-        setFormMedecinError("");
-        setFormMedecinSuccess("");
-    };
-    const handleFormMedecinSubmit = async (e) => {
-        e.preventDefault();
-        if (!formMedecin.nom || !formMedecin.prenom || !formMedecin.email || !formMedecin.password || !formMedecin.confirmPassword) {
-            setFormMedecinError("Tous les champs sont obligatoires.");
-            return;
-        }
-        if (formMedecin.password !== formMedecin.confirmPassword) {
-            setFormMedecinError("Les mots de passe ne correspondent pas.");
-            return;
-        }
-        setCreatingMedecin(true);
-        setFormMedecinError("");
-        setFormMedecinSuccess("");
+    const loadUsers = async () => {
         try {
-            const newMedecin = await createProfSante({
-                nom: formMedecin.nom,
-                prenom: formMedecin.prenom,
-                email: formMedecin.email,
-                mot_de_passe: formMedecin.password
-            });
-            setMedecins([newMedecin, ...medecins]);
-            setFormMedecin({ nom: "", prenom: "", email: "", password: "", confirmPassword: "", role: "medecin" });
-            setFormMedecinSuccess("Médecin créé avec succès !");
+            setLoading(true);
+            console.log('Loading users...');
+            const response = await getAllUsers();
+            console.log('Users response:', response);
+            
+            // Vérifier la structure de la réponse
+            if (response && response.data && Array.isArray(response.data.users)) {
+                console.log('Setting users from API data.users:', response.data.users.length);
+                setUsers(response.data.users);
+            } else if (response && response.data && Array.isArray(response.data)) {
+                console.log('Setting users from API data:', response.data.length);
+                setUsers(response.data);
+            } else if (response && Array.isArray(response)) {
+                console.log('Setting users from direct array:', response.length);
+                setUsers(response);
+            } else {
+                console.warn('Unexpected response structure:', response);
+                setUsers([]);
+            }
         } catch (err) {
-            setFormMedecinError("Erreur lors de la création du médecin");
+            console.error('Error loading users:', err);
+            setError("Erreur lors du chargement des utilisateurs");
+            setUsers([]);
         } finally {
-            setCreatingMedecin(false);
+            setLoading(false);
         }
     };
 
-    // Gestion du formulaire secrétaire
-    const handleFormSecretaireChange = (e) => {
-        const { name, value } = e.target;
-        setFormSecretaire(f => ({ ...f, [name]: value }));
-        setFormSecretaireError("");
-        setFormSecretaireSuccess("");
-    };
-    const handleFormSecretaireSubmit = async (e) => {
-        e.preventDefault();
-        if (!formSecretaire.nom || !formSecretaire.prenom || !formSecretaire.email || !formSecretaire.password || !formSecretaire.confirmPassword) {
-            setFormSecretaireError("Tous les champs sont obligatoires.");
-            return;
-        }
-        if (formSecretaire.password !== formSecretaire.confirmPassword) {
-            setFormSecretaireError("Les mots de passe ne correspondent pas.");
-            return;
-        }
-        setCreatingSecretaire(true);
-        setFormSecretaireError("");
-        setFormSecretaireSuccess("");
+    const loadRoles = async () => {
         try {
-            const newSecretaire = await register({
-                nom: formSecretaire.nom,
-                prenom: formSecretaire.prenom,
-                email: formSecretaire.email,
-                role: "secretaire",
-                password: formSecretaire.password
-            });
-            setSecretaires([newSecretaire, ...secretaires]);
-            setFormSecretaire({ nom: "", prenom: "", email: "", password: "", confirmPassword: "", role: "secretaire" });
-            setFormSecretaireSuccess("Secrétaire créée avec succès !");
+            console.log('Loading roles...');
+            const response = await getAllRoles();
+            console.log('Roles response:', response);
+            
+            if (response && response.data && Array.isArray(response.data.roles)) {
+                console.log('Setting roles from API data.roles:', response.data.roles.length);
+                setRoles(response.data.roles);
+            } else if (response && response.data && Array.isArray(response.data)) {
+                console.log('Setting roles from API data:', response.data.length);
+                setRoles(response.data);
+            } else if (response && Array.isArray(response)) {
+                console.log('Setting roles from direct array:', response.length);
+                setRoles(response);
+            } else {
+                console.warn('Using empty roles due to unexpected response structure');
+                setRoles([]);
+            }
         } catch (err) {
-            setFormSecretaireError("Erreur lors de la création de la secrétaire");
-        } finally {
-            setCreatingSecretaire(false);
+            console.error('Error loading roles:', err);
+            console.log('Using empty roles due to error');
+            setRoles([]);
         }
     };
 
-    if (loadingPatients) return <div className="flex justify-center items-center h-40 text-lg font-semibold text-blue-600">Chargement des patients...</div>;
-    if (errorPatients) return <div className="text-red-600 font-semibold">Erreur : {errorPatients}</div>;
+    const loadPatients = async () => {
+        try {
+            setLoadingPatients(true);
+            console.log('Loading patients...');
+            const response = await getAllPatients();
+            console.log('Patients response:', response);
+            
+            if (response && response.data && Array.isArray(response.data.patients)) {
+                console.log('Setting patients from API data.patients:', response.data.patients.length);
+                setPatients(response.data.patients);
+            } else if (response && response.data && Array.isArray(response.data)) {
+                console.log('Setting patients from API data:', response.data.length);
+                setPatients(response.data);
+            } else if (response && Array.isArray(response)) {
+                console.log('Setting patients from direct array:', response.length);
+                setPatients(response);
+            } else {
+                console.warn('Unexpected patients response structure:', response);
+                setPatients([]);
+            }
+        } catch (err) {
+            console.error('Error loading patients:', err);
+            setPatients([]);
+        } finally {
+            setLoadingPatients(false);
+        }
+    };
 
-    if (loadingMedecins) return <div className="flex justify-center items-center h-40 text-lg font-semibold text-blue-600">Chargement des médecins...</div>;
-    if (errorMedecins) return <div className="text-red-600 font-semibold">Erreur : {errorMedecins}</div>;
+    const loadHealthcareProfessionals = async () => {
+        try {
+            setLoadingProfessionals(true);
+            console.log('🚀 Loading healthcare professionals...');
+            console.log('📡 Calling getAllHealthcareProfessionals()...');
+            
+            const response = await getAllHealthcareProfessionals();
+            console.log('📥 Raw API response:', response);
+            console.log('📊 Response type:', typeof response);
+            console.log('🔍 Response keys:', response ? Object.keys(response) : 'null');
+            
+            // 🔍 Analyse détaillée de la réponse
+            console.log('🔍 === DÉTAIL DE LA RÉPONSE ===');
+            if (response) {
+                console.log('   - Response exists:', true);
+                console.log('   - Response type:', typeof response);
+                console.log('   - Response keys:', Object.keys(response));
+                
+                if (response.data) {
+                    console.log('   - Has data:', true);
+                    console.log('   - Data type:', typeof response.data);
+                    console.log('   - Data keys:', Object.keys(response.data));
+                    
+                    if (Array.isArray(response.data)) {
+                        console.log('   - Data is array:', true);
+                        console.log('   - Array length:', response.data.length);
+                        if (response.data.length > 0) {
+                            console.log('   - First item:', response.data[0]);
+                        }
+                    } else if (typeof response.data === 'object') {
+                        console.log('   - Data is object:', true);
+                        for (const [key, value] of Object.entries(response.data)) {
+                            console.log(`     ${key}:`, value);
+                            if (Array.isArray(value)) {
+                                console.log(`       Array length: ${value.length}`);
+                                if (value.length > 0) {
+                                    console.log(`       First item:`, value[0]);
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    console.log('   - Has data: false');
+                }
+            } else {
+                console.log('   - Response exists: false');
+            }
+            console.log('🔍 === FIN ANALYSE ===');
+            
+            // 🔍 Traitement intelligent des données
+            let professionalsToSet = [];
+            
+            if (response && response.data && Array.isArray(response.data.professionals)) {
+                console.log('✅ Setting professionals from API data.professionals:', response.data.professionals.length);
+                professionalsToSet = response.data.professionals;
+            } else if (response && response.data && Array.isArray(response.data)) {
+                console.log('✅ Setting professionals from API data:', response.data.length);
+                professionalsToSet = response.data;
+            } else if (response && Array.isArray(response)) {
+                console.log('✅ Setting professionals from direct array:', response.length);
+                professionalsToSet = response;
+            } else if (response && response.data && typeof response.data === 'object') {
+                // 🔍 Chercher dans toutes les propriétés de response.data
+                console.log('🔍 Searching for professionals in response.data properties...');
+                for (const [key, value] of Object.entries(response.data)) {
+                    if (Array.isArray(value) && value.length > 0) {
+                        // Vérifier si c'est un tableau de professionnels
+                        const firstItem = value[0];
+                        if (firstItem && (firstItem.nom || firstItem.prenom || firstItem.specialite)) {
+                            console.log(`✅ Found professionals in property '${key}':`, value.length);
+                            professionalsToSet = value;
+                            break;
+                        }
+                    }
+                }
+                
+                if (professionalsToSet.length === 0) {
+                    console.warn('⚠️ No professionals found in any property of response.data');
+                }
+            } else {
+                console.warn('⚠️ Unexpected professionals response structure:', response);
+                console.warn('🔍 Response structure analysis:');
+                if (response) {
+                    console.warn('   - Has response:', true);
+                    console.warn('   - Has data:', !!response.data);
+                    console.warn('   - Data type:', typeof response.data);
+                    if (response.data) {
+                        console.warn('   - Data keys:', Object.keys(response.data));
+                        console.warn('   - Data is array:', Array.isArray(response.data));
+                    }
+                } else {
+                    console.warn('   - Response is null/undefined');
+                }
+            }
+            
+            // 🔍 Vérifier et définir les professionnels
+            console.log('🔍 Final professionals to set:', professionalsToSet);
+            console.log('🔍 Professionals count:', professionalsToSet.length);
+            if (professionalsToSet.length > 0) {
+                console.log('🔍 First professional:', professionalsToSet[0]);
+            }
+            
+            setHealthcareProfessionals(professionalsToSet);
+        } catch (err) {
+            console.error('❌ Error loading healthcare professionals:', err);
+            console.error('🔍 Error details:', {
+                message: err.message,
+                status: err.response?.status,
+                statusText: err.response?.statusText,
+                data: err.response?.data
+            });
+            setHealthcareProfessionals([]);
+        } finally {
+            setLoadingProfessionals(false);
+            console.log('🏁 Loading finished');
+        }
+    };
 
-    if (loadingSecretaires) return <div className="flex justify-center items-center h-40 text-lg font-semibold text-blue-600">Chargement des secrétaires...</div>;
-    if (errorSecretaires) return <div className="text-red-600 font-semibold">Erreur : {errorSecretaires}</div>;
+    const handleCreateUser = async () => {
+        try {
+            // Préparer les données pour l'API
+            const userData = {
+                ...formData,
+                // S'assurer que le rôle est envoyé comme ID si c'est un objet
+                role: typeof formData.role === 'object' ? formData.role.id : formData.role
+            };
+            
+            await createUser(userData);
+            setShowModal(false);
+            setFormData({
+                nom: '',
+                prenom: '',
+                email: '',
+                role: 'patient',
+                statut: 'actif'
+            });
+            loadUsers(); // Recharger la liste
+        } catch (err) {
+            console.error('Error creating user:', err);
+            setError("Erreur lors de la création de l'utilisateur");
+        }
+    };
+
+    const handleUpdateUser = async () => {
+        try {
+            if (!editingUser) return;
+            
+            // Préparer les données pour l'API
+            const userData = {
+                ...formData,
+                // S'assurer que le rôle est envoyé comme ID si c'est un objet
+                role: typeof formData.role === 'object' ? formData.role.id : formData.role
+            };
+            
+            await updateUser(editingUser.id, userData);
+            setShowModal(false);
+            setEditingUser(null);
+            setFormData({
+                nom: '',
+                prenom: '',
+                email: '',
+                role: 'patient',
+                statut: 'actif'
+            });
+            loadUsers(); // Recharger la liste
+        } catch (err) {
+            console.error('Error updating user:', err);
+            setError("Erreur lors de la mise à jour de l'utilisateur");
+        }
+    };
+
+    const handleDeleteUser = async (userId) => {
+        if (window.confirm("Êtes-vous sûr de vouloir supprimer cet utilisateur ?")) {
+            try {
+                await deleteUser(userId);
+                loadUsers(); // Recharger la liste
+            } catch (err) {
+                console.error('Error deleting user:', err);
+                setError("Erreur lors de la suppression de l'utilisateur");
+            }
+        }
+    };
+
+    const handleToggleStatus = async (userId, newStatus) => {
+        try {
+            await toggleUserStatus(userId, newStatus);
+            loadUsers(); // Recharger la liste
+        } catch (err) {
+            console.error('Error toggling user status:', err);
+            setError("Erreur lors de la modification du statut");
+        }
+    };
+
+    const openEditModal = (user) => {
+        setEditingUser(user);
+        setFormData({
+            nom: user.nom || '',
+            prenom: user.prenom || '',
+            email: user.email || '',
+            role: user.role || 'patient',
+            statut: user.statut || 'actif'
+        });
+        setShowModal(true);
+    };
+
+    const openCreateModal = () => {
+        setEditingUser(null);
+        setFormData({
+            nom: '',
+            prenom: '',
+            email: '',
+            role: 'patient',
+            statut: 'actif'
+        });
+        setShowModal(true);
+    };
+
+    const closeModal = () => {
+        setShowModal(false);
+        setEditingUser(null);
+    };
+
+    const handleInputChange = (e) => {
+        const { name, value, type, checked } = e.target;
+        setFormData(prev => ({
+            ...prev,
+            [name]: type === 'checkbox' ? checked : value
+        }));
+    };
+
+    // Filtrage des utilisateurs
+    const filteredUsers = users.filter(user => {
+        // Filtre par recherche
+        const matchesSearch = searchTerm === "" || 
+                             user.nom?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                             user.prenom?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                             user.email?.toLowerCase().includes(searchTerm.toLowerCase());
+        
+        // Filtre par rôle - comparaison directe et insensible à la casse
+        const matchesRole = selectedRole === "all" || 
+                           user.role?.toLowerCase() === selectedRole.toLowerCase();
+        
+        // Debug pour voir ce qui se passe
+        if (selectedRole !== "all") {
+            console.log(`User: ${user.nom}, Role: "${user.role}", Selected: "${selectedRole}", Match: ${matchesRole}`);
+        }
+        
+        return matchesSearch && matchesRole;
+    });
+
+    // Filtrage des professionnels de santé
+    const filteredProfessionals = healthcareProfessionals.filter(professional => {
+        // Filtre par recherche
+        const matchesSearch = searchTerm === "" || 
+                             professional.nom?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                             professional.prenom?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                             professional.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                             professional.specialite?.toLowerCase().includes(searchTerm.toLowerCase());
+        
+        // Filtre par rôle - comparaison directe et insensible à la casse
+        const matchesRole = selectedRole === "all" || 
+                           professional.role?.toLowerCase() === selectedRole.toLowerCase();
+        
+        return matchesSearch && matchesRole;
+    });
+
+    // Préparer les options de rôle pour le select - utiliser directement les rôles de l'API
+    const roleOptions = ['all', 'secretaire', 'admin', 'medecin', 'patient'];
+
+    if (loading) {
+        return (
+            <div className="flex justify-center items-center h-96">
+                <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div className="text-center py-12">
+                <div className="text-red-600 text-xl font-semibold mb-4">{error}</div>
+                <button 
+                    onClick={() => { setError(null); loadUsers(); }} 
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg"
+                >
+                    Réessayer
+                </button>
+            </div>
+        );
+    }
 
     return (
-        <div className="p-2 sm:p-4 md:p-6 max-w-5xl mx-auto">
-            <h2 className="text-2xl sm:text-3xl font-extrabold mb-6 text-blue-700">Gestion des utilisateurs</h2>
-
-            {/* Formulaire de création de compte
-            <form onSubmit={handleFormPatientSubmit} className="mb-8 sm:mb-10 bg-white p-4 sm:p-6 rounded-xl shadow-lg border border-gray-100">
-                <h3 className="text-lg sm:text-xl font-bold mb-4 text-gray-700">Créer un nouveau patient</h3>
-                {formPatientError && <div className="text-red-600 mb-3 font-medium text-sm">{formPatientError}</div>}
-                {formPatientSuccess && <div className="text-green-600 mb-3 font-medium text-sm">{formPatientSuccess}</div>}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
-                    <div>
-                        <label className="block text-xs sm:text-sm font-semibold mb-1 text-gray-700">Nom</label>
-                        <input type="text" name="nom" value={formPatient.nom} onChange={handleFormPatientChange} className="border border-gray-300 rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-blue-400 text-xs sm:text-sm" />
-                    </div>
-                    <div>
-                        <label className="block text-xs sm:text-sm font-semibold mb-1 text-gray-700">Prénom</label>
-                        <input type="text" name="prenom" value={formPatient.prenom} onChange={handleFormPatientChange} className="border border-gray-300 rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-blue-400 text-xs sm:text-sm" />
-                    </div>
-                    <div className="md:col-span-2">
-                        <label className="block text-xs sm:text-sm font-semibold mb-1 text-gray-700">Email</label>
-                        <input type="email" name="email" value={formPatient.email} onChange={handleFormPatientChange} className="border border-gray-300 rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-blue-400 text-xs sm:text-sm" />
-                    </div>
-                    <div>
-                        <label className="block text-xs sm:text-sm font-semibold mb-1 text-gray-700">Mot de passe</label>
-                        <input type="password" name="password" value={formPatient.password} onChange={handleFormPatientChange} className="border border-gray-300 rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-blue-400 text-xs sm:text-sm" />
-                    </div>
-                    <div>
-                        <label className="block text-xs sm:text-sm font-semibold mb-1 text-gray-700">Confirmer le mot de passe</label>
-                        <input type="password" name="confirmPassword" value={formPatient.confirmPassword} onChange={handleFormPatientChange} className="border border-gray-300 rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-blue-400 text-xs sm:text-sm" />
-                    </div>
-                </div>
-                <button type="submit" disabled={creatingPatient} className="mt-6 bg-blue-600 hover:bg-blue-700 text-white px-4 sm:px-6 py-2 rounded-lg font-semibold shadow transition text-sm sm:text-base disabled:opacity-60">{creatingPatient ? "Création..." : "Créer le compte"}</button>
-            </form> */}
-
-            <form onSubmit={handleFormMedecinSubmit} className="mb-8 sm:mb-10 bg-white p-4 sm:p-6 rounded-xl shadow-lg border border-gray-100">
-                <h3 className="text-lg sm:text-xl font-bold mb-4 text-gray-700">Créer un nouveau médecin</h3>
-                {formMedecinError && <div className="text-red-600 mb-3 font-medium text-sm">{formMedecinError}</div>}
-                {formMedecinSuccess && <div className="text-green-600 mb-3 font-medium text-sm">{formMedecinSuccess}</div>}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
-                    <div>
-                        <label className="block text-xs sm:text-sm font-semibold mb-1 text-gray-700">Nom</label>
-                        <input type="text" name="nom" value={formMedecin.nom} onChange={handleFormMedecinChange} className="border border-gray-300 rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-blue-400 text-xs sm:text-sm" />
-                    </div>
-                    <div>
-                        <label className="block text-xs sm:text-sm font-semibold mb-1 text-gray-700">Prénom</label>
-                        <input type="text" name="prenom" value={formMedecin.prenom} onChange={handleFormMedecinChange} className="border border-gray-300 rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-blue-400 text-xs sm:text-sm" />
-                    </div>
-                    <div className="md:col-span-2">
-                        <label className="block text-xs sm:text-sm font-semibold mb-1 text-gray-700">Email</label>
-                        <input type="email" name="email" value={formMedecin.email} onChange={handleFormMedecinChange} className="border border-gray-300 rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-blue-400 text-xs sm:text-sm" />
-                    </div>
-                    <div>
-                        <label className="block text-xs sm:text-sm font-semibold mb-1 text-gray-700">Mot de passe</label>
-                        <input type="password" name="password" value={formMedecin.password} onChange={handleFormMedecinChange} className="border border-gray-300 rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-blue-400 text-xs sm:text-sm" />
-                    </div>
-                    <div>
-                        <label className="block text-xs sm:text-sm font-semibold mb-1 text-gray-700">Confirmer le mot de passe</label>
-                        <input type="password" name="confirmPassword" value={formMedecin.confirmPassword} onChange={handleFormMedecinChange} className="border border-gray-300 rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-blue-400 text-xs sm:text-sm" />
+        <div className="min-h-screen bg-gray-50 py-8">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                {/* Header */}
+                <div className="mb-8">
+                    <h1 className="text-3xl font-bold text-gray-900 mb-2">Gestion des Utilisateurs</h1>
+                    <p className="text-gray-600">Gérez tous les utilisateurs de la plateforme</p>
+                    
+                    {/* Onglets */}
+                    <div className="mt-6 border-b border-gray-200">
+                        <nav className="-mb-px flex space-x-8">
+                            <button
+                                onClick={() => setActiveTab("users")}
+                                className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                                    activeTab === "users"
+                                        ? "border-blue-500 text-blue-600"
+                                        : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                                }`}
+                            >
+                                <i className="fas fa-users mr-2"></i>
+                                Utilisateurs ({users.length})
+                            </button>
+                            <button
+                                onClick={() => setActiveTab("patients")}
+                                className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                                    activeTab === "patients"
+                                        ? "border-blue-500 text-blue-600"
+                                        : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                                }`}
+                            >
+                                <i className="fas fa-user-injured mr-2"></i>
+                                Patients ({patients.length})
+                            </button>
+                            <button
+                                onClick={() => setActiveTab("professionals")}
+                                className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                                    activeTab === "professionals"
+                                        ? "border-blue-500 text-blue-600"
+                                        : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                                }`}
+                            >
+                                <i className="fas fa-user-md mr-2"></i>
+                                Professionnels ({healthcareProfessionals.length})
+                            </button>
+                        </nav>
                     </div>
                 </div>
-                <button type="submit" disabled={creatingMedecin} className="mt-6 bg-blue-600 hover:bg-blue-700 text-white px-4 sm:px-6 py-2 rounded-lg font-semibold shadow transition text-sm sm:text-base disabled:opacity-60">{creatingMedecin ? "Création..." : "Créer le compte"}</button>
-            </form>
 
-            <form onSubmit={handleFormSecretaireSubmit} className="mb-8 sm:mb-10 bg-white p-4 sm:p-6 rounded-xl shadow-lg border border-gray-100">
-                <h3 className="text-lg sm:text-xl font-bold mb-4 text-gray-700">Créer une nouvelle secrétaire</h3>
-                {formSecretaireError && <div className="text-red-600 mb-3 font-medium text-sm">{formSecretaireError}</div>}
-                {formSecretaireSuccess && <div className="text-green-600 mb-3 font-medium text-sm">{formSecretaireSuccess}</div>}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
-                    <div>
-                        <label className="block text-xs sm:text-sm font-semibold mb-1 text-gray-700">Nom</label>
-                        <input type="text" name="nom" value={formSecretaire.nom} onChange={handleFormSecretaireChange} className="border border-gray-300 rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-blue-400 text-xs sm:text-sm" />
-                    </div>
-                    <div>
-                        <label className="block text-xs sm:text-sm font-semibold mb-1 text-gray-700">Prénom</label>
-                        <input type="text" name="prenom" value={formSecretaire.prenom} onChange={handleFormSecretaireChange} className="border border-gray-300 rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-blue-400 text-xs sm:text-sm" />
-                    </div>
-                    <div className="md:col-span-2">
-                        <label className="block text-xs sm:text-sm font-semibold mb-1 text-gray-700">Email</label>
-                        <input type="email" name="email" value={formSecretaire.email} onChange={handleFormSecretaireChange} className="border border-gray-300 rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-blue-400 text-xs sm:text-sm" />
-                    </div>
-                    <div>
-                        <label className="block text-xs sm:text-sm font-semibold mb-1 text-gray-700">Mot de passe</label>
-                        <input type="password" name="password" value={formSecretaire.password} onChange={handleFormSecretaireChange} className="border border-gray-300 rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-blue-400 text-xs sm:text-sm" />
-                    </div>
-                    <div>
-                        <label className="block text-xs sm:text-sm font-semibold mb-1 text-gray-700">Confirmer le mot de passe</label>
-                        <input type="password" name="confirmPassword" value={formSecretaire.confirmPassword} onChange={handleFormSecretaireChange} className="border border-gray-300 rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-blue-400 text-xs sm:text-sm" />
+                {/* Barre d'outils */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
+                    <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
+                        <div className="flex flex-col sm:flex-row gap-4 flex-1">
+                            <div className="relative flex-1 max-w-md">
+                                <input
+                                    type="text"
+                                    placeholder={
+                                        activeTab === "users" ? "Rechercher un utilisateur..." :
+                                        activeTab === "patients" ? "Rechercher un patient..." :
+                                        "Rechercher un professionnel..."
+                                    }
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                />
+                                <i className="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                            </div>
+                            
+                            {/* Filtres spécifiques selon l'onglet actif */}
+                            {activeTab === "users" && (
+                                <select
+                                    value={selectedRole}
+                                    onChange={(e) => setSelectedRole(e.target.value)}
+                                    className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                >
+                                    <option value="all">Tous les rôles</option>
+                                    <option value="secretaire">Secrétaire</option>
+                                    <option value="admin">Administrateur</option>
+                                    <option value="medecin">Médecin</option>
+                                    <option value="patient">Patient</option>
+                                </select>
+                            )}
+                            
+                            {activeTab === "professionals" && (
+                                <select
+                                    value={selectedRole}
+                                    onChange={(e) => setSelectedRole(e.target.value)}
+                                    className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                >
+                                    <option value="all">Tous les professionnels</option>
+                                    <option value="medecin">Médecin</option>
+                                    <option value="infirmier">Infirmier</option>
+                                </select>
+                            )}
+                        </div>
+                        
+                        {/* Bouton d'action selon l'onglet */}
+                        {activeTab === "users" && (
+                            <button 
+                                onClick={openCreateModal}
+                                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-semibold transition-colors"
+                            >
+                                <i className="fas fa-plus mr-2"></i>
+                                Nouvel Utilisateur
+                            </button>
+                        )}
+                        
+                        {activeTab === "professionals" && (
+                            <button 
+                                onClick={() => console.log('Créer un professionnel')}
+                                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-semibold transition-colors"
+                            >
+                                <i className="fas fa-plus mr-2"></i>
+                                Nouveau Professionnel
+                            </button>
+                        )}
                     </div>
                 </div>
-                <button type="submit" disabled={creatingSecretaire} className="mt-6 bg-blue-600 hover:bg-blue-700 text-white px-4 sm:px-6 py-2 rounded-lg font-semibold shadow transition text-sm sm:text-base disabled:opacity-60">{creatingSecretaire ? "Création..." : "Créer le compte"}</button>
-            </form>
 
-            <div className="overflow-x-auto rounded-xl shadow border border-gray-100 bg-white">
-                <table className="min-w-[600px] w-full divide-y divide-gray-200 text-xs sm:text-sm">
-                    <thead className="bg-blue-50">
-                        <tr>
-                            <th className="py-3 px-4 text-left font-bold text-blue-700 uppercase tracking-wider">Nom</th>
-                            <th className="py-3 px-4 text-left font-bold text-blue-700 uppercase tracking-wider">Prénom</th>
-                            <th className="py-3 px-4 text-left font-bold text-blue-700 uppercase tracking-wider">Email</th>
-                            <th className="py-3 px-4 text-left font-bold text-blue-700 uppercase tracking-wider">Rôle</th>
-                            <th className="py-3 px-4 text-left font-bold text-blue-700 uppercase tracking-wider">Statut</th>
-                            <th className="py-3 px-4 text-center font-bold text-blue-700 uppercase tracking-wider">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                        {/* {patients.map((patient, idx) => (
-                            <tr key={patient.id} className={idx % 2 === 0 ? "bg-white" : "bg-blue-50/50"}>
-                                <td className="py-2 px-4 whitespace-nowrap">{patient.nom}</td>
-                                <td className="py-2 px-4 whitespace-nowrap">{patient.prenom}</td>
-                                <td className="py-2 px-4 whitespace-nowrap">{patient.email}</td>
-                                <td className="py-2 px-4 whitespace-nowrap">Patient</td>
-                                <td className="py-2 px-4 whitespace-nowrap">
-                                    {patient.actif ? (
-                                        <span className="inline-block px-2 py-1 text-xs font-semibold rounded bg-green-100 text-green-700">Actif</span>
+                {/* Statistiques selon l'onglet actif */}
+                {activeTab === "users" && (
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                            <div className="flex items-center">
+                                <div className="p-2 bg-blue-100 rounded-lg">
+                                    <i className="fas fa-users text-blue-600 text-xl"></i>
+                                </div>
+                                <div className="ml-4">
+                                    <p className="text-sm font-medium text-gray-600">Total Utilisateurs</p>
+                                    <p className="text-2xl font-bold text-gray-900">{users.length}</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                            <div className="flex items-center">
+                                <div className="p-2 bg-green-100 rounded-lg">
+                                    <i className="fas fa-user-md text-green-600 text-xl"></i>
+                                </div>
+                                <div className="ml-4">
+                                    <p className="text-sm font-medium text-gray-600">Médecins</p>
+                                    <p className="text-2xl font-bold text-gray-900">
+                                        {users.filter(u => normalizeRoleValue(u.role) === 'medecin').length}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                            <div className="flex items-center">
+                                <div className="p-2 bg-purple-100 rounded-lg">
+                                    <i className="fas fa-user-tie text-purple-600 text-xl"></i>
+                                </div>
+                                <div className="ml-4">
+                                    <p className="text-sm font-medium text-gray-600">Secrétaires</p>
+                                    <p className="text-2xl font-bold text-gray-900">
+                                        {users.filter(u => normalizeRoleValue(u.role) === 'secretaire').length}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                            <div className="flex items-center">
+                                <div className="p-2 bg-orange-100 rounded-lg">
+                                    <i className="fas fa-user text-orange-600 text-xl"></i>
+                                </div>
+                                <div className="ml-4">
+                                    <p className="text-sm font-medium text-gray-600">Patients</p>
+                                    <p className="text-2xl font-bold text-gray-900">
+                                        {users.filter(u => normalizeRoleValue(u.role) === 'patient').length}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {activeTab === "patients" && (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                            <div className="flex items-center">
+                                <div className="p-2 bg-green-100 rounded-lg">
+                                    <i className="fas fa-user-injured text-green-600 text-xl"></i>
+                                </div>
+                                <div className="ml-4">
+                                    <p className="text-sm font-medium text-gray-600">Total Patients</p>
+                                    <p className="text-2xl font-bold text-gray-900">{patients.length}</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                            <div className="flex items-center">
+                                <div className="p-2 bg-blue-100 rounded-lg">
+                                    <i className="fas fa-calendar text-blue-600 text-xl"></i>
+                                </div>
+                                <div className="ml-4">
+                                    <p className="text-sm font-medium text-gray-600">Avec Rendez-vous</p>
+                                    <p className="text-2xl font-bold text-gray-900">
+                                        {patients.filter(p => p.rendez_vous && p.rendez_vous.length > 0).length}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                            <div className="flex items-center">
+                                <div className="p-2 bg-purple-100 rounded-lg">
+                                    <i className="fas fa-history text-purple-600 text-xl"></i>
+                                </div>
+                                <div className="ml-4">
+                                    <p className="text-sm font-medium text-gray-600">Avec Historique</p>
+                                    <p className="text-2xl font-bold text-gray-900">
+                                        {patients.filter(p => p.historique_medical && p.historique_medical.length > 0).length}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {activeTab === "professionals" && (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                            <div className="flex items-center">
+                                <div className="p-2 bg-purple-100 rounded-lg">
+                                    <i className="fas fa-user-md text-purple-600 text-xl"></i>
+                                </div>
+                                <div className="ml-4">
+                                    <p className="text-sm font-medium text-gray-600">Total Professionnels</p>
+                                    <p className="text-2xl font-bold text-gray-900">{healthcareProfessionals.length}</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                            <div className="flex items-center">
+                                <div className="p-2 bg-green-100 rounded-lg">
+                                    <i className="fas fa-stethoscope text-green-600 text-xl"></i>
+                                </div>
+                                <div className="ml-4">
+                                    <p className="text-sm font-medium text-gray-600">Médecins</p>
+                                    <p className="text-2xl font-bold text-gray-900">
+                                        {healthcareProfessionals.filter(p => p.role === 'medecin').length}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                            <div className="flex items-center">
+                                <div className="p-2 bg-blue-100 rounded-lg">
+                                    <i className="fas fa-user-nurse text-blue-600 text-xl"></i>
+                                </div>
+                                <div className="ml-4">
+                                    <p className="text-sm font-medium text-gray-600">Infirmiers</p>
+                                    <p className="text-2xl font-bold text-gray-900">
+                                        {healthcareProfessionals.filter(p => p.role === 'infirmier').length}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Contenu conditionnel selon l'onglet actif */}
+                {activeTab === "users" && (
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                        <div className="overflow-x-auto">
+                            <table className="min-w-full divide-y divide-gray-200">
+                                <thead className="bg-gray-50">
+                                    <tr>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Utilisateur</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rôle</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Statut</th>
+                                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="bg-white divide-y divide-gray-200">
+                                    {filteredUsers.map((user) => (
+                                        <tr key={user.id} className="hover:bg-gray-50">
+                                            <td className="px-6 py-4 whitespace-nowrap">
+                                                <div className="flex items-center">
+                                                    <div className="flex-shrink-0 h-10 w-10">
+                                                        <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
+                                                            <span className="text-sm font-medium text-blue-600">
+                                                                {user.nom?.charAt(0)}{user.prenom?.charAt(0)}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                    <div className="ml-4">
+                                                        <div className="text-sm font-medium text-gray-900">
+                                                            {user.nom} {user.prenom}
+                                                        </div>
+                                                        <div className="text-sm text-gray-500">ID: {user.id}</div>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap">
+                                                <div className="text-sm text-gray-900">{user.email}</div>
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap">
+                                                <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
+                                                    {getRoleName(user.role)}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap">
+                                                <span 
+                                                    className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full cursor-pointer ${
+                                                        user.statut === 'actif' ? 'bg-green-100 text-green-800' : 
+                                                        user.statut === 'inactif' ? 'bg-red-100 text-red-800' : 
+                                                        'bg-yellow-100 text-yellow-800'
+                                                    }`}
+                                                    onClick={() => handleToggleStatus(user.id, user.statut === 'actif' ? 'inactif' : 'actif')}
+                                                >
+                                                    {user.statut === 'actif' ? 'Actif' : 
+                                                     user.statut === 'inactif' ? 'Inactif' : 
+                                                     user.statut === 'suspendu' ? 'Suspendu' : 'Inconnu'}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
+                                                <div className="flex items-center justify-center space-x-2">
+                                                    <button 
+                                                        className="text-blue-600 hover:text-blue-900 p-1" 
+                                                        title="Modifier"
+                                                        onClick={() => openEditModal(user)}
+                                                    >
+                                                        <i className="fas fa-edit"></i>
+                                                    </button>
+                                                    <button 
+                                                        className="text-red-600 hover:text-red-900 p-1" 
+                                                        title="Supprimer"
+                                                        onClick={() => handleDeleteUser(user.id)}
+                                                    >
+                                                        <i className="fas fa-trash"></i>
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        {filteredUsers.length === 0 && (
+                            <div className="text-center py-12">
+                                <i className="fas fa-users text-gray-400 text-4xl mb-4"></i>
+                                <p className="text-gray-500 text-lg">Aucun utilisateur trouvé</p>
+                                {selectedRole !== "all" && (
+                                    <p className="text-gray-400 text-sm mt-2">
+                                        Aucun utilisateur avec le rôle "{selectedRole}"
+                                    </p>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* Onglet Patients */}
+                {activeTab === "patients" && (
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                        <div className="overflow-x-auto">
+                            <table className="min-w-full divide-y divide-gray-200">
+                                <thead className="bg-gray-50">
+                                    <tr>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Patient</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Informations</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="bg-white divide-y divide-gray-200">
+                                    {loadingPatients ? (
+                                        <tr>
+                                            <td colSpan="4" className="px-6 py-4 text-center">
+                                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                                            </td>
+                                        </tr>
+                                    ) : patients.length > 0 ? (
+                                        patients.map((patient) => (
+                                            <tr key={patient.id} className="hover:bg-gray-50">
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <div className="flex items-center">
+                                                        <div className="flex-shrink-0 h-10 w-10">
+                                                            <div className="h-10 w-10 rounded-full bg-green-100 flex items-center justify-center">
+                                                                <span className="text-sm font-medium text-green-600">
+                                                                    {patient.nom?.charAt(0)}{patient.prenom?.charAt(0)}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                        <div className="ml-4">
+                                                            <div className="text-sm font-medium text-gray-900">
+                                                                {patient.nom} {patient.prenom}
+                                                            </div>
+                                                            <div className="text-sm text-gray-500">ID: {patient.id}</div>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <div className="text-sm text-gray-900">{patient.email}</div>
+                                                    {patient.telephone && (
+                                                        <div className="text-sm text-gray-500">{patient.telephone}</div>
+                                                    )}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <div className="text-sm text-gray-900">
+                                                        {patient.date_naissance && (
+                                                            <div>Né(e) le: {new Date(patient.date_naissance).toLocaleDateString()}</div>
+                                                        )}
+                                                        {patient.groupe_sanguin && (
+                                                            <div>Groupe: {patient.groupe_sanguin}</div>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
+                                                    <div className="flex items-center justify-center space-x-2">
+                                                        <button 
+                                                            className="text-blue-600 hover:text-blue-900 p-1" 
+                                                            title="Voir l'historique"
+                                                        >
+                                                            <i className="fas fa-history"></i>
+                                                        </button>
+                                                        <button 
+                                                            className="text-green-600 hover:text-green-900 p-1" 
+                                                            title="Voir les rendez-vous"
+                                                        >
+                                                            <i className="fas fa-calendar"></i>
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))
                                     ) : (
-                                        <span className="inline-block px-2 py-1 text-xs font-semibold rounded bg-red-100 text-red-700">Inactif</span>
+                                        <tr>
+                                            <td colSpan="4" className="px-6 py-4 text-center">
+                                                <div className="text-gray-500">Aucun patient trouvé</div>
+                                            </td>
+                                        </tr>
                                     )}
-                                </td>
-                                <td className="py-2 px-4 whitespace-nowrap text-center">
-                                    <button
-                                        onClick={() => handleActivationToggle(patient.id)}
-                                        className={`px-3 sm:px-4 py-1 rounded-lg font-semibold shadow-sm transition text-white text-xs sm:text-sm ${patient.actif ? "bg-red-500 hover:bg-red-600" : "bg-green-500 hover:bg-green-600"}`}
-                                    >
-                                        {patient.actif ? "Désactiver" : "Activer"}
-                                    </button>
-                                </td>
-                            </tr>
-                        ))} */}
-                    </tbody>
-                </table>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                )}
+
+                                 {/* Onglet Professionnels de Santé */}
+                 {activeTab === "professionals" && (
+                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                         {/* En-tête avec compteur filtré */}
+                         <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
+                             <div className="flex items-center justify-between">
+                                 <h3 className="text-lg font-medium text-gray-900">
+                                     Professionnels de Santé
+                                 </h3>
+                                 <div className="text-sm text-gray-500">
+                                     {filteredProfessionals.length} sur {healthcareProfessionals.length} professionnels
+                                     {searchTerm !== "" && (
+                                         <span className="ml-2 text-blue-600">
+                                             • Recherche: "{searchTerm}"
+                                         </span>
+                                     )}
+                                     {selectedRole !== "all" && (
+                                         <span className="ml-2 text-green-600">
+                                             • Rôle: {selectedRole === 'medecin' ? 'Médecin' : 'Infirmier'}
+                                         </span>
+                                     )}
+                                 </div>
+                             </div>
+                         </div>
+                         
+                         <div className="overflow-x-auto">
+                             <table className="min-w-full divide-y divide-gray-200">
+                                 <thead className="bg-gray-50">
+                                     <tr>
+                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Professionnel</th>
+                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</th>
+                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Spécialité</th>
+                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                                     </tr>
+                                 </thead>
+                                <tbody className="bg-white divide-y divide-gray-200">
+                                    {loadingProfessionals ? (
+                                        <tr>
+                                            <td colSpan="4" className="px-6 py-4 text-center">
+                                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                                            </td>
+                                        </tr>
+                                                                         ) : filteredProfessionals.length > 0 ? (
+                                         filteredProfessionals.map((professional) => (
+                                            <tr key={professional.id} className="hover:bg-gray-50">
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <div className="flex items-center">
+                                                        <div className="flex-shrink-0 h-10 w-10">
+                                                            <div className="h-10 w-10 rounded-full bg-purple-100 flex items-center justify-center">
+                                                                <span className="text-sm font-medium text-purple-600">
+                                                                    {professional.nom?.charAt(0)}{professional.prenom?.charAt(0)}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                        <div className="ml-4">
+                                                            <div className="text-sm font-medium text-gray-900">
+                                                                {professional.nom} {professional.prenom}
+                                                            </div>
+                                                            <div className="text-sm text-gray-500">ID: {professional.id}</div>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <div className="text-sm text-gray-900">{professional.email}</div>
+                                                    {professional.telephone && (
+                                                        <div className="text-sm text-gray-500">{professional.telephone}</div>
+                                                    )}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <div className="text-sm text-gray-900">
+                                                        <div className="font-medium">{professional.specialite}</div>
+                                                        {professional.role && (
+                                                            <div className="text-gray-500">{professional.role}</div>
+                                                        )}
+                                                        {professional.numero_adeli && (
+                                                            <div className="text-gray-500">ADELI: {professional.numero_adeli}</div>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
+                                                    <div className="flex items-center justify-center space-x-2">
+                                                        <button 
+                                                            className="text-blue-600 hover:text-blue-900 p-1" 
+                                                            title="Modifier"
+                                                        >
+                                                            <i className="fas fa-edit"></i>
+                                                        </button>
+                                                        <button 
+                                                            className="text-green-600 hover:text-green-900 p-1" 
+                                                            title="Voir le planning"
+                                                        >
+                                                            <i className="fas fa-calendar-alt"></i>
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))
+                                                                         ) : (
+                                         <tr>
+                                             <td colSpan="4" className="px-6 py-4 text-center">
+                                                 <div className="text-gray-500">
+                                                     {healthcareProfessionals.length === 0 
+                                                         ? "Aucun professionnel trouvé" 
+                                                         : `Aucun professionnel ne correspond aux critères de recherche`
+                                                     }
+                                                 </div>
+                                                 {searchTerm !== "" && (
+                                                     <div className="text-gray-400 text-sm mt-1">
+                                                         Recherche: "{searchTerm}"
+                                                     </div>
+                                                 )}
+                                                 {selectedRole !== "all" && (
+                                                     <div className="text-gray-400 text-sm mt-1">
+                                                         Rôle: "{selectedRole}"
+                                                     </div>
+                                                 )}
+                                             </td>
+                                         </tr>
+                                     )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                )}
             </div>
 
-            <div className="overflow-x-auto rounded-xl shadow border border-gray-100 bg-white">
-                <table className="min-w-[600px] w-full divide-y divide-gray-200 text-xs sm:text-sm">
-                    <thead className="bg-blue-50">
-                        <tr>
-                            <th className="py-3 px-4 text-left font-bold text-blue-700 uppercase tracking-wider">Nom</th>
-                            <th className="py-3 px-4 text-left font-bold text-blue-700 uppercase tracking-wider">Prénom</th>
-                            <th className="py-3 px-4 text-left font-bold text-blue-700 uppercase tracking-wider">Email</th>
-                            <th className="py-3 px-4 text-left font-bold text-blue-700 uppercase tracking-wider">Rôle</th>
-                            <th className="py-3 px-4 text-left font-bold text-blue-700 uppercase tracking-wider">Statut</th>
-                            <th className="py-3 px-4 text-center font-bold text-blue-700 uppercase tracking-wider">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                        {medecins.map((medecin, idx) => (
-                            <tr key={medecin.id} className={idx % 2 === 0 ? "bg-white" : "bg-blue-50/50"}>
-                                <td className="py-2 px-4 whitespace-nowrap">{medecin.nom}</td>
-                                <td className="py-2 px-4 whitespace-nowrap">{medecin.prenom}</td>
-                                <td className="py-2 px-4 whitespace-nowrap">{medecin.email}</td>
-                                <td className="py-2 px-4 whitespace-nowrap">Médecin</td>
-                                <td className="py-2 px-4 whitespace-nowrap">
-                                    {medecin.actif ? (
-                                        <span className="inline-block px-2 py-1 text-xs font-semibold rounded bg-green-100 text-green-700">Actif</span>
-                                    ) : (
-                                        <span className="inline-block px-2 py-1 text-xs font-semibold rounded bg-red-100 text-red-700">Inactif</span>
-                                    )}
-                                </td>
-                                <td className="py-2 px-4 whitespace-nowrap text-center">
-                                    <button
-                                        onClick={() => handleActivationToggle(medecin.id)}
-                                        className={`px-3 sm:px-4 py-1 rounded-lg font-semibold shadow-sm transition text-white text-xs sm:text-sm ${medecin.actif ? "bg-red-500 hover:bg-red-600" : "bg-green-500 hover:bg-green-600"}`}
-                                    >
-                                        {medecin.actif ? "Désactiver" : "Activer"}
-                                    </button>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-
-            <div className="overflow-x-auto rounded-xl shadow border border-gray-100 bg-white">
-                <table className="min-w-[600px] w-full divide-y divide-gray-200 text-xs sm:text-sm">
-                    <thead className="bg-blue-50">
-                        <tr>
-                            <th className="py-3 px-4 text-left font-bold text-blue-700 uppercase tracking-wider">Nom</th>
-                            <th className="py-3 px-4 text-left font-bold text-blue-700 uppercase tracking-wider">Prénom</th>
-                            <th className="py-3 px-4 text-left font-bold text-blue-700 uppercase tracking-wider">Email</th>
-                            <th className="py-3 px-4 text-left font-bold text-blue-700 uppercase tracking-wider">Rôle</th>
-                            <th className="py-3 px-4 text-left font-bold text-blue-700 uppercase tracking-wider">Statut</th>
-                            <th className="py-3 px-4 text-center font-bold text-blue-700 uppercase tracking-wider">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                        {secretaires.map((secretaire, idx) => (
-                            <tr key={secretaire.id} className={idx % 2 === 0 ? "bg-white" : "bg-blue-50/50"}>
-                                <td className="py-2 px-4 whitespace-nowrap">{secretaire.nom}</td>
-                                <td className="py-2 px-4 whitespace-nowrap">{secretaire.prenom}</td>
-                                <td className="py-2 px-4 whitespace-nowrap">{secretaire.email}</td>
-                                <td className="py-2 px-4 whitespace-nowrap">Secrétaire</td>
-                                <td className="py-2 px-4 whitespace-nowrap">
-                                    {secretaire.actif ? (
-                                        <span className="inline-block px-2 py-1 text-xs font-semibold rounded bg-green-100 text-green-700">Actif</span>
-                                    ) : (
-                                        <span className="inline-block px-2 py-1 text-xs font-semibold rounded bg-red-100 text-red-700">Inactif</span>
-                                    )}
-                                </td>
-                                <td className="py-2 px-4 whitespace-nowrap text-center">
-                                    <button
-                                        onClick={() => handleActivationToggle(secretaire.id)}
-                                        className={`px-3 sm:px-4 py-1 rounded-lg font-semibold shadow-sm transition text-white text-xs sm:text-sm ${secretaire.actif ? "bg-red-500 hover:bg-red-600" : "bg-green-500 hover:bg-green-600"}`}
-                                    >
-                                        {secretaire.actif ? "Désactiver" : "Activer"}
-                                    </button>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
+            {/* Modal de création/édition */}
+            {showModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                    <div className="bg-white rounded-xl shadow-lg w-full max-w-md">
+                        <div className="p-6 border-b border-gray-200">
+                            <h2 className="text-xl font-semibold text-gray-900">
+                                {editingUser ? 'Modifier l\'utilisateur' : 'Créer un utilisateur'}
+                            </h2>
+                        </div>
+                        <div className="p-6 space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Nom</label>
+                                <input
+                                    type="text"
+                                    name="nom"
+                                    value={formData.nom}
+                                    onChange={handleInputChange}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Prénom</label>
+                                <input
+                                    type="text"
+                                    name="prenom"
+                                    value={formData.prenom}
+                                    onChange={handleInputChange}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                                <input
+                                    type="email"
+                                    name="email"
+                                    value={formData.email}
+                                    onChange={handleInputChange}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Rôle</label>
+                                <select
+                                    name="role"
+                                    value={typeof formData.role === 'object' ? formData.role.id : formData.role}
+                                    onChange={handleInputChange}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                >
+                                    {roleOptions.map(role => (
+                                        <option key={role} value={role}>
+                                            {role}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Statut</label>
+                                <select
+                                    name="statut"
+                                    value={formData.statut}
+                                    onChange={handleInputChange}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                >
+                                    <option value="actif">Actif</option>
+                                    <option value="inactif">Inactif</option>
+                                    <option value="suspendu">Suspendu</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div className="p-6 border-t border-gray-200 flex justify-end space-x-3">
+                            <button
+                                onClick={closeModal}
+                                className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md"
+                            >
+                                Annuler
+                            </button>
+                            <button
+                                onClick={editingUser ? handleUpdateUser : handleCreateUser}
+                                className="px-4 py-2 text-white bg-blue-600 hover:bg-blue-700 rounded-md"
+                            >
+                                {editingUser ? 'Modifier' : 'Créer'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

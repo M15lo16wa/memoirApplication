@@ -384,9 +384,13 @@ const DMPMonEspaceSante = () => {
                         Auto-mesures Récentes
                     </h2>
                     <div className="space-y-3">
+                        {/* Debug: Afficher les données des auto-mesures */}
+                        {console.log('🔍 Auto-mesures dans le composant:', autoMesures)}
+                        
                         {autoMesures.length > 0 ? (
                             autoMesures.slice(0, 5).map((mesure, index) => {
-                                const config = getMesureConfig(mesure.type);
+                                console.log(`🔍 Mesure ${index}:`, { type: mesure.type_mesure, valeur: mesure.valeur, unite: mesure.unite });
+                                const config = getMesureConfig(mesure.type_mesure);
                                 return (
                                     <div key={index} className="border rounded-lg p-4 hover:bg-gray-50">
                                         <div className="flex items-center justify-between">

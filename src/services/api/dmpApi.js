@@ -47,6 +47,12 @@ export const getPatientConsultations = (patientId) => dmpApi.get(`/consultation/
 export const authenticateCPS = (cpsData) => dmpApi.post('/auth/authenticate-cps', cpsData);
 export const requestStandardAccess = (accessData) => dmpApi.post('/access/request-standard', accessData);
 
+// --- Tableau de Bord Médecin ---
+export const getPatientsByMedecin = (medecinId) => dmpApi.get(`/medecin/${medecinId}/patients`);
+export const getRendezVousByMedecin = (medecinId) => dmpApi.get(`/medecin/${medecinId}/rendez-vous`);
+export const getMessagesRecents = (medecinId) => dmpApi.get(`/medecin/${medecinId}/messages`);
+export const getNotificationsByMedecin = (medecinId) => dmpApi.get(`/medecin/${medecinId}/notifications`);
+
 /**
  * Enregistre un accès d'urgence dans le système
  * @param {Object} emergencyData - Données de l'accès d'urgence

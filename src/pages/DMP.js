@@ -6,7 +6,7 @@ import {
   FaSignOutAlt, FaPlus, FaDownload,
   FaHeartbeat, FaPills, FaThermometerHalf, FaWeight,
   FaTint, FaPrint, FaUserShield, FaCheck, FaTimes,
-  FaComments
+  FaComments, FaCalendar
 } from "react-icons/fa";
 
 // Routes et protection
@@ -31,7 +31,8 @@ import { MessagingButton, MessagingWidget, ChatMessage } from "../messaging";
 // APIs
 import * as dmpApi from "../services/api/dmpApi";
 import * as patientApi from "../services/api/patientApi";
-import { uploadDocument } from "../services/api/medicalApi";
+import { uploadDocument, getDossierPatient } from "../services/api/medicalApi";
+import { getRendezVousByPatient } from "../services/api/rendezVous";
 
 // Protection 2FA
 import Validate2FA from "../components/2fa/Validate2FA";
@@ -113,6 +114,12 @@ const HistoriqueMedical = ({ patientProfile, onOpenMessaging }) => {
   const [showPrescriptionModal, setShowPrescriptionModal] = useState(false);
   const [selectedPrescriptionsForPDF, setSelectedPrescriptionsForPDF] = useState([]);
   const [showPDFSelectionModal, setShowPDFSelectionModal] = useState(false);
+
+  // États pour la récupération du dossier médical
+  const [dossierMedical, setDossierMedical] = useState(null);
+  const [loadingDossier, setLoadingDossier] = useState(false);
+  const [errorDossier, setErrorDossier] = useState(null);
+  const [showDossierSection, setShowDossierSection] = useState(false);
 
   // Hook pour la gnration de PDF
   const {
@@ -394,6 +401,144 @@ prescription.redacteur.id_professionnel || prescription.redacteur.id_medecin)) {
     }
   };
 
+  // Fonction pour nettoyer les données du dossier médical
+  const clearDossierData = useCallback(() => {
+    setDossierMedical(null);
+    setShowDossierSection(false);
+    setErrorDossier(null);
+  }, []);
+
+  // Fonction pour récupérer le dossier médical du patient
+  const loadDossierMedical = useCallback(async () => {
+    if (!patientId || !patientProfile) {
+      console.warn('⚠️ Tentative de chargement du dossier médical sans patientId ou profil');
+      return;
+    }
+
+    setLoadingDossier(true);
+    setErrorDossier(null);
+
+    try {
+      console.log('🔍 Chargement du dossier médical pour le patient:', patientId);
+      const dossierData = await getDossierPatient(patientId);
+      
+      console.log('📋 Dossier médical récupéré (brut):', dossierData);
+      console.log('🔍 Structure des données:', {
+        hasStatus: !!dossierData?.status,
+        hasData: !!dossierData?.data,
+        hasDataData: !!dossierData?.data?.data,
+        hasDataDataDossier: !!dossierData?.data?.data?.dossier,
+        hasDataDossier: !!dossierData?.data?.dossier,
+        status: dossierData?.status,
+        dataKeys: dossierData?.data ? Object.keys(dossierData.data) : 'Pas de data',
+        dataDataKeys: dossierData?.data?.data ? Object.keys(dossierData.data.data) : 'Pas de data.data'
+      });
+      
+      // Gérer différents formats de réponse possibles
+      let dossierInfo = null;
+      
+      if (dossierData && dossierData.status === 'success' && dossierData.data && dossierData.data.data && dossierData.data.data.dossier) {
+        // Format reçu : { status: "success", data: { data: { dossier: {...} } } }
+        dossierInfo = dossierData.data.data.dossier;
+        console.log('✅ Format détecté: structure double imbriquée avec data.data.dossier');
+      } else if (dossierData && dossierData.status === 'success' && dossierData.data && dossierData.data.dossier) {
+        // Format reçu : { status: "success", data: { dossier: {...} } }
+        dossierInfo = dossierData.data.dossier;
+        console.log('✅ Format détecté: structure avec dossier imbriqué');
+      } else if (dossierData && dossierData.success && dossierData.data) {
+        // Format standard avec success et data
+        dossierInfo = dossierData.data;
+        console.log('✅ Format détecté: structure avec success et data');
+      } else if (dossierData && dossierData.data) {
+        // Format avec data directement
+        dossierInfo = dossierData.data;
+        console.log('✅ Format détecté: structure avec data direct');
+      } else if (dossierData && dossierData.id) {
+        // Format avec données directement dans l'objet
+        dossierInfo = dossierData;
+        console.log('✅ Format détecté: structure directe');
+      } else if (Array.isArray(dossierData) && dossierData.length > 0) {
+        // Format tableau, prendre le premier élément
+        dossierInfo = dossierData[0];
+        console.log('✅ Format détecté: structure tableau');
+      }
+      
+      if (dossierInfo) {
+        // Normaliser les données pour l'affichage
+        const normalizedDossier = {
+          // ID et numéro de dossier
+          id: dossierInfo.id_dossier || dossierInfo.id || dossierInfo.numeroDossier,
+          numeroDossier: dossierInfo.numeroDossier || dossierInfo.id_dossier || dossierInfo.id,
+          
+          // Statut et dates
+          statut: dossierInfo.statut || 'Non défini',
+          date_ouverture: dossierInfo.dateCreation || dossierInfo.date_ouverture || dossierInfo.createdAt,
+          
+          // Informations médicales (gérer les différents noms de propriétés)
+          resume_medical: dossierInfo.resume || dossierInfo.resume_medical || 'Aucun résumé disponible',
+          antecedents_medicaux: dossierInfo.antecedent_medicaux || dossierInfo.antecedents_medicaux || dossierInfo.antecedents || 'Aucun antécédent connu',
+          allergies: dossierInfo.allergies || 'Aucune allergie connue',
+          traitement: dossierInfo.traitements_chroniques || dossierInfo.traitement || dossierInfo.traitements || 'Aucun traitement en cours',
+          
+          // Signes vitaux
+          signes_vitaux: dossierInfo.heart_rate || dossierInfo.blood_pressure || dossierInfo.temperature ? 
+            `FC: ${dossierInfo.heart_rate || 'N/A'}, TA: ${dossierInfo.blood_pressure || 'N/A'}, Temp: ${dossierInfo.temperature || 'N/A'}°C` : 
+            'Normaux',
+          
+          // Autres informations
+          histoire_familiale: dossierInfo.historique_familial || dossierInfo.histoire_familiale || 'Non documentée',
+          observations: dossierInfo.observations || 'Aucune observation particulière',
+          
+          // Informations sur le médecin traitant
+          medecin: dossierInfo.medecinReferent || dossierInfo.medecin || dossierInfo.medecin_traitant || dossierInfo.professionnel,
+          
+          // Données brutes pour debug
+          rawData: dossierInfo
+        };
+        
+        console.log('📋 Dossier normalisé:', normalizedDossier);
+        setDossierMedical(normalizedDossier);
+        setShowDossierSection(true);
+        console.log('✅ Dossier médical chargé avec succès');
+      } else {
+        throw new Error('Aucun dossier médical trouvé pour ce patient');
+      }
+    } catch (error) {
+      console.error('❌ Erreur lors du chargement du dossier médical:', error);
+      
+      // Gérer les erreurs spécifiques
+      let errorMessage = 'Impossible de charger le dossier médical';
+      if (error.response) {
+        if (error.response.status === 404) {
+          errorMessage = 'Aucun dossier médical trouvé pour ce patient';
+        } else if (error.response.status === 403) {
+          errorMessage = 'Accès non autorisé au dossier médical';
+        } else if (error.response.status === 500) {
+          errorMessage = 'Erreur serveur lors de la récupération du dossier';
+        }
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      setErrorDossier(errorMessage);
+      setDossierMedical(null);
+    } finally {
+      setLoadingDossier(false);
+    }
+  }, [patientId, patientProfile]);
+
+  // Fonction pour recharger le dossier médical
+  const handleRefreshDossier = useCallback(() => {
+    console.log('Rechargement forcé du dossier médical');
+    clearDossierData();
+    loadDossierMedical();
+  }, [clearDossierData, loadDossierMedical]);
+
+  // Fonction pour nettoyer les erreurs du dossier médical
+  const clearDossierError = useCallback(() => {
+    setErrorDossier(null);
+  }, []);
+
   const handleFilterChange = async (filter) => {
     try {
       setLoading(true);
@@ -462,6 +607,8 @@ prescription.redacteur.id_professionnel || prescription.redacteur.id_medecin)) {
       return 'Date invalide';
     }
   };
+
+
 
   const getStatusColor = (statut) => {
     switch (statut?.toLowerCase()) {
@@ -1456,6 +1603,208 @@ hover:bg-indigo-50 text-xs"
         )}
       </div>
 
+      {/* Section de récupération du dossier médical - Visible seulement pour les patients */}
+      {patientProfile && patientProfile.role === 'patient' && (
+        <div className="mt-8 p-6 bg-green-50 border border-green-200 rounded-lg">
+          <div className="flex justify-between items-center mb-4">
+            <div>
+              <h3 className="text-lg font-semibold text-green-800">
+                📋 Mon Dossier Médical
+              </h3>
+              <p className="text-sm text-green-700 mt-1">
+                Accédez à votre dossier médical créé par votre médecin traitant
+              </p>
+            </div>
+            {!showDossierSection && (
+              <div className="flex flex-col items-end space-y-2">
+                <button
+                  onClick={loadDossierMedical}
+                  disabled={loadingDossier || !patientProfile}
+                  className={`inline-flex items-center px-6 py-3 border border-transparent shadow-lg text-sm font-medium rounded-lg text-white transition-all duration-200 ${
+                    loadingDossier || !patientProfile
+                      ? 'bg-gray-400 cursor-not-allowed'
+                      : 'bg-green-600 hover:bg-green-700 hover:shadow-xl transform hover:scale-105'
+                  }`}
+                >
+                  {loadingDossier ? (
+                    <>
+                      <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Chargement...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="h-5 w-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      Récupérer mon dossier médical
+                    </>
+                  )}
+                </button>
+                <p className="text-xs text-green-600 text-right max-w-xs">
+                  Accédez à votre dossier médical complet créé par votre médecin traitant
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Affichage des erreurs */}
+          {errorDossier && (
+            <div className="mb-4 p-3 bg-red-100 border border-red-300 rounded-md">
+              <div className="flex items-center">
+                <svg className="h-5 w-5 text-red-400 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                </svg>
+                <span className="text-red-700 text-sm">{errorDossier}</span>
+              </div>
+              <button
+                onClick={clearDossierError}
+                className="mt-2 text-red-600 hover:text-red-800 text-sm underline"
+              >
+                Réessayer
+              </button>
+            </div>
+          )}
+
+          {/* Affichage du dossier médical */}
+          {showDossierSection && dossierMedical && (
+            <div className="bg-white rounded-lg border border-green-200 p-4">
+              <div className="flex justify-between items-center mb-4">
+                <h4 className="text-md font-semibold text-green-800">
+                  📋 Dossier Médical de {patientProfile.nom || patientProfile.prenom ? `${patientProfile.prenom || ''} ${patientProfile.nom || ''}`.trim() : `Patient #${patientProfile.id_patient || patientProfile.id}`}
+                </h4>
+                <div className="flex space-x-2">
+                  <button
+                    onClick={() => {
+                      setShowDossierSection(false);
+                      setDossierMedical(null);
+                    }}
+                    className="text-gray-500 hover:text-gray-700 text-sm p-2 rounded-md hover:bg-gray-50"
+                  >
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={handleRefreshDossier}
+                    disabled={loadingDossier}
+                    className="text-green-600 hover:text-green-800 text-sm p-2 rounded-md hover:bg-green-50"
+                    title="Actualiser le dossier"
+                  >
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              {/* Informations principales du dossier */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm mb-4">
+                <div className="space-y-3">
+                  <div className="bg-blue-50 p-3 rounded-md">
+                    <span className="font-medium text-blue-800">Numéro de dossier:</span>
+                    <p className="text-blue-900 mt-1 font-mono text-lg">{dossierMedical.id || dossierMedical.numeroDossier || 'N/A'}</p>
+                  </div>
+                  <div className="bg-green-50 p-3 rounded-md">
+                    <span className="font-medium text-green-800">Statut:</span>
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ml-2 ${
+                      (dossierMedical.statut || '').toLowerCase() === 'actif' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                    }`}>
+                      {dossierMedical.statut || 'Non défini'}
+                    </span>
+                  </div>
+                  <div className="bg-purple-50 p-3 rounded-md">
+                    <span className="font-medium text-purple-800">Date d'ouverture:</span>
+                    <p className="text-purple-900 mt-1">{formatDate(dossierMedical.date_ouverture || dossierMedical.dateCreation || dossierMedical.createdAt)}</p>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="bg-yellow-50 p-3 rounded-md">
+                    <span className="font-medium text-yellow-800">Résumé médical:</span>
+                    <p className="text-yellow-900 mt-1">{dossierMedical.resume_medical || dossierMedical.resume || 'Aucun résumé disponible'}</p>
+                  </div>
+                  <div className="bg-orange-50 p-3 rounded-md">
+                    <span className="font-medium text-orange-800">Antécédents médicaux:</span>
+                    <p className="text-orange-900 mt-1">{dossierMedical.antecedents_medicaux || dossierMedical.antecedents || 'Aucun antécédent connu'}</p>
+                  </div>
+                  <div className="bg-red-50 p-3 rounded-md">
+                    <span className="font-medium text-red-800">Allergies:</span>
+                    <p className="text-red-900 mt-1">{dossierMedical.allergies || 'Aucune allergie connue'}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Informations supplémentaires */}
+              <div className="mt-4 p-4 bg-gray-50 rounded-md">
+                <h5 className="font-medium text-gray-700 mb-3 flex items-center">
+                  <svg className="h-5 w-5 mr-2 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Informations complémentaires
+                </h5>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="font-medium text-gray-600">Traitement en cours:</span>
+                    <p className="text-gray-800 mt-1">{dossierMedical.traitement || dossierMedical.traitements || 'Aucun traitement en cours'}</p>
+                  </div>
+                  <div>
+                    <span className="font-medium text-gray-600">Signes vitaux:</span>
+                    <p className="text-gray-800 mt-1">{dossierMedical.signes_vitaux || dossierMedical.signesVitaux || 'Normaux'}</p>
+                  </div>
+                  <div>
+                    <span className="font-medium text-gray-600">Histoire familiale:</span>
+                    <p className="text-gray-800 mt-1">{dossierMedical.histoire_familiale || dossierMedical.histoireFamiliale || 'Non documentée'}</p>
+                  </div>
+                  <div>
+                    <span className="font-medium text-gray-600">Observations:</span>
+                    <p className="text-gray-800 mt-1">{dossierMedical.observations || 'Aucune observation particulière'}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Informations sur le médecin traitant si disponibles */}
+              {(dossierMedical.medecin || dossierMedical.medecin_traitant || dossierMedical.professionnel) && (
+                <div className="mt-4 p-4 bg-blue-50 rounded-md">
+                  <h5 className="font-medium text-blue-700 mb-3 flex items-center">
+                    <svg className="h-5 w-5 mr-2 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                    Médecin traitant
+                  </h5>
+                  <div className="text-sm text-blue-800">
+                    {dossierMedical.medecin ? (
+                      <p>{dossierMedical.medecin.nom || ''} {dossierMedical.medecin.prenom || ''}</p>
+                    ) : dossierMedical.medecin_traitant ? (
+                      <p>{dossierMedical.medecin_traitant.nom || ''} {dossierMedical.medecin_traitant.prenom || ''}</p>
+                    ) : dossierMedical.professionnel ? (
+                      <p>{dossierMedical.professionnel.nom || ''} {dossierMedical.professionnel.prenom || ''}</p>
+                    ) : (
+                      <p>Médecin non spécifié</p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Message si pas de dossier */}
+          {showDossierSection && !dossierMedical && !loadingDossier && !errorDossier && (
+            <div className="text-center py-6">
+              <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              <h3 className="mt-2 text-sm font-medium text-gray-900">Aucun dossier médical trouvé</h3>
+              <p className="mt-1 text-sm text-gray-500">
+                Votre médecin traitant n'a pas encore créé de dossier médical pour vous.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Modal pour afficher les dtails de la prescription */}
       {showPrescriptionModal && selectedPrescription && (
         <div
@@ -1863,14 +2212,16 @@ const DMP = () => {
     hasActions: !!dmpContext?.actions,
     patientId: dmpContext?.state?.patientId,
     loading: dmpContext?.state?.loading,
-    error: dmpContext?.state?.error
+    error: dmpContext?.state?.error,
+    createAutoMesure: !!dmpContext?.createAutoMesure,
+    uploadDocument: !!dmpContext?.uploadDocument
   });
   
   // Vrification de scurit pour le contexte DMP
-  const createAutoMesure = dmpContext?.actions?.createAutoMesure;
-  const uploadDocument = dmpContext?.actions?.uploadDocument;
-  const dmpState = dmpContext?.state || {};
-  const dmpActions = dmpContext?.actions || {};
+  const createAutoMesure = dmpContext?.createAutoMesure;
+  const uploadDocument = dmpContext?.uploadDocument;
+  const dmpState = dmpContext || {};
+  const dmpActions = dmpContext || {};
 
 
   // Vrification de scurit avant d'utiliser le contexte
@@ -2038,6 +2389,20 @@ const DMP = () => {
     }
   };
 
+  // Fonction pour formater les dates dans l'onglet rappels
+  const formatDateRappels = (dateString) => {
+    if (!dateString) return 'Date non disponible';
+    try {
+      return new Date(dateString).toLocaleDateString('fr-FR', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+    } catch {
+      return 'Date invalide';
+    }
+  };
+
   // Nouvelle fonction pour charger les autorisations valides
   const loadAutorisationsValidees = async () => {
     try {
@@ -2134,10 +2499,68 @@ const DMP = () => {
           break;
         case 'rappels':
           try {
-            const rappelsData = await dmpApi.getRappels(); // Utilise automatiquement l'ID du patient 
-            setRappels(rappelsData.data || []);
+            // Récupérer l'ID du patient connecté
+            const storedPatient = getStoredPatient();
+            const patientId = storedPatient?.id_patient || storedPatient?.id;
+
+            if (!patientId) {
+              console.warn('ID patient non disponible pour charger les rendez-vous');
+              setRappels([]);
+              break;
+            }
+
+            // Utiliser le service rendezVous pour récupérer les rendez-vous du patient
+            const rendezVousData = await getRendezVousByPatient(patientId);
+            
+            if (rendezVousData && (rendezVousData.success || rendezVousData.status === 'success')) {
+              console.log('Rendez-vous récupérés avec succès:', rendezVousData.data);
+              
+              // Gérer les deux structures possibles de réponse
+              let rendezVous = [];
+              if (rendezVousData.data && Array.isArray(rendezVousData.data)) {
+                // Structure directe : data: [...]
+                rendezVous = rendezVousData.data;
+              } else if (rendezVousData.data && Array.isArray(rendezVousData.data.rendezVous)) {
+                // Structure imbriquée : data: {rendezVous: [...]}
+                rendezVous = rendezVousData.data.rendezVous;
+              }
+              
+              console.log('Rendez-vous extraits:', rendezVous);
+              
+              // Normaliser les données des rendez-vous pour la nouvelle structure API
+              const normalizedRendezVous = rendezVous.map(rdv => ({
+                id: rdv.id_rendezvous || rdv.id,
+                date: rdv.DateHeure ? new Date(rdv.DateHeure).toISOString().split('T')[0] : rdv.date,
+                heure: rdv.DateHeure ? new Date(rdv.DateHeure).toLocaleTimeString('fr-FR', { 
+                  hour: '2-digit', 
+                  minute: '2-digit' 
+                }) : rdv.heure,
+                motif: rdv.motif_consultation || rdv.motif,
+                statut: rdv.statut,
+                notes: rdv.notes,
+                patient: {
+                  nom: rdv.nom,
+                  prenom: rdv.prenom,
+                  email: rdv.email,
+                  date_naissance: rdv.dateNaissance,
+                  sexe: rdv.sexe,
+                  telephone: rdv.telephone
+                },
+                professionnel: rdv.professionnel,
+                hopital: rdv.Hopital,
+                service: rdv.ServiceSante,
+                createdAt: rdv.createdAt,
+                updatedAt: rdv.updatedAt
+              }));
+              
+              console.log('✅ Rendez-vous normalisés:', normalizedRendezVous);
+              setRappels(normalizedRendezVous);
+            } else {
+              console.warn('Aucun rendez-vous trouvé ou erreur API:', rendezVousData?.message || 'Structure de réponse inattendue');
+              setRappels([]);
+            }
           } catch (rappelsError) {
-            console.warn(' Rappels non disponibles:', rappelsError.message);
+            console.warn('Erreur lors du chargement des rendez-vous:', rappelsError.message);
             setRappels([]);
           }
           break;
@@ -3519,7 +3942,212 @@ ${activeTab === tab.id
         {/* Rappels */}
         {activeTab === 'rappels' && (
           <div className="bg-white rounded-lg shadow">
-            ...existing code...
+            <div className="p-6 border-b">
+              <h2 className="text-xl font-semibold">Rappels et Rendez-vous</h2>
+              <p className="text-gray-600">Consultez vos rendez-vous programmés et vos rappels médicaux</p>
+            </div>
+            
+            {/* Section des rendez-vous programmés */}
+            <div className="p-6 border-b">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center">
+                  <div className="bg-blue-100 p-2 rounded-full mr-3">
+                    <FaCalendar className="text-blue-600 text-lg" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-800">
+                      Rendez-vous programmés
+                    </h3>
+                    <p className="text-sm text-gray-600">
+                      Planning établi par votre médecin traitant
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => loadTabData('rappels')}
+                  className="flex items-center px-3 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Actualiser
+                </button>
+              </div>
+
+              {/* Affichage des rendez-vous */}
+              {rappels && rappels.length > 0 ? (
+                <div className="space-y-4">
+                  {rappels.map((rendezVous, index) => (
+                    <div key={index} className="border rounded-lg p-4 hover:shadow-md transition-shadow bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-3 mb-3">
+                            <div className="bg-blue-100 p-2 rounded-full">
+                              <FaCalendar className="text-blue-600" />
+                            </div>
+                            <div>
+                                                          <h4 className="font-medium text-gray-900">
+                              Rendez-vous du {formatDateRappels(rendezVous.date || rendezVous.date_rdv || rendezVous.appointmentDate)}
+                            </h4>
+                              <p className="text-sm text-gray-600">
+                                {rendezVous.heure || rendezVous.heure_rdv || rendezVous.appointmentTime || 'Heure non spécifiée'}
+                              </p>
+                            </div>
+                            <span className={`ml-auto px-3 py-1 rounded-full text-xs font-medium ${
+                              (rendezVous.statut || rendezVous.status || 'programme').toLowerCase() === 'confirme' || (rendezVous.statut || rendezVous.status || 'programme').toLowerCase() === 'confirmed'
+                                ? 'bg-green-100 text-green-800'
+                                : (rendezVous.statut || rendezVous.status || 'programme').toLowerCase() === 'annule' || (rendezVous.statut || rendezVous.status || 'programme').toLowerCase() === 'cancelled'
+                                ? 'bg-red-100 text-red-800'
+                                : 'bg-blue-100 text-blue-800'
+                            }`}>
+                              {rendezVous.statut || rendezVous.status || 'Programmé'}
+                            </span>
+                          </div>
+
+                          {/* Informations du rendez-vous */}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+                            <div>
+                              <span className="text-xs font-medium text-gray-600">Motif :</span>
+                              <p className="text-sm text-gray-800 mt-1">
+                                {rendezVous.motif || rendezVous.raison || rendezVous.reason || 'Consultation médicale'}
+                              </p>
+                            </div>
+                            <div>
+                              <span className="text-xs font-medium text-gray-600">Type :</span>
+                              <p className="text-sm text-gray-800 mt-1">
+                                {rendezVous.type_rdv || rendezVous.type || rendezVous.appointmentType || 'Consultation'}
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Informations du médecin */}
+                          {(rendezVous.medecin || rendezVous.professionnel) && (
+                            <div className="bg-white p-3 rounded-md border border-blue-200 mb-3">
+                              <span className="text-xs font-medium text-gray-600">Médecin :</span>
+                              <p className="text-sm text-gray-800 mt-1">
+                                Dr. {(rendezVous.professionnel?.prenom || rendezVous.medecin?.prenom || rendezVous.medecin?.firstName || '')} {(rendezVous.professionnel?.nom || rendezVous.medecin?.nom || rendezVous.medecin?.lastName || '')}
+                                {(rendezVous.professionnel?.specialite || rendezVous.medecin?.specialite || rendezVous.medecin?.speciality) && (
+                                  <span className="text-xs text-gray-500 ml-2">
+                                    ({(rendezVous.professionnel?.specialite || rendezVous.medecin?.specialite || rendezVous.medecin?.speciality)})
+                                  </span>
+                                )}
+                              </p>
+                            </div>
+                          )}
+
+                          {/* Informations du service */}
+                          {(rendezVous.service || rendezVous.ServiceSante) && (
+                            <div className="bg-white p-3 rounded-md border border-blue-200 mb-3">
+                              <span className="text-xs font-medium text-gray-600">Service :</span>
+                              <p className="text-sm text-gray-800 mt-1">
+                                {(rendezVous.ServiceSante?.nom || rendezVous.service?.nom || rendezVous.service?.name || 'Service non spécifié')}
+                                {(rendezVous.ServiceSante?.code || rendezVous.service?.code) && (
+                                  <span className="text-xs text-gray-500 ml-2 font-mono">
+                                    ({(rendezVous.ServiceSante?.code || rendezVous.service?.code)})
+                                  </span>
+                                )}
+                              </p>
+                            </div>
+                          )}
+
+                          {/* Notes et instructions */}
+                          {(rendezVous.notes || rendezVous.instructions || rendezVous.commentaires) && (
+                            <div className="bg-yellow-50 p-3 rounded-md border border-yellow-200">
+                              <span className="text-xs font-medium text-yellow-700">Notes :</span>
+                              <p className="text-sm text-yellow-800 mt-1">
+                                {rendezVous.notes || rendezVous.instructions || rendezVous.commentaires}
+                              </p>
+                            </div>
+                          )}
+
+                          {/* Actions */}
+                          <div className="flex items-center justify-between mt-4 pt-3 border-t border-blue-200">
+                            <div className="flex items-center space-x-2 text-xs text-gray-500">
+                              <span>📅 Créé le : {formatDateRappels(rendezVous.createdAt || rendezVous.date_creation)}</span>
+                              {rendezVous.updatedAt && (
+                                <span>🔄 Modifié le : {formatDateRappels(rendezVous.updatedAt)}</span>
+                              )}
+                            </div>
+                            
+                            <div className="flex space-x-2">
+                              {/* Bouton pour ouvrir la messagerie avec le médecin */}
+                              {(rendezVous.medecin || rendezVous.professionnel) && (rendezVous.professionnel?.id_professionnel || rendezVous.medecin?.id || rendezVous.medecin?.id_professionnel || rendezVous.medecin?.id_medecin) && (
+                                <button
+                                  onClick={() => {
+                                    const medecinId = rendezVous.professionnel?.id_professionnel || rendezVous.medecin?.id || rendezVous.medecin?.id_professionnel || rendezVous.medecin?.id_medecin;
+                                    handleOpenMessaging(null, medecinId);
+                                  }}
+                                  className="flex items-center px-3 py-2 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                                  title="Contacter le médecin"
+                                >
+                                  <FaComments className="w-3 h-3 mr-1" />
+                                  Contacter
+                                </button>
+                              )}
+                              
+                              {/* Bouton pour voir les détails */}
+                              <button
+                                className="flex items-center px-3 py-2 bg-gray-100 text-gray-700 text-xs font-medium rounded-lg hover:bg-gray-200 transition-colors"
+                                title="Voir les détails"
+                              >
+                                <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                </svg>
+                                Détails
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <FaCalendar className="text-gray-400 text-xl" />
+                  </div>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">Aucun rendez-vous programmé</h3>
+                  <p className="text-gray-600">
+                    Vous n'avez actuellement aucun rendez-vous programmé par votre médecin traitant.
+                  </p>
+                  <p className="text-sm text-gray-500 mt-2">
+                    Les rendez-vous apparaîtront ici une fois programmés par votre médecin.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Section des rappels médicaux (existante) */}
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center">
+                  <div className="bg-green-100 p-2 rounded-full mr-3">
+                    <FaBell className="text-green-600 text-lg" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-800">
+                      Rappels médicaux
+                    </h3>
+                    <p className="text-sm text-gray-600">
+                      Rappels pour vos traitements et examens
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Contenu des rappels existant */}
+              <div className="text-center py-8">
+                <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <FaBell className="text-gray-400 text-xl" />
+                </div>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">Fonctionnalité en développement</h3>
+                <p className="text-gray-600">
+                  La gestion des rappels médicaux sera bientôt disponible.
+                </p>
+              </div>
+            </div>
           </div>
         )}
 

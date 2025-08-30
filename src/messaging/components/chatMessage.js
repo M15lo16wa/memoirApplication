@@ -132,13 +132,27 @@ export default function ChatMessage({ userId: propUserId, role: propRole, token:
       setIsLoading(true);
       setError(null);
       
+      console.log('🔍 Chargement des conversations pour l\'utilisateur:', { userId, userRole });
+      
       const result = await signalingService.getUserConversations();
+      console.log('📨 Réponse du serveur pour les conversations:', result);
+      
       if (result.success) {
         // Éviter les doublons en utilisant un Map avec l'ID comme clé
         const uniqueConversations = Array.from(
           new Map((result.conversations || []).map(conv => [conv.id, conv])).values()
         );
+        
+        console.log('✅ Conversations uniques trouvées:', uniqueConversations);
         setConversations(uniqueConversations);
+        
+        // Si aucune conversation n'est sélectionnée et qu'il y en a, sélectionner la première
+        if (!selectedConversation && uniqueConversations.length > 0) {
+          const firstConversation = uniqueConversations[0];
+          setSelectedConversation(firstConversation.id);
+          await loadConversationMessages(firstConversation.id);
+        }
+        
         console.log('✅ Conversations chargées:', uniqueConversations.length);
       } else {
         console.error('❌ Erreur lors du chargement des conversations:', result.error);
@@ -157,14 +171,38 @@ export default function ChatMessage({ userId: propUserId, role: propRole, token:
       setIsLoading(true);
       setError(null);
       
+      console.log('🔍 Chargement des messages pour la conversation:', conversationId);
+      
       const result = await signalingService.getConversationMessages(conversationId, 50, 0);
+      console.log('📨 Réponse du serveur pour les messages:', result);
+      
       if (result.success) {
         // Éviter les doublons en utilisant un Map avec l'ID comme clé
         const uniqueMessages = Array.from(
           new Map((result.messages || []).map(msg => [msg.id, msg])).values()
         );
-        setMessages(uniqueMessages);
-        console.log('✅ Messages chargés:', uniqueMessages.length);
+        
+        console.log('📝 Messages uniques trouvés:', uniqueMessages);
+        
+        // Formater les messages pour l'affichage
+        const formattedMessages = uniqueMessages.map(msg => {
+          const isOwnMessage = msg.expediteur_id === userId || msg.sender_id === userId;
+          const sender = isOwnMessage ? userRole : (userRole === 'patient' ? 'medecin' : 'patient');
+          
+          const formattedMsg = {
+            id: msg.id || msg.message_id,
+            sender: sender,
+            content: msg.contenu || msg.content || msg.message || 'Message sans contenu',
+            timestamp: msg.timestamp || msg.created_at || msg.date_creation || new Date().toISOString(),
+            type: msg.type_message || msg.type || 'texte'
+          };
+          
+          console.log('📝 Message formaté:', formattedMsg);
+          return formattedMsg;
+        });
+        
+        setMessages(formattedMessages);
+        console.log('✅ Messages chargés et formatés:', formattedMessages.length);
       } else {
         console.error('❌ Erreur lors du chargement des messages:', result.error);
         setError(`Erreur lors du chargement des messages: ${result.error}`);
@@ -198,20 +236,40 @@ export default function ChatMessage({ userId: propUserId, role: propRole, token:
         return;
       }
       
+      console.log('🔍 Création d\'une nouvelle conversation:', { medecinId: userId, patientId, type: 'patient_medecin' });
+      
       const result = await signalingService.createConversation(
-        userId,     // ID du médecin (utilisateur actuel)
-        patientId,  // ID du patient
+        patientId,  // ID du patient (premier paramètre)
+        userId,     // ID du médecin (deuxième paramètre)
         'patient_medecin'
       );
       
-      if (result.success) {
+      console.log('📨 Réponse de création de conversation:', result);
+      
+      if (result.success && result.conversation) {
         console.log('✅ Nouvelle conversation créée:', result.conversation);
-        await loadUserConversations();
-        setSelectedConversation(result.conversation.id);
+        
+        // Ajouter la nouvelle conversation à la liste locale
+        const newConversation = result.conversation;
+        setConversations(prev => {
+          const updated = [...prev, newConversation];
+          console.log('📝 Conversations mises à jour:', updated);
+          return updated;
+        });
+        
+        // Sélectionner la nouvelle conversation
+        setSelectedConversation(newConversation.id);
         setMessages([]);
+        
+        // Recharger les conversations depuis le serveur pour s'assurer de la synchronisation
+        setTimeout(() => {
+          loadUserConversations();
+        }, 1000);
+        
+        console.log('✅ Conversation créée et sélectionnée avec succès');
       } else {
         console.error('❌ Erreur lors de la création de conversation:', result.error);
-        setError(`Erreur lors de la création de conversation: ${result.error}`);
+        setError(`Erreur lors de la création de conversation: ${result.error || 'Erreur inconnue'}`);
       }
     } catch (error) {
       console.error('❌ Erreur lors de la création de conversation:', error);
@@ -222,25 +280,48 @@ export default function ChatMessage({ userId: propUserId, role: propRole, token:
   };
 
   const sendMessage = async () => {
-    if (!inputMessage.trim() || !selectedConversation || !isConnected) return;
+    if (!inputMessage.trim() || !isConnected) return;
     
     try {
+      let targetConversationId = selectedConversation;
+      
+      // Si pas de conversation sélectionnée mais qu'on a un médecin ID, essayer d'en créer une
+      if (!targetConversationId && propMedecinId && userRole === 'patient') {
+        console.log('🔍 Pas de conversation sélectionnée, tentative d\'initiation avec le médecin:', propMedecinId);
+        const newConversation = await initiateConversationWithMedecin(propMedecinId);
+        if (newConversation) {
+          targetConversationId = newConversation.id;
+          console.log('✅ Conversation créée côté serveur pour l\'envoi du message');
+        } else {
+          setError("Impossible d'initier une conversation avec ce médecin");
+          return;
+        }
+      }
+      
+      if (!targetConversationId) {
+        setError("Veuillez sélectionner une conversation ou un médecin pour envoyer un message");
+        return;
+      }
+
+      console.log('🔍 Envoi du message dans la conversation:', targetConversationId);
+      
       const result = await signalingService.sendMessage(
-        selectedConversation, 
+        targetConversationId, 
         inputMessage.trim(), 
         'texte'
       );
       
       if (result.success) {
         // Ajouter le message localement
-        setMessages(prev => [...prev, {
+        const newMessage = {
           id: Date.now(),
           sender: userRole,
           content: inputMessage.trim(),
           timestamp: new Date().toISOString(),
           type: 'text'
-        }]);
+        };
         
+        setMessages(prev => [...prev, newMessage]);
         setInputMessage("");
         console.log('✅ Message envoyé avec succès');
       } else {
@@ -286,6 +367,62 @@ export default function ChatMessage({ userId: propUserId, role: propRole, token:
     }
   }, [propMedecinId, conversations, userRole]);
 
+  // Fonction pour permettre aux patients d'initier une conversation
+  const initiateConversationWithMedecin = async (medecinId) => {
+    if (userRole !== 'patient') {
+      console.log('❌ Seuls les patients peuvent initier des conversations');
+      return null;
+    }
+
+    try {
+      console.log('🔍 Tentative d\'initiation de conversation avec le médecin:', medecinId);
+      
+      // Vérifier d'abord s'il y a déjà une conversation
+      const existingConversation = findConversationWithMedecin(medecinId);
+      if (existingConversation) {
+        console.log('✅ Conversation existante trouvée, pas besoin d\'en créer une nouvelle');
+        return existingConversation;
+      }
+
+      // Créer une vraie conversation côté serveur
+      console.log('📝 Création d\'une vraie conversation côté serveur...');
+      
+      // Utiliser le service de signalisation pour créer la conversation
+      // Note: Le service doit permettre aux patients de créer des conversations
+      const result = await signalingService.createConversation(
+        userId,        // ID du patient (premier paramètre)
+        medecinId,     // ID du médecin (deuxième paramètre)
+        'patient_medecin'
+      );
+
+      if (result.success && result.conversation) {
+        console.log('✅ Conversation créée côté serveur:', result.conversation);
+        
+        // Ajouter la nouvelle conversation à la liste locale
+        const newConversation = result.conversation;
+        setConversations(prev => {
+          const updated = [...prev, newConversation];
+          console.log('📝 Conversations mises à jour:', updated);
+          return updated;
+        });
+        
+        // Sélectionner la nouvelle conversation
+        setSelectedConversation(newConversation.id);
+        setMessages([]);
+        
+        return newConversation;
+      } else {
+        console.error('❌ Erreur lors de la création de conversation côté serveur:', result.error);
+        setError(`Impossible de créer une conversation avec ce médecin: ${result.error || 'Erreur inconnue'}`);
+        return null;
+      }
+    } catch (error) {
+      console.error('❌ Erreur lors de l\'initiation de la conversation:', error);
+      setError(`Erreur lors de la création de conversation: ${error.message}`);
+      return null;
+    }
+  };
+
   const handleKeyPress = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -298,9 +435,12 @@ export default function ChatMessage({ userId: propUserId, role: propRole, token:
         } else {
           setError("Veuillez d'abord sélectionner un patient pour créer une conversation");
         }
+      } else if (userRole === 'patient' && propMedecinId) {
+        // Pour les patients avec un médecin ID, permettre l'envoi direct
+        sendMessage();
       } else {
-        // Pour les patients, afficher un message d'information
-        setError("Veuillez sélectionner une conversation existante pour envoyer un message");
+        // Pour les patients sans médecin ID, afficher un message d'information
+        setError("Veuillez sélectionner une conversation existante ou un médecin pour envoyer un message");
       }
     }
   };
@@ -347,7 +487,17 @@ export default function ChatMessage({ userId: propUserId, role: propRole, token:
           {/* Liste des conversations */}
           <div className="w-1/3 border-r border-gray-200 bg-gray-50 flex flex-col">
             <div className="p-4 border-b border-gray-200 flex-shrink-0">
-              <h2 className="text-lg font-semibold text-gray-800 mb-3">Conversations</h2>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-lg font-semibold text-gray-800">Conversations</h2>
+                <button
+                  onClick={loadUserConversations}
+                  className="text-blue-600 hover:text-blue-800 text-sm px-2 py-1 rounded border border-blue-300 hover:bg-blue-50"
+                  title="Rafraîchir les conversations"
+                  disabled={isLoading}
+                >
+                  🔄
+                </button>
+              </div>
               {userRole === 'medecin' ? (
                 <button
                   onClick={() => createNewConversation()}
@@ -513,12 +663,14 @@ export default function ChatMessage({ userId: propUserId, role: propRole, token:
                       value={inputMessage}
                       onChange={(e) => setInputMessage(e.target.value)}
                       onKeyPress={handleKeyPress}
-                      placeholder={userRole === 'medecin' 
-                        ? propPatientId 
-                          ? "Écrire un message... (appuyez sur Entrée pour créer une conversation)"
-                          : "Sélectionnez d'abord un patient pour créer une conversation"
-                        : "Écrire un message au médecin..."
-                      }
+                                             placeholder={userRole === 'medecin' 
+                         ? propPatientId 
+                           ? "Écrire un message... (appuyez sur Entrée pour créer une conversation)"
+                           : "Sélectionnez d'abord un patient pour créer une conversation"
+                         : propMedecinId
+                           ? "Écrire un message au médecin... (appuyez sur Entrée pour envoyer)"
+                           : "Écrire un message au médecin..."
+                       }
                       disabled={!isConnected}
                       className="flex-1 border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
                     />
@@ -535,13 +687,22 @@ export default function ChatMessage({ userId: propUserId, role: propRole, token:
                       >
                         {propPatientId ? 'Créer conversation' : 'Sélectionner patient'}
                       </button>
-                    ) : (
-                      <div className="text-center px-4 py-2 bg-gray-100 rounded-lg">
-                        <p className="text-sm text-gray-600">
-                          Sélectionnez une conversation existante
-                        </p>
-                      </div>
-                    )}
+                                         ) : propMedecinId ? (
+                       <button
+                         onClick={sendMessage}
+                         disabled={!inputMessage.trim() || !isConnected || isLoading}
+                         className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                         title="Envoyer un message au médecin"
+                       >
+                         Envoyer au médecin
+                       </button>
+                     ) : (
+                       <div className="text-center px-4 py-2 bg-gray-100 rounded-lg">
+                         <p className="text-sm text-gray-600">
+                           Sélectionnez une conversation existante
+                         </p>
+                       </div>
+                     )}
                   </div>
                 </div>
               </div>

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getAllConsultations, getAllDossiersMedical } from '../services/api/medicalApi';
 import { getPatients } from '../services/api/patientApi';
+import { createRendezVous, getAllRendezVous, getRendezVousByMedecin } from '../services/api/rendezVous';
 
 function Agenda() {
   const navigate = useNavigate();
@@ -20,31 +21,44 @@ function Agenda() {
   // Charger les données réelles de l'API
   const loadRealData = useCallback(async () => {
     try {
+      console.log('🔄 [loadRealData] Début du chargement des données...');
       setLoading(true);
-      console.log('🚀 Chargement des données réelles pour l\'agenda...');
 
       // Charger les patients
+      console.log('👥 [loadRealData] Chargement des patients...');
       const patientsData = await getPatients();
+      console.log('📊 [loadRealData] Réponse patients:', patientsData);
       setPatients(Array.isArray(patientsData) ? patientsData : []);
+      console.log(`✅ [loadRealData] Patients chargés: ${patients.length}`);
 
       // Charger les consultations
+      console.log('🏥 [loadRealData] Chargement des consultations...');
       const consultationsData = await getAllConsultations();
+      console.log('📊 [loadRealData] Réponse consultations:', consultationsData);
       setConsultations(Array.isArray(consultationsData) ? consultationsData : []);
 
       // Charger les dossiers médicaux
+      console.log('📁 [loadRealData] Chargement des dossiers médicaux...');
       const dossiersData = await getAllDossiersMedical();
+      console.log('📊 [loadRealData] Réponse dossiers:', dossiersData);
       setDossiers(Array.isArray(dossiersData) ? dossiersData : []);
 
-      console.log('✅ Données réelles chargées:', {
+      console.log('✅ [loadRealData] Données réelles chargées:', {
         patients: patients.length,
         consultations: consultations.length,
         dossiers: dossiers.length
       });
 
     } catch (error) {
-      console.error('❌ Erreur lors du chargement des données réelles:', error);
+      console.error('❌ [loadRealData] Erreur lors du chargement des données réelles:', error);
+      console.error('❌ [loadRealData] Détails:', {
+        message: error.message,
+        stack: error.stack,
+        response: error.response
+      });
     } finally {
       setLoading(false);
+      console.log('🔄 [loadRealData] Chargement terminé, loading = false');
     }
   }, []);
 
@@ -114,136 +128,263 @@ function Agenda() {
     }
   }, [patients]);
 
-  // Générer des rendez-vous réalistes basés sur les données réelles
-  const generateRealisticAppointments = useCallback(() => {
-    if (patients.length === 0 || consultations.length === 0) {
-      return [];
-    }
-
-    const realisticAppointments = [];
-    const today = new Date();
-    
-    // Types de rendez-vous réalistes
-    const appointmentTypes = [
-      { type: 'consultation', color: 'bg-blue-500', duration: 30, title: 'Consultation' },
-      { type: 'suivi', color: 'bg-green-500', duration: 20, title: 'Suivi' },
-      { type: 'examen', color: 'bg-purple-500', duration: 45, title: 'Examen' },
-      { type: 'vaccination', color: 'bg-yellow-500', duration: 15, title: 'Vaccination' },
-      { type: 'urgence', color: 'bg-red-500', duration: 60, title: 'Urgence' }
-    ];
-
-    // Statuts réalistes
-    const statuses = ['confirmed', 'pending', 'confirmed', 'confirmed', 'pending'];
-
-    // Générer des rendez-vous pour les 7 prochains jours
-    for (let dayOffset = 0; dayOffset < 7; dayOffset++) {
-      const appointmentDate = new Date(today);
-      appointmentDate.setDate(today.getDate() + dayOffset);
-      
-      // 2-4 rendez-vous par jour
-      const appointmentsPerDay = Math.floor(Math.random() * 3) + 2;
-      
-      for (let i = 0; i < appointmentsPerDay; i++) {
-        const patient = patients[Math.floor(Math.random() * patients.length)];
-        const appointmentType = appointmentTypes[Math.floor(Math.random() * appointmentTypes.length)];
-        const status = statuses[Math.floor(Math.random() * statuses.length)];
-        
-        // Heures de consultation réalistes (8h-18h)
-        const hour = Math.floor(Math.random() * 10) + 8; // 8h à 17h
-        const minute = Math.floor(Math.random() * 4) * 15; // 0, 15, 30, 45
-        
-        const startTime = new Date(appointmentDate);
-        startTime.setHours(hour, minute, 0, 0);
-        
-        const endTime = new Date(startTime);
-        endTime.setMinutes(startTime.getMinutes() + appointmentType.duration);
-        
-        // Créer des notes réalistes basées sur le type
-        const notes = generateRealisticNotes(appointmentType.type, patient);
-        
-        realisticAppointments.push({
-          id: `rdv_${dayOffset}_${i}_${Date.now()}`,
-          title: `${appointmentType.title} ${patient?.nom || 'Patient'} ${patient?.prenom || ''}`,
-          patient: `${patient?.nom || 'Nom'} ${patient?.prenom || 'Prénom'}`,
-          patientId: patient?.id || patient?.id_patient,
-          startTime,
-          endTime,
-          type: appointmentType.type,
-          color: appointmentType.color,
-          status,
-          notes,
-          duration: appointmentType.duration,
-          // Données réelles liées
-          consultationId: consultations.length > 0 ? consultations[Math.floor(Math.random() * consultations.length)]?.id : null,
-          dossierId: dossiers.length > 0 ? dossiers[Math.floor(Math.random() * dossiers.length)]?.id : null
-        });
+    // Fonction pour récupérer l'ID du médecin connecté
+  const getMedecinConnecteId = () => {
+    // Essayer de récupérer depuis le localStorage
+    const storedMedecin = localStorage.getItem('medecinConnecte');
+    if (storedMedecin) {
+      try {
+        const medecinData = JSON.parse(storedMedecin);
+        return medecinData.id_professionnel || medecinData.id || 79;
+      } catch (e) {
+        console.warn('⚠️ Erreur parsing médecin connecté:', e);
       }
     }
-
-    // Trier par date et heure
-    realisticAppointments.sort((a, b) => new Date(a.startTime) - new Date(b.startTime));
     
-    console.log('✅ Rendez-vous réalistes générés:', realisticAppointments.length);
-    return realisticAppointments;
-  }, [patients, consultations, dossiers]);
-
-  // Générer des notes réalistes
-  const generateRealisticNotes = (type, patient) => {
-    const notesByType = {
-      consultation: [
-        'Suivi tension artérielle',
-        'Contrôle glycémie',
-        'Bilan de santé général',
-        'Suivi traitement en cours',
-        'Consultation de routine'
-      ],
-      suivi: [
-        'Contrôle poids',
-        'Suivi tension',
-        'Vérification traitement',
-        'Bilan biologique'
-      ],
-      examen: [
-        'Analyse sanguine',
-        'Radiographie thorax',
-        'Échographie abdominale',
-        'Test d\'effort',
-        'Bilan cardiaque'
-      ],
-      vaccination: [
-        'Rappel vaccinal',
-        'Vaccin grippe saisonnière',
-        'Vaccin COVID-19',
-        'Vaccin tétanos'
-      ],
-      urgence: [
-        'Douleur thoracique',
-        'Traumatisme',
-        'Fièvre élevée',
-        'Symptômes aigus'
-      ]
-    };
-
-    const notes = notesByType[type] || ['Consultation médicale'];
-    return notes[Math.floor(Math.random() * notes.length)];
+    // Fallback : ID codé en dur (à remplacer par le vrai système d'auth)
+    return 79;
   };
 
-  // Charger les données et générer les rendez-vous
+  // Charger les vrais rendez-vous depuis l'API via le service
+  const loadRealAppointments = useCallback(async () => {
+    try {
+      console.log('🚀 [loadRealAppointments] Début du chargement des rendez-vous...');
+      console.log('🔍 [loadRealAppointments] Médecin connecté ID:', getMedecinConnecteId());
+      
+             // Utiliser le service getRendezVousByMedecin pour récupérer directement les RDV du médecin
+       const medecinConnecteId = getMedecinConnecteId();
+       console.log('📡 [loadRealAppointments] Appel du service getRendezVousByMedecin pour le médecin ID:', medecinConnecteId);
+       const allRendezVousResponse = await getRendezVousByMedecin(medecinConnecteId);
+      
+      console.log('📡 [loadRealAppointments] Réponse complète du service:', allRendezVousResponse);
+      console.log('📊 [loadRealAppointments] Statut de la réponse:', allRendezVousResponse.status);
+      console.log('📊 [loadRealAppointments] Succès de la réponse:', allRendezVousResponse.success);
+      
+      // Gérer l'erreur d'authentification
+      if (allRendezVousResponse.status === 401) {
+        console.warn('⚠️ [loadRealAppointments] Erreur d\'authentification (401) détectée');
+        console.log('🔄 [loadRealAppointments] Basculement vers les données de test...');
+        
+        // Données de test temporaires
+        const testAppointments = [
+          {
+            id: 'test_1',
+            title: 'Consultation BIYA PAUL',
+            patient: 'BIYA PAUL',
+            patientId: 7,
+            startTime: new Date('2025-08-30T10:00:00'),
+            endTime: new Date('2025-08-30T10:30:00'),
+            type: 'consultation',
+            color: 'bg-blue-500',
+            status: 'confirmed',
+            notes: 'Consultation de routine',
+            duration: 30
+          },
+          {
+            id: 'test_2',
+            title: 'Suivi cardiologique DIOP Fatou',
+            patient: 'DIOP Fatou',
+            patientId: 8,
+            startTime: new Date('2025-08-30T14:00:00'),
+            endTime: new Date('2025-08-30T14:45:00'),
+            type: 'suivi',
+            color: 'bg-green-500',
+            status: 'confirmed',
+            notes: 'Contrôle tension artérielle',
+            duration: 45
+          }
+        ];
+        
+        console.log('📋 [loadRealAppointments] Données de test créées:', testAppointments);
+        console.log('💾 [loadRealAppointments] Mise à jour du state appointments...');
+        setAppointments(testAppointments);
+        console.log('✅ [loadRealAppointments] Mode test activé, retour de', testAppointments.length, 'rendez-vous');
+        return testAppointments.length;
+      }
+      
+      if (allRendezVousResponse.success) {
+        console.log('✅ [loadRealAppointments] API répond avec succès');
+        
+        // L'API retourne directement les données dans allRendezVousResponse.data
+        let allRendezVousData = allRendezVousResponse.data;
+        console.log('📅 [loadRealAppointments] Données brutes reçues:', allRendezVousData);
+        console.log('🔍 [loadRealAppointments] Type des données:', typeof allRendezVousData);
+        console.log('🔍 [loadRealAppointments] Est un array?', Array.isArray(allRendezVousData));
+        
+                 // Vérifier la structure des données et extraire la liste
+        let rendezVousList = [];
+        if (Array.isArray(allRendezVousData)) {
+          // Structure directe : data: [...]
+          rendezVousList = allRendezVousData;
+          console.log('📋 [loadRealAppointments] Structure directe détectée (array)');
+        } else if (allRendezVousData && Array.isArray(allRendezVousData.data)) {
+          // Structure imbriquée : data: {data: [...]}
+          rendezVousList = allRendezVousData.data;
+          console.log('📋 [loadRealAppointments] Structure imbriquée détectée (data.data)');
+        } else if (allRendezVousData && Array.isArray(allRendezVousData.rendezVous)) {
+          // Structure alternative : data: {rendezVous: [...]}
+          rendezVousList = allRendezVousData.rendezVous;
+          console.log('📋 [loadRealAppointments] Structure alternative détectée (data.rendezVous)');
+        } else if (allRendezVousData && allRendezVousData.data && Array.isArray(allRendezVousData.data.rendezVous)) {
+          // Structure : {status: 'success', results: 5, data: {rendezVous: [...]}}
+          rendezVousList = allRendezVousData.data.rendezVous;
+          console.log('📋 [loadRealAppointments] Structure API détectée (data.data.rendezVous)');
+        } else if (allRendezVousData && allRendezVousData.data && Array.isArray(allRendezVousData.data)) {
+          // Structure : {status: 'success', results: 5, data: [...]}
+          rendezVousList = allRendezVousData.data;
+          console.log('📋 [loadRealAppointments] Structure API détectée (data.data)');
+        } else {
+          console.warn('⚠️ [loadRealAppointments] Structure de données non reconnue:', allRendezVousData);
+          console.log('🔍 [loadRealAppointments] Clés disponibles:', allRendezVousData ? Object.keys(allRendezVousData) : 'null/undefined');
+          if (allRendezVousData && allRendezVousData.data) {
+            console.log('🔍 [loadRealAppointments] Clés de data:', Object.keys(allRendezVousData.data));
+          }
+        }
+        
+        console.log('📋 [loadRealAppointments] Liste des rendez-vous extraite:', rendezVousList);
+        console.log('📊 [loadRealAppointments] Nombre de rendez-vous extraits:', rendezVousList.length);
+        
+        if (!rendezVousList || rendezVousList.length === 0) {
+          console.warn('⚠️ [loadRealAppointments] Aucun rendez-vous trouvé dans la réponse');
+          console.log('💾 [loadRealAppointments] Mise à jour du state avec tableau vide');
+          setAppointments([]);
+          return 0;
+        }
+        
+                 // L'API retourne déjà les RDV du bon médecin, pas besoin de filtrer
+         const medecinRendezVous = rendezVousList;
+         console.log('👨‍⚕️ [loadRealAppointments] Rendez-vous du médecin connecté (déjà filtrés par l\'API):', medecinRendezVous);
+         console.log('📊 [loadRealAppointments] Nombre de RDV reçus:', medecinRendezVous.length);
+         
+         if (medecinRendezVous.length === 0) {
+           console.warn('⚠️ [loadRealAppointments] Aucun rendez-vous trouvé pour ce médecin');
+         }
+        
+        console.log('🔄 [loadRealAppointments] Début de la conversion des données...');
+        
+        // Convertir au format de l'agenda avec la nouvelle structure API
+        const realAppointments = medecinRendezVous.map((rdv, index) => {
+          console.log(`🔄 [loadRealAppointments] Conversion RDV ${index + 1}/${medecinRendezVous.length}:`, rdv);
+          
+          // Gérer les différents formats de date/heure
+          let startTime, endTime;
+          
+          if (rdv.DateHeure) {
+            // Nouvelle structure : DateHeure unique
+            startTime = new Date(rdv.DateHeure);
+            endTime = new Date(rdv.DateHeure);
+            if (rdv.duree) {
+              endTime.setMinutes(endTime.getMinutes() + rdv.duree);
+            } else {
+              endTime.setMinutes(endTime.getMinutes() + 30); // Durée par défaut
+            }
+            console.log(`📅 [loadRealAppointments] RDV ${index + 1}: DateHeure détecté, startTime=${startTime}, endTime=${endTime}`);
+          } else if (rdv.date && rdv.heure) {
+            // Ancienne structure : date + heure séparées
+            startTime = new Date(`${rdv.date}T${rdv.heure}`);
+            endTime = new Date(`${rdv.date}T${rdv.heure}`);
+            if (rdv.duree) {
+              endTime.setMinutes(endTime.getMinutes() + rdv.duree);
+            } else {
+              endTime.setMinutes(endTime.getMinutes() + 30);
+            }
+            console.log(`📅 [loadRealAppointments] RDV ${index + 1}: date+heure détectés, startTime=${startTime}, endTime=${endTime}`);
+          } else {
+            // Fallback : utiliser la date de création
+            startTime = new Date(rdv.createdAt);
+            endTime = new Date(rdv.createdAt);
+            endTime.setMinutes(endTime.getMinutes() + 30);
+            console.log(`📅 [loadRealAppointments] RDV ${index + 1}: fallback createdAt, startTime=${startTime}, endTime=${endTime}`);
+          }
+          
+          const appointment = {
+            id: rdv.id || rdv.id_rendezvous || `rdv_${Date.now()}`,
+            title: `${rdv.type_rdv || rdv.motif_consultation || 'Consultation'} ${rdv.nom || 'Patient'} ${rdv.prenom || ''}`,
+            patient: `${rdv.nom || 'Nom'} ${rdv.prenom || 'Prénom'}`,
+            patientId: rdv.patient_id || rdv.id_patient,
+            startTime: startTime,
+            endTime: endTime,
+            type: rdv.type_rdv || 'consultation',
+            color: getAppointmentColor(rdv.type_rdv || 'consultation'),
+            status: (rdv.statut || 'programme') === 'confirme' ? 'confirmed' : 'pending',
+            notes: rdv.notes || rdv.motif_consultation || rdv.motif || '',
+            duration: rdv.duree || 30,
+            // Données de l'API
+            apiId: rdv.id || rdv.id_rendezvous,
+            createdAt: rdv.createdAt,
+            lieu: rdv.lieu || 'Cabinet médical'
+          };
+          
+          console.log(`📋 [loadRealAppointments] RDV ${index + 1} converti:`, appointment);
+          return appointment;
+        });
+        
+        console.log('✅ [loadRealAppointments] Rendez-vous réels convertis:', realAppointments);
+        console.log('💾 [loadRealAppointments] Mise à jour du state appointments...');
+        setAppointments(realAppointments);
+        
+        // Log pour déboguer l'affichage
+        console.log('🎯 [loadRealAppointments] État des rendez-vous après mise à jour:', {
+          count: realAppointments.length,
+          appointments: realAppointments,
+          stateUpdated: true
+        });
+        
+        // Retourner le nombre de rendez-vous pour confirmation
+        console.log(`✅ [loadRealAppointments] Fonction terminée avec succès, retour de ${realAppointments.length} rendez-vous`);
+        return realAppointments.length;
+        
+      } else {
+        console.warn('⚠️ [loadRealAppointments] Erreur du service détectée');
+        console.log('📊 [loadRealAppointments] Détails de l\'erreur:', allRendezVousResponse.error);
+        console.log('💾 [loadRealAppointments] Mise à jour du state avec tableau vide');
+        setAppointments([]);
+        return 0;
+      }
+      
+    } catch (error) {
+      console.error('❌ [loadRealAppointments] Erreur lors du chargement des rendez-vous:', error);
+      console.error('❌ [loadRealAppointments] Détails de l\'erreur:', {
+        message: error.message,
+        stack: error.stack,
+        response: error.response
+      });
+      console.log('💾 [loadRealAppointments] Mise à jour du state avec tableau vide en cas d\'erreur');
+      setAppointments([]);
+      return 0;
+    }
+  }, []);
+
+  // Charger les données et les vrais rendez-vous
   useEffect(() => {
     const initializeAgenda = async () => {
-      await loadRealData();
+      try {
+        console.log('🚀 [useEffect] Début de l\'initialisation de l\'agenda...');
+        console.log('📊 [useEffect] État initial - appointments:', appointments.length, 'loading:', loading);
+        
+        // Charger d'abord les données de base
+        console.log('🔄 [useEffect] Étape 1: Chargement des données de base...');
+        await loadRealData();
+        console.log('✅ [useEffect] Données de base chargées avec succès');
+        
+        // Puis charger les rendez-vous
+        console.log('🔄 [useEffect] Étape 2: Chargement des rendez-vous...');
+        const count = await loadRealAppointments();
+        console.log(`✅ [useEffect] Agenda initialisé avec ${count} rendez-vous`);
+        console.log('📊 [useEffect] État final - appointments:', appointments.length, 'loading:', loading);
+        
+      } catch (error) {
+        console.error('❌ [useEffect] Erreur lors de l\'initialisation de l\'agenda:', error);
+        console.error('❌ [useEffect] Détails:', {
+          message: error.message,
+          stack: error.stack
+        });
+      }
     };
     
+    console.log('🔄 [useEffect] Déclenchement de l\'initialisation...');
     initializeAgenda();
-  }, [loadRealData]);
-
-  // Mettre à jour les rendez-vous quand les données changent
-  useEffect(() => {
-    if (patients.length > 0 && consultations.length > 0) {
-      const newAppointments = generateRealisticAppointments();
-      setAppointments(newAppointments);
-    }
-  }, [patients, consultations, dossiers, generateRealisticAppointments]);
+  }, [loadRealData, loadRealAppointments]); // Ajouter les dépendances
 
   // Navigation dans le calendrier
   const goToPrevious = () => {
@@ -301,14 +442,23 @@ function Agenda() {
 
   // Obtenir les rendez-vous pour une date et heure données
   const getAppointmentsForSlot = (date, time) => {
-    return appointments.filter(appointment => {
+    const slotAppointments = appointments.filter(appointment => {
       const appointmentDate = new Date(appointment.startTime);
       const slotDate = new Date(date);
       const slotHour = parseInt(time.split(':')[0]);
       
-      return appointmentDate.toDateString() === slotDate.toDateString() && 
-             appointmentDate.getHours() === slotHour;
+      const matchesDate = appointmentDate.toDateString() === slotDate.toDateString();
+      const matchesHour = appointmentDate.getHours() === slotHour;
+      
+      if (matchesDate && matchesHour) {
+        console.log(`🔍 [getAppointmentsForSlot] RDV trouvé pour ${slotDate.toDateString()} à ${slotHour}:00:`, appointment);
+      }
+      
+      return matchesDate && matchesHour;
     });
+    
+    console.log(`🔍 [getAppointmentsForSlot] ${slotAppointments.length} RDV trouvés pour ${date.toDateString()} à ${time}`);
+    return slotAppointments;
   };
 
   // Formater l'heure
@@ -347,46 +497,115 @@ function Agenda() {
     );
   };
 
-  // Fonction pour créer un nouveau rendez-vous (simulation)
+  // Fonction pour créer un nouveau rendez-vous (API réelle)
   const handleCreateAppointment = async (appointmentData) => {
     try {
-      console.log('🚀 Création d\'un nouveau rendez-vous:', appointmentData);
+      console.log('🚀 [handleCreateAppointment] Début de la création du rendez-vous...');
+      console.log('📊 [handleCreateAppointment] Données reçues:', appointmentData);
+      console.log('👨‍⚕️ [handleCreateAppointment] ID médecin connecté:', getMedecinConnecteId());
       
-      // Simuler la création via API
-      const newAppointment = {
-        id: `rdv_${Date.now()}`,
-        ...appointmentData,
-        status: 'confirmed',
-        startTime: new Date(appointmentData.startTime),
-        endTime: new Date(appointmentData.endTime)
+      // Préparer les données pour l'API
+      const rendezVousData = {
+        patient_id: appointmentData.patientId,
+        medecin_id: getMedecinConnecteId(), // ID du médecin connecté (dynamique)
+        // Utiliser le nouveau format DateHeure
+        DateHeure: new Date(appointmentData.startTime).toISOString(),
+        motif_consultation: appointmentData.notes || 'Consultation médicale',
+        type_rdv: appointmentData.type || 'consultation',
+        statut: 'confirme',
+        notes: appointmentData.notes || '',
+        // Données supplémentaires
+        duree: Math.round((new Date(appointmentData.endTime) - new Date(appointmentData.startTime)) / (1000 * 60)), // durée en minutes
+        lieu: 'Cabinet médical' // À personnaliser selon le contexte
       };
       
-      // Ajouter à la liste locale
-      setAppointments(prev => [...prev, newAppointment].sort((a, b) => new Date(a.startTime) - new Date(b.startTime)));
+      console.log('📋 [handleCreateAppointment] Données formatées pour l\'API:', rendezVousData);
+      console.log('📅 [handleCreateAppointment] DateHeure formatée:', rendezVousData.DateHeure);
+      console.log('⏱️ [handleCreateAppointment] Durée calculée:', rendezVousData.duree, 'minutes');
       
-      // Créer le rappel pour le patient
-      await createPatientReminder(newAppointment);
+      // Appeler l'API réelle pour créer le rendez-vous
+      console.log('📡 [handleCreateAppointment] Appel de l\'API createRendezVous...');
+      const apiResponse = await createRendezVous(rendezVousData);
+      console.log('📡 [handleCreateAppointment] Réponse de l\'API:', apiResponse);
       
-      // Ici, vous pourriez appeler une vraie API pour créer le RDV
-      // await createAppointmentAPI(appointmentData);
-      
-      console.log('✅ Rendez-vous créé avec succès');
-      setShowAddModal(false);
+      if (apiResponse.success) {
+        console.log('✅ [handleCreateAppointment] Rendez-vous créé via API avec succès');
+        console.log('📊 [handleCreateAppointment] Données retournées par l\'API:', apiResponse.data);
+        
+        // Créer l'objet local avec l'ID retourné par l'API
+        const newAppointment = {
+          id: apiResponse.data.id || `rdv_${Date.now()}`,
+          title: `${appointmentData.type || 'Consultation'} ${appointmentData.patientName || 'Patient'}`,
+          patient: appointmentData.patientName || 'Patient',
+          patientId: appointmentData.patientId,
+          startTime: new Date(appointmentData.startTime),
+          endTime: new Date(appointmentData.endTime),
+          type: appointmentData.type || 'consultation',
+          color: getAppointmentColor(appointmentData.type || 'consultation'),
+          status: 'confirmed',
+          notes: appointmentData.notes || '',
+          duration: Math.round((new Date(appointmentData.endTime) - new Date(appointmentData.startTime)) / (1000 * 60)),
+          // Données de l'API
+          apiId: apiResponse.data.id,
+          createdAt: apiResponse.data.createdAt || new Date().toISOString()
+        };
+        
+        console.log('📋 [handleCreateAppointment] Nouveau rendez-vous formaté:', newAppointment);
+        console.log('📊 [handleCreateAppointments] État actuel des appointments:', appointments.length);
+        
+        // Ajouter à la liste locale
+        console.log('💾 [handleCreateAppointment] Mise à jour du state appointments...');
+        setAppointments(prev => {
+          const updated = [...prev, newAppointment].sort((a, b) => new Date(a.startTime) - new Date(b.startTime));
+          console.log('📊 [handleCreateAppointment] Nouveaux appointments après ajout:', updated.length);
+          console.log('📋 [handleCreateAppointment] Détail du nouveau RDV ajouté:', newAppointment);
+          return updated;
+        });
+        
+        // Créer le rappel pour le patient
+        console.log('🔔 [handleCreateAppointment] Création du rappel patient...');
+        await createPatientReminder(newAppointment);
+        
+        console.log('✅ [handleCreateAppointment] Rendez-vous créé avec succès et sauvegardé en base');
+        setShowAddModal(false);
+        
+        // Recharger les rendez-vous depuis l'API pour afficher le nouveau
+        console.log('🔄 [handleCreateAppointment] Rechargement de l\'agenda après création...');
+        const reloadCount = await loadRealAppointments();
+        console.log(`✅ [handleCreateAppointment] Rechargement terminé: ${reloadCount} rendez-vous`);
+        
+        // Afficher la notification de succès
+        setNotificationMessage(`Rendez-vous créé et sauvegardé pour ${appointmentData.patientName || 'le patient'}`);
+        setShowNotification(true);
+        
+        // Masquer la notification après 5 secondes
+        setTimeout(() => {
+          setShowNotification(false);
+        }, 5000);
+        
+      } else {
+        console.error('❌ [handleCreateAppointment] Erreur de l\'API:', apiResponse);
+        throw new Error(apiResponse.message || 'Erreur lors de la création du rendez-vous');
+      }
       
     } catch (error) {
-      console.error('❌ Erreur lors de la création du rendez-vous:', error);
-      alert('Erreur lors de la création du rendez-vous');
+      console.error('❌ [handleCreateAppointment] Erreur lors de la création du rendez-vous:', error);
+      console.error('❌ [handleCreateAppointment] Détails de l\'erreur:', {
+        message: error.message,
+        stack: error.stack,
+        response: error.response
+      });
+      alert(`Erreur lors de la création du rendez-vous: ${error.message}`);
     }
   };
 
   // Rendu de la vue jour
   const renderDayView = () => {
     const timeSlots = getTimeSlots();
-    const dayAppointments = appointments.filter(appointment => {
-      const appointmentDate = new Date(appointment.startTime);
-      return appointmentDate.toDateString() === selectedDate.toDateString();
-    });
-
+    console.log('📅 [renderDayView] Rendu de la vue jour pour:', selectedDate.toLocaleDateString('fr-FR'));
+    console.log('📊 [renderDayView] Nombre total d\'appointments:', appointments.length);
+    console.log('📋 [renderDayView] Détail des appointments:', appointments);
+    
     return (
       <div className="bg-white rounded-lg shadow">
         <div className="p-4 border-b">
@@ -571,6 +790,22 @@ function Agenda() {
                 Nouveau RDV
               </button>
               <button
+                onClick={async () => {
+                  console.log('🔄 [Bouton Rafraîchir] Début du rafraîchissement manuel...');
+                  console.log('📊 [Bouton Rafraîchir] État avant rafraîchissement - appointments:', appointments.length);
+                  const count = await loadRealAppointments();
+                  console.log(`✅ [Bouton Rafraîchir] Agenda rafraîchi: ${count} rendez-vous chargés`);
+                  console.log('📊 [Bouton Rafraîchir] État après rafraîchissement - appointments:', appointments.length);
+                }}
+                className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors"
+                title="Rafraîchir l'agenda"
+              >
+                <svg className="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Rafraîchir
+              </button>
+              <button
                 onClick={() => navigate('/medecin')}
                 className="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 transition-colors"
               >
@@ -656,10 +891,13 @@ function Agenda() {
           </div>
         </div>
 
-        {/* Contenu du calendrier */}
-        <div className="space-y-6">
-          {/* Rendez-vous du jour */}
-          <div>
+         {/* Contenu du calendrier */}
+         <div className="space-y-6">
+
+
+           
+           {/* Rendez-vous du jour */}
+           <div>
             <h2 className="text-lg font-semibold text-gray-900 mb-4">
               Rendez-vous du {new Date().toLocaleDateString('fr-FR', { 
                 weekday: 'long', 
@@ -673,6 +911,30 @@ function Agenda() {
                 <div className="text-center py-8">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
                   <p className="mt-2 text-gray-600">Chargement des rendez-vous...</p>
+                </div>
+              ) : appointments.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  <p className="mt-2">Aucun rendez-vous chargé</p>
+                  <p className="text-sm text-gray-400 mt-1">Vérifiez la console pour plus de détails</p>
+                   <button 
+                     onClick={async () => {
+                       console.log('🔄 [Bouton Recharger] Début du rechargement manuel...');
+                       console.log('📊 [Bouton Recharger] État avant rechargement - appointments:', appointments.length, 'loading:', loading);
+                       setLoading(true);
+                       console.log('🔄 [Bouton Recharger] Loading mis à true');
+                       const count = await loadRealAppointments();
+                       console.log(`✅ [Bouton Recharger] Rechargement terminé: ${count} rendez-vous`);
+                       setLoading(false);
+                       console.log('🔄 [Bouton Recharger] Loading mis à false');
+                       console.log('📊 [Bouton Recharger] État après rechargement - appointments:', appointments.length, 'loading:', loading);
+                     }}
+                     className="mt-3 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                   >
+                     Recharger
+                   </button>
                 </div>
               ) : appointments.filter(appointment => {
                 const appointmentDate = new Date(appointment.startTime);
@@ -749,13 +1011,26 @@ function Agenda() {
             <form onSubmit={(e) => {
               e.preventDefault();
               const formData = new FormData(e.target);
+              
+              // Récupérer l'ID du patient sélectionné
+              const patientId = formData.get('patientId');
+              
+              // Trouver le nom du patient sélectionné
+              const selectedPatient = patients.find(p => (p.id || p.id_patient) == patientId);
+              const patientName = selectedPatient ? `${selectedPatient.nom} ${selectedPatient.prenom}` : 'Patient';
+              
+              console.log('📋 [Formulaire] Patient sélectionné:', { patientId, patientName, selectedPatient });
+              
               const appointmentData = {
-                patientId: formData.get('patientId'),
+                patientId: patientId,
+                patientName: patientName, // Ajouter le nom du patient
                 startTime: formData.get('startTime'),
                 endTime: formData.get('endTime'),
                 type: formData.get('type'),
                 notes: formData.get('notes')
               };
+              
+              console.log('📋 [Formulaire] Données du rendez-vous préparées:', appointmentData);
               handleCreateAppointment(appointmentData);
             }}>
               <div className="space-y-4">

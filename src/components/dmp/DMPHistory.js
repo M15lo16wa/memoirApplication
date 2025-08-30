@@ -76,6 +76,8 @@ function DMPHistory({ patientId = null }) {
   const [hasAccessRequests, setHasAccessRequests] = useState(false);
   const [authorizations, setAuthorizations] = useState([]);
 
+
+
   // Récupérer les informations d'authentification au montage du composant
   useEffect(() => {
     const token = localStorage.getItem('token') || localStorage.getItem('jwt');
@@ -436,6 +438,8 @@ function DMPHistory({ patientId = null }) {
       protectedLoadHistory(true);
     }
   }, [effectivePatientId, protectedLoadHistory]);
+
+
 
   const formatDate = (dateString) => {
     // Utiliser safeDisplay pour gérer les objets
@@ -864,6 +868,8 @@ function DMPHistory({ patientId = null }) {
           </div>
         </div>
       )}
+
+
 
       {/* Section de messagerie */}
       <div className="mt-8 p-4 bg-blue-50 border border-blue-200 rounded-lg">

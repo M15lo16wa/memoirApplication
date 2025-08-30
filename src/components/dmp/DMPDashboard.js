@@ -309,24 +309,30 @@ const DMPDashboard = () => {
                         Auto-mesures Récentes
                     </h2>
                     <div className="space-y-3">
+                        {/* Debug: Afficher les données des auto-mesures */}
+                        {console.log('🔍 Dashboard - Auto-mesures:', latestMesures)}
+                        
                         {latestMesures.length > 0 ? (
-                            latestMesures.map((mesure, index) => (
-                                <div key={index} className="flex items-center p-3 bg-gray-50 rounded">
-                                    <div className="mr-3">
-                                        {getMesureIcon(mesure.type)}
+                            latestMesures.map((mesure, index) => {
+                                console.log(`🔍 Dashboard - Mesure ${index}:`, { type: mesure.type_mesure, valeur: mesure.valeur, unite: mesure.unite });
+                                return (
+                                    <div key={index} className="flex items-center p-3 bg-gray-50 rounded">
+                                        <div className="mr-3">
+                                            {getMesureIcon(mesure.type_mesure)}
+                                        </div>
+                                        <div className="flex-1">
+                                            <p className="font-medium">{mesure.type_mesure ? mesure.type_mesure.replace('_', ' ') : 'Mesure'}</p>
+                                            <p className="text-sm text-gray-600">
+                                                {mesure.valeur} {mesure.unite}
+                                                {mesure.valeur_secondaire && ` / ${mesure.valeur_secondaire} ${mesure.unite_secondaire}`}
+                                            </p>
+                                        </div>
+                                        <span className="text-xs text-gray-500">
+                                            {formatDate(mesure.date_mesure)}
+                                        </span>
                                     </div>
-                                    <div className="flex-1">
-                                        <p className="font-medium">{mesure.type ? mesure.type.replace('_', ' ') : 'Mesure'}</p>
-                                        <p className="text-sm text-gray-600">
-                                            {mesure.valeur} {mesure.unite}
-                                            {mesure.valeur_secondaire && ` / ${mesure.valeur_secondaire} ${mesure.unite_secondaire}`}
-                                        </p>
-                                    </div>
-                                    <span className="text-xs text-gray-500">
-                                        {formatDate(mesure.date_mesure)}
-                                    </span>
-                                </div>
-                            ))
+                                );
+                            })
                         ) : (
                             <p className="text-gray-500 text-center py-4">Aucune auto-mesure récente</p>
                         )}
