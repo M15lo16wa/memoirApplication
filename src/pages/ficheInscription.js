@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { createPatient } from "../services/api/patientApi";
 
 function FicheInscription() {
   const navigate = useNavigate();
@@ -29,12 +30,68 @@ function FicheInscription() {
     }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // TODO: Add form validation and submission logic
-    console.log("Form submitted:", formData);
-    // Redirect to login or confirmation page
-    navigate('/connexion');
+    
+    // Validation des mots de passe
+    if (formData.password !== formData.confirmPassword) {
+      alert("Les mots de passe ne correspondent pas");
+      return;
+    }
+    
+    try {
+      // Préparation des données pour l'API
+    const patientData = {
+      civilite: formData.civilite,
+      nom: formData.nom,
+      prenom: formData.prenom,
+      date_naissance: formData.dateNaissance,
+      lieu_naissance: formData.lieuNaissance,
+      sexe: formData.sexe,
+      numero_assure: formData.numeroCarteAssurance,        // Changé de numero_carte_assurance
+      nom_assurance: formData.nomAssureur,                 // Changé de nom_assureur
+      adresse: formData.adresse,
+      ville: formData.ville,
+      pays: formData.pays,
+      email: formData.email,
+      telephone: formData.telephone,
+      mot_de_passe: formData.password                      // Changé de password
+    };
+      
+      console.log("Données du patient à envoyer:", patientData);
+      
+      // Appel de l'API pour créer le patient
+      const response = await createPatient(patientData);
+      
+      console.log("Réponse de l'API:", response);
+      
+      // Redirection vers la page de connexion en cas de succès
+      alert("Inscription réussie ! Vous pouvez maintenant vous connecter.");
+      navigate('/connexion');
+      
+    } catch (error) {
+      console.error("Erreur lors de l'inscription:", error);
+      
+      // Gestion des erreurs spécifiques
+      if (error.response) {
+        const { status, data } = error.response;
+        switch (status) {
+          case 400:
+            alert(`Erreur de validation: ${data.message || 'Données invalides'}`);
+            break;
+          case 409:
+            alert("Un patient avec cet email existe déjà.");
+            break;
+          case 500:
+            alert("Erreur serveur. Veuillez réessayer plus tard.");
+            break;
+          default:
+            alert(`Erreur ${status}: ${data.message || 'Erreur inconnue'}`);
+        }
+      } else {
+        alert("Erreur de connexion. Vérifiez votre connexion internet.");
+      }
+    }
   };
 
   return (

@@ -785,18 +785,154 @@ export const marquerNotificationDroitsAccesLue = async (notificationId) => {
 };
 
 // --- Historique et accès ---
-export const getDMPAccessHistory = async (patientId) => {
+export const getDMPAccessHistory = async (patientId, forceGenericEndpoint = false) => {
     // Validation du patientId
     if (!patientId) {
         throw new Error('ID du patient requis pour récupérer l\'historique DMP');
     }
     
+    console.log(`🔍 [getDMPAccessHistory] Début de la fonction pour patient ${patientId}`, {
+        forceGenericEndpoint: forceGenericEndpoint
+    });
+    
+    // Si forceGenericEndpoint est true, utiliser directement l'endpoint générique
+    if (forceGenericEndpoint) {
+        console.log(`🔄 [getDMPAccessHistory] Forçage de l'endpoint générique pour patient ${patientId}`);
+        try {
+            const response = await dmpApi.get('/access/history');
+            let historyData = response.data.data;
+            
+            if (Array.isArray(historyData)) {
+                // Filtrer strictement par patient_id
+                const filteredData = historyData.filter(entry => {
+                    const entryPatientId = entry.patient_id || entry.id_ressource;
+                    const match = Number(entryPatientId) === Number(patientId);
+                    
+                    console.log(`🔍 [getDMPAccessHistory] Filtrage forcé:`, {
+                        entryId: entry.id_historique,
+                        entryPatientId: entry.patient_id,
+                        entryIdRessource: entry.id_ressource,
+                        targetPatientId: patientId,
+                        match: match
+                    });
+                    
+                    return match;
+                });
+                
+                console.log(`✅ [getDMPAccessHistory] Filtrage forcé réussi: ${filteredData.length} entrées pour patient ${patientId}`);
+                return filteredData;
+            }
+            return [];
+        } catch (error) {
+            console.error(`❌ [getDMPAccessHistory] Erreur avec endpoint forcé:`, error);
+            return [];
+        }
+    }
+    
     try {
+        // Essayer d'abord l'endpoint spécifique au patient
+        console.log(`🚀 [getDMPAccessHistory] Appel API: /access/history/patient/${patientId}`);
         const response = await dmpApi.get(`/access/history/patient/${patientId}`);
-        return response.data.data;
+        let historyData = response.data.data;
+        
+        console.log(`📊 [getDMPAccessHistory] Données brutes reçues:`, {
+            patientId: patientId,
+            dataLength: Array.isArray(historyData) ? historyData.length : 'Non-array',
+            dataType: typeof historyData,
+            firstEntry: Array.isArray(historyData) && historyData.length > 0 ? historyData[0] : 'Aucune entrée'
+        });
+        
+        // 🔑 FILTRAGE CRUCIAL : S'assurer que seules les données du patient demandé sont retournées
+        if (Array.isArray(historyData)) {
+            // Filtrer par patient_id pour éviter la confusion entre patients
+            const filteredHistory = historyData.filter(entry => {
+                console.log(`🔍 [getDMPAccessHistory] Vérification entrée:`, {
+                    entryId: entry.id_historique,
+                    entryPatientId: entry.patient_id,
+                    entryIdRessource: entry.id_ressource,
+                    targetPatientId: patientId,
+                    patientIdMatch: entry.patient_id ? Number(entry.patient_id) === Number(patientId) : false,
+                    idRessourceMatch: entry.id_ressource ? Number(entry.id_ressource) === Number(patientId) : false
+                });
+                
+                // Vérifier si l'entrée a un patient_id qui correspond
+                if (entry.patient_id) {
+                    return Number(entry.patient_id) === Number(patientId);
+                }
+                // Si pas de patient_id, vérifier l'id_ressource (pour les accès au dossier)
+                if (entry.id_ressource) {
+                    return Number(entry.id_ressource) === Number(patientId);
+                }
+                // Si aucune correspondance, exclure l'entrée
+                return false;
+            });
+            
+            console.log(`🔍 [getDMPAccessHistory] Résultat du filtrage pour patient ${patientId}:`, {
+                total: historyData.length,
+                filtré: filteredHistory.length,
+                patientId: patientId,
+                entréesFiltrées: filteredHistory.map(entry => ({
+                    id: entry.id_historique,
+                    patient_id: entry.patient_id,
+                    id_ressource: entry.id_ressource,
+                    action: entry.action
+                }))
+            });
+            
+            // Si le filtrage ne donne aucun résultat mais qu'il y a des données brutes,
+            // cela indique un problème avec l'endpoint backend
+            if (filteredHistory.length === 0 && historyData.length > 0) {
+                console.warn(`⚠️ [getDMPAccessHistory] Endpoint backend ne filtre pas correctement pour patient ${patientId}`);
+                console.warn(`⚠️ [getDMPAccessHistory] Tentative de récupération avec endpoint générique...`);
+                return await getDMPAccessHistory(patientId, true); // Récursion avec forceGenericEndpoint = true
+            }
+            
+            return filteredHistory;
+        }
+        
+        return historyData;
     } catch (error) {
-        console.error(`Erreur lors de la récupération de l'historique DMP pour le patient ${patientId}:`, error);
-        throw error;
+        console.error(`Erreur lors de la récupération de l\'historique DMP pour le patient ${patientId}:`, error);
+        
+        // En cas d'erreur, essayer l'endpoint générique et filtrer côté frontend
+        try {
+            console.log(`🔄 [getDMPAccessHistory] Fallback: récupération depuis l'endpoint générique...`);
+            const fallbackResponse = await dmpApi.get('/access/history');
+            let fallbackData = fallbackResponse.data.data;
+            
+            console.log(`📊 [getDMPAccessHistory] Données fallback reçues:`, {
+                patientId: patientId,
+                dataLength: Array.isArray(fallbackData) ? fallbackData.length : 'Non-array',
+                dataType: typeof fallbackData
+            });
+            
+            if (Array.isArray(fallbackData)) {
+                // Filtrer strictement par patient_id
+                const filteredData = fallbackData.filter(entry => {
+                    const entryPatientId = entry.patient_id || entry.id_ressource;
+                    const match = Number(entryPatientId) === Number(patientId);
+                    
+                    console.log(`🔍 [getDMPAccessHistory] Filtrage fallback:`, {
+                        entryId: entry.id_historique,
+                        entryPatientId: entry.patient_id,
+                        entryIdRessource: entry.id_ressource,
+                        targetPatientId: patientId,
+                        match: match
+                    });
+                    
+                    return match;
+                });
+                
+                console.log(`✅ [getDMPAccessHistory] Fallback réussi: ${filteredData.length} entrées filtrées pour patient ${patientId}`);
+                return filteredData;
+            }
+            
+            return [];
+        } catch (fallbackError) {
+            console.error(`❌ [getDMPAccessHistory] Erreur lors du fallback:`, fallbackError);
+            // Retourner un tableau vide pour éviter les erreurs d'affichage
+            return [];
+        }
     }
 };
 

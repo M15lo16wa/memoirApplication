@@ -313,7 +313,7 @@ function DMPHistory({ patientId = null }) {
 
       // Charger l'historique et les informations du patient en parallèle
       const [historyData, patientData] = await Promise.all([
-        getDMPAccessHistory(effectivePatientId),
+        getDMPAccessHistory(effectivePatientId, true), // 🔑 FORCER l'endpoint générique avec filtrage strict
         getPatientInfo(effectivePatientId)
       ]);
 
@@ -688,6 +688,8 @@ function DMPHistory({ patientId = null }) {
 
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
+
+
       <div className="flex justify-between items-center mb-6">
         <div>
           <h3 className="text-lg font-semibold text-gray-900">
@@ -873,35 +875,9 @@ function DMPHistory({ patientId = null }) {
 
       {/* Section de messagerie */}
       <div className="mt-8 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-        <h3 className="text-lg font-semibold text-blue-800 mb-4">🔍 Debug - Section Messagerie</h3>
-        <div className="space-y-2 text-sm">
-          <div className="flex justify-between">
-            <span>User ID:</span>
-            <span className="font-mono">{userId || 'undefined'}</span>
-          </div>
-          <div className="flex justify-between">
-            <span>Role:</span>
-            <span className="font-mono">{role || 'undefined'}</span>
-          </div>
-          <div className="flex justify-between">
-            <span>Token:</span>
-            <span className={jwtToken ? 'text-green-600' : 'text-red-600'}>
-              {jwtToken ? '✅ Présent' : '❌ Absent'}
-            </span>
-          </div>
-          <div className="flex justify-between">
-            <span>showMessaging:</span>
-            <span className="font-mono">{showMessaging ? 'true' : 'false'}</span>
-          </div>
-          <div className="flex justify-between">
-            <span>isPatientAuthorized:</span>
-            <span className="font-mono">{isPatientAuthorized ? 'true' : 'false'}</span>
-          </div>
-        </div>
-
         {/* Bouton d'ouverture de la messagerie */}
         {userId && role && jwtToken && !showMessaging && (
-          <div className="mt-4 text-center">
+          <div className="text-center">
             <h4 className="text-md font-semibold text-blue-800 mb-3">
               {role === 'patient' ? 'Messagerie avec les patients' : 'Messagerie sécurisée'}
             </h4>
@@ -925,7 +901,7 @@ function DMPHistory({ patientId = null }) {
 
         {/* Message si conditions non remplies */}
         {(!userId || !role || !jwtToken) && (
-          <div className="mt-4 text-center text-red-600">
+          <div className="text-center text-red-600">
             <p>⚠️ Conditions non remplies pour afficher la messagerie</p>
             <p className="text-xs">Vérifiez l'authentification</p>
           </div>
