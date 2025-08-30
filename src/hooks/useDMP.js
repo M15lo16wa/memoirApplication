@@ -2,6 +2,7 @@
 
 import { useContext, useEffect, useCallback } from 'react';
 import DMPContext from '../context/DMPContext';
+import { isAuthenticated, logAuthStatus } from '../utils/authUtils';
 
 export const useDMP = () => {
     const context = useContext(DMPContext);
@@ -14,7 +15,15 @@ export const useDMP = () => {
 
     // Charger les données une seule fois si elles ne sont pas déjà là
     useEffect(() => {
+        // ✅ VÉRIFICATION D'AUTHENTIFICATION : Ne charger les données que si l'utilisateur est connecté
+        if (!isAuthenticated()) {
+            logAuthStatus('useDMP');
+            console.log('🔒 useDMP - Utilisateur non authentifié, pas de chargement automatique');
+            return;
+        }
+        
         if (state.patientId && !state.dmpData && !state.loading) {
+            console.log('🔐 useDMP - Utilisateur authentifié, chargement du DMP...');
             actions.loadDMP();
         }
     }, [state.patientId, state.dmpData, state.loading, actions]);

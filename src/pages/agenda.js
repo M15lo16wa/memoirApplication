@@ -145,202 +145,171 @@ function Agenda() {
     return 79;
   };
 
-  // Charger les vrais rendez-vous depuis l'API via le service
+    // Charger les vrais rendez-vous depuis l'API via le service
   const loadRealAppointments = useCallback(async () => {
     try {
       console.log('🚀 [loadRealAppointments] Début du chargement des rendez-vous...');
       console.log('🔍 [loadRealAppointments] Médecin connecté ID:', getMedecinConnecteId());
       
-             // Utiliser le service getRendezVousByMedecin pour récupérer directement les RDV du médecin
-       const medecinConnecteId = getMedecinConnecteId();
-       console.log('📡 [loadRealAppointments] Appel du service getRendezVousByMedecin pour le médecin ID:', medecinConnecteId);
-       const allRendezVousResponse = await getRendezVousByMedecin(medecinConnecteId);
+      // Utiliser le service getRendezVousByMedecin pour récupérer directement les RDV du médecin
+      const medecinConnecteId = getMedecinConnecteId();
+      console.log('📡 [loadRealAppointments] Appel du service getRendezVousByMedecin pour le médecin ID:', medecinConnecteId);
+      const allRendezVousResponse = await getRendezVousByMedecin(medecinConnecteId);
       
       console.log('📡 [loadRealAppointments] Réponse complète du service:', allRendezVousResponse);
-      console.log('📊 [loadRealAppointments] Statut de la réponse:', allRendezVousResponse.status);
-      console.log('📊 [loadRealAppointments] Succès de la réponse:', allRendezVousResponse.success);
+      console.log('📊 [loadRealAppointments] Type de la réponse:', typeof allRendezVousResponse);
+      console.log('📊 [loadRealAppointments] Clés de la réponse:', Object.keys(allRendezVousResponse || {}));
       
-      // Gérer l'erreur d'authentification
-      if (allRendezVousResponse.status === 401) {
-        console.warn('⚠️ [loadRealAppointments] Erreur d\'authentification (401) détectée');
-        console.log('🔄 [loadRealAppointments] Basculement vers les données de test...');
+      // ✅ CORRECTION : Traiter toutes les structures de réponse possibles
+      let rendezVousList = [];
+      
+      // Structure 1: Réponse directe (array)
+      if (Array.isArray(allRendezVousResponse)) {
+        rendezVousList = allRendezVousResponse;
+        console.log('📋 [loadRealAppointments] Structure 1 détectée: réponse directe (array)');
+      }
+      // Structure 2: { data: [...] }
+      else if (allRendezVousResponse && allRendezVousResponse.data && Array.isArray(allRendezVousResponse.data)) {
+        rendezVousList = allRendezVousResponse.data;
+        console.log('📋 [loadRealAppointments] Structure 2 détectée: data direct (array)');
+      }
+      // Structure 3: { data: { rendezVous: [...] } }
+      else if (allRendezVousResponse && allRendezVousResponse.data && allRendezVousResponse.data.rendezVous && Array.isArray(allRendezVousResponse.data.rendezVous)) {
+        rendezVousList = allRendezVousResponse.data.rendezVous;
+        console.log('📋 [loadRealAppointments] Structure 3 détectée: data.rendezVous');
+      }
+      // Structure 4: { rendezVous: [...] }
+      else if (allRendezVousResponse && allRendezVousResponse.rendezVous && Array.isArray(allRendezVousResponse.rendezVous)) {
+        rendezVousList = allRendezVousResponse.rendezVous;
+        console.log('📋 [loadRealAppointments] Structure 4 détectée: rendezVous direct');
+      }
+      // Structure 5: { results: X, data: [...] }
+      else if (allRendezVousResponse && allRendezVousResponse.results && allRendezVousResponse.data && Array.isArray(allRendezVousResponse.data)) {
+        rendezVousList = allRendezVousResponse.data;
+        console.log('📋 [loadRealAppointments] Structure 5 détectée: results + data');
+      }
+      // Structure 6: { success: true, data: [...] }
+      else if (allRendezVousResponse && allRendezVousResponse.success && allRendezVousResponse.data && Array.isArray(allRendezVousResponse.data)) {
+        rendezVousList = allRendezVousResponse.data;
+        console.log('📋 [loadRealAppointments] Structure 6 détectée: success + data');
+      }
+      else {
+        console.warn('⚠️ [loadRealAppointments] Structure de données non reconnue, tentative de fallback...');
+        console.log('🔍 [loadRealAppointments] Contenu complet de la réponse:', JSON.stringify(allRendezVousResponse, null, 2));
         
-        // Données de test temporaires
-        const testAppointments = [
-          {
-            id: 'test_1',
-            title: 'Consultation BIYA PAUL',
-            patient: 'BIYA PAUL',
-            patientId: 7,
-            startTime: new Date('2025-08-30T10:00:00'),
-            endTime: new Date('2025-08-30T10:30:00'),
-            type: 'consultation',
-            color: 'bg-blue-500',
-            status: 'confirmed',
-            notes: 'Consultation de routine',
-            duration: 30
-          },
-          {
-            id: 'test_2',
-            title: 'Suivi cardiologique DIOP Fatou',
-            patient: 'DIOP Fatou',
-            patientId: 8,
-            startTime: new Date('2025-08-30T14:00:00'),
-            endTime: new Date('2025-08-30T14:45:00'),
-            type: 'suivi',
-            color: 'bg-green-500',
-            status: 'confirmed',
-            notes: 'Contrôle tension artérielle',
-            duration: 45
+        // Fallback: essayer de trouver un tableau dans la réponse
+        const findArrayInObject = (obj) => {
+          for (const key in obj) {
+            if (Array.isArray(obj[key])) {
+              return obj[key];
+            }
+            if (typeof obj[key] === 'object' && obj[key] !== null) {
+              const found = findArrayInObject(obj[key]);
+              if (found) return found;
+            }
           }
-        ];
+          return null;
+        };
         
-        console.log('📋 [loadRealAppointments] Données de test créées:', testAppointments);
-        console.log('💾 [loadRealAppointments] Mise à jour du state appointments...');
-        setAppointments(testAppointments);
-        console.log('✅ [loadRealAppointments] Mode test activé, retour de', testAppointments.length, 'rendez-vous');
-        return testAppointments.length;
+        const fallbackArray = findArrayInObject(allRendezVousResponse);
+        if (fallbackArray) {
+          rendezVousList = fallbackArray;
+          console.log('🔄 [loadRealAppointments] Fallback: tableau trouvé dans la réponse:', fallbackArray);
+        }
       }
       
-      if (allRendezVousResponse.success) {
-        console.log('✅ [loadRealAppointments] API répond avec succès');
-        
-        // L'API retourne directement les données dans allRendezVousResponse.data
-        let allRendezVousData = allRendezVousResponse.data;
-        console.log('📅 [loadRealAppointments] Données brutes reçues:', allRendezVousData);
-        console.log('🔍 [loadRealAppointments] Type des données:', typeof allRendezVousData);
-        console.log('🔍 [loadRealAppointments] Est un array?', Array.isArray(allRendezVousData));
-        
-                 // Vérifier la structure des données et extraire la liste
-        let rendezVousList = [];
-        if (Array.isArray(allRendezVousData)) {
-          // Structure directe : data: [...]
-          rendezVousList = allRendezVousData;
-          console.log('📋 [loadRealAppointments] Structure directe détectée (array)');
-        } else if (allRendezVousData && Array.isArray(allRendezVousData.data)) {
-          // Structure imbriquée : data: {data: [...]}
-          rendezVousList = allRendezVousData.data;
-          console.log('📋 [loadRealAppointments] Structure imbriquée détectée (data.data)');
-        } else if (allRendezVousData && Array.isArray(allRendezVousData.rendezVous)) {
-          // Structure alternative : data: {rendezVous: [...]}
-          rendezVousList = allRendezVousData.rendezVous;
-          console.log('📋 [loadRealAppointments] Structure alternative détectée (data.rendezVous)');
-        } else if (allRendezVousData && allRendezVousData.data && Array.isArray(allRendezVousData.data.rendezVous)) {
-          // Structure : {status: 'success', results: 5, data: {rendezVous: [...]}}
-          rendezVousList = allRendezVousData.data.rendezVous;
-          console.log('📋 [loadRealAppointments] Structure API détectée (data.data.rendezVous)');
-        } else if (allRendezVousData && allRendezVousData.data && Array.isArray(allRendezVousData.data)) {
-          // Structure : {status: 'success', results: 5, data: [...]}
-          rendezVousList = allRendezVousData.data;
-          console.log('📋 [loadRealAppointments] Structure API détectée (data.data)');
-        } else {
-          console.warn('⚠️ [loadRealAppointments] Structure de données non reconnue:', allRendezVousData);
-          console.log('🔍 [loadRealAppointments] Clés disponibles:', allRendezVousData ? Object.keys(allRendezVousData) : 'null/undefined');
-          if (allRendezVousData && allRendezVousData.data) {
-            console.log('🔍 [loadRealAppointments] Clés de data:', Object.keys(allRendezVousData.data));
-          }
-        }
-        
-        console.log('📋 [loadRealAppointments] Liste des rendez-vous extraite:', rendezVousList);
-        console.log('📊 [loadRealAppointments] Nombre de rendez-vous extraits:', rendezVousList.length);
-        
-        if (!rendezVousList || rendezVousList.length === 0) {
-          console.warn('⚠️ [loadRealAppointments] Aucun rendez-vous trouvé dans la réponse');
-          console.log('💾 [loadRealAppointments] Mise à jour du state avec tableau vide');
-          setAppointments([]);
-          return 0;
-        }
-        
-                 // L'API retourne déjà les RDV du bon médecin, pas besoin de filtrer
-         const medecinRendezVous = rendezVousList;
-         console.log('👨‍⚕️ [loadRealAppointments] Rendez-vous du médecin connecté (déjà filtrés par l\'API):', medecinRendezVous);
-         console.log('📊 [loadRealAppointments] Nombre de RDV reçus:', medecinRendezVous.length);
-         
-         if (medecinRendezVous.length === 0) {
-           console.warn('⚠️ [loadRealAppointments] Aucun rendez-vous trouvé pour ce médecin');
-         }
-        
-        console.log('🔄 [loadRealAppointments] Début de la conversion des données...');
-        
-        // Convertir au format de l'agenda avec la nouvelle structure API
-        const realAppointments = medecinRendezVous.map((rdv, index) => {
-          console.log(`🔄 [loadRealAppointments] Conversion RDV ${index + 1}/${medecinRendezVous.length}:`, rdv);
-          
-          // Gérer les différents formats de date/heure
-          let startTime, endTime;
-          
-          if (rdv.DateHeure) {
-            // Nouvelle structure : DateHeure unique
-            startTime = new Date(rdv.DateHeure);
-            endTime = new Date(rdv.DateHeure);
-            if (rdv.duree) {
-              endTime.setMinutes(endTime.getMinutes() + rdv.duree);
-            } else {
-              endTime.setMinutes(endTime.getMinutes() + 30); // Durée par défaut
-            }
-            console.log(`📅 [loadRealAppointments] RDV ${index + 1}: DateHeure détecté, startTime=${startTime}, endTime=${endTime}`);
-          } else if (rdv.date && rdv.heure) {
-            // Ancienne structure : date + heure séparées
-            startTime = new Date(`${rdv.date}T${rdv.heure}`);
-            endTime = new Date(`${rdv.date}T${rdv.heure}`);
-            if (rdv.duree) {
-              endTime.setMinutes(endTime.getMinutes() + rdv.duree);
-            } else {
-              endTime.setMinutes(endTime.getMinutes() + 30);
-            }
-            console.log(`📅 [loadRealAppointments] RDV ${index + 1}: date+heure détectés, startTime=${startTime}, endTime=${endTime}`);
-          } else {
-            // Fallback : utiliser la date de création
-            startTime = new Date(rdv.createdAt);
-            endTime = new Date(rdv.createdAt);
-            endTime.setMinutes(endTime.getMinutes() + 30);
-            console.log(`📅 [loadRealAppointments] RDV ${index + 1}: fallback createdAt, startTime=${startTime}, endTime=${endTime}`);
-          }
-          
-          const appointment = {
-            id: rdv.id || rdv.id_rendezvous || `rdv_${Date.now()}`,
-            title: `${rdv.type_rdv || rdv.motif_consultation || 'Consultation'} ${rdv.nom || 'Patient'} ${rdv.prenom || ''}`,
-            patient: `${rdv.nom || 'Nom'} ${rdv.prenom || 'Prénom'}`,
-            patientId: rdv.patient_id || rdv.id_patient,
-            startTime: startTime,
-            endTime: endTime,
-            type: rdv.type_rdv || 'consultation',
-            color: getAppointmentColor(rdv.type_rdv || 'consultation'),
-            status: (rdv.statut || 'programme') === 'confirme' ? 'confirmed' : 'pending',
-            notes: rdv.notes || rdv.motif_consultation || rdv.motif || '',
-            duration: rdv.duree || 30,
-            // Données de l'API
-            apiId: rdv.id || rdv.id_rendezvous,
-            createdAt: rdv.createdAt,
-            lieu: rdv.lieu || 'Cabinet médical'
-          };
-          
-          console.log(`📋 [loadRealAppointments] RDV ${index + 1} converti:`, appointment);
-          return appointment;
-        });
-        
-        console.log('✅ [loadRealAppointments] Rendez-vous réels convertis:', realAppointments);
-        console.log('💾 [loadRealAppointments] Mise à jour du state appointments...');
-        setAppointments(realAppointments);
-        
-        // Log pour déboguer l'affichage
-        console.log('🎯 [loadRealAppointments] État des rendez-vous après mise à jour:', {
-          count: realAppointments.length,
-          appointments: realAppointments,
-          stateUpdated: true
-        });
-        
-        // Retourner le nombre de rendez-vous pour confirmation
-        console.log(`✅ [loadRealAppointments] Fonction terminée avec succès, retour de ${realAppointments.length} rendez-vous`);
-        return realAppointments.length;
-        
-      } else {
-        console.warn('⚠️ [loadRealAppointments] Erreur du service détectée');
-        console.log('📊 [loadRealAppointments] Détails de l\'erreur:', allRendezVousResponse.error);
+      console.log('📋 [loadRealAppointments] Liste des rendez-vous extraite:', rendezVousList);
+      console.log('📊 [loadRealAppointments] Nombre de rendez-vous extraits:', rendezVousList.length);
+      
+      if (!rendezVousList || rendezVousList.length === 0) {
+        console.warn('⚠️ [loadRealAppointments] Aucun rendez-vous trouvé dans la réponse');
         console.log('💾 [loadRealAppointments] Mise à jour du state avec tableau vide');
         setAppointments([]);
         return 0;
       }
+      
+      // L'API retourne déjà les RDV du bon médecin, pas besoin de filtrer
+      const medecinRendezVous = rendezVousList;
+      console.log('👨‍⚕️ [loadRealAppointments] Rendez-vous du médecin connecté (déjà filtrés par l\'API):', medecinRendezVous);
+      console.log('📊 [loadRealAppointments] Nombre de RDV reçus:', medecinRendezVous.length);
+      
+      if (medecinRendezVous.length === 0) {
+        console.warn('⚠️ [loadRealAppointments] Aucun rendez-vous trouvé pour ce médecin');
+      }
+      
+      console.log('🔄 [loadRealAppointments] Début de la conversion des données...');
+      
+      // Convertir au format de l'agenda avec la nouvelle structure API
+      const realAppointments = medecinRendezVous.map((rdv, index) => {
+        console.log(`🔄 [loadRealAppointments] Conversion RDV ${index + 1}/${medecinRendezVous.length}:`, rdv);
+        
+        // Gérer les différents formats de date/heure
+        let startTime, endTime;
+        
+        if (rdv.DateHeure) {
+          // Nouvelle structure : DateHeure unique
+          startTime = new Date(rdv.DateHeure);
+          endTime = new Date(rdv.DateHeure);
+          if (rdv.duree) {
+            endTime.setMinutes(endTime.getMinutes() + rdv.duree);
+          } else {
+            endTime.setMinutes(endTime.getMinutes() + 30); // Durée par défaut
+          }
+          console.log(`📅 [loadRealAppointments] RDV ${index + 1}: DateHeure détecté, startTime=${startTime}, endTime=${endTime}`);
+        } else if (rdv.date && rdv.heure) {
+          // Ancienne structure : date + heure séparées
+          startTime = new Date(`${rdv.date}T${rdv.heure}`);
+          endTime = new Date(`${rdv.date}T${rdv.heure}`);
+          if (rdv.duree) {
+            endTime.setMinutes(endTime.getMinutes() + rdv.duree);
+          } else {
+            endTime.setMinutes(endTime.getMinutes() + 30);
+          }
+          console.log(`📅 [loadRealAppointments] RDV ${index + 1}: date+heure détectés, startTime=${startTime}, endTime=${endTime}`);
+        } else {
+          // Fallback : utiliser la date de création
+          startTime = new Date(rdv.createdAt);
+          endTime = new Date(rdv.createdAt);
+          endTime.setMinutes(endTime.getMinutes() + 30);
+          console.log(`📅 [loadRealAppointments] RDV ${index + 1}: fallback createdAt, startTime=${startTime}, endTime=${endTime}`);
+        }
+        
+        const appointment = {
+          id: rdv.id || rdv.id_rendezvous || `rdv_${Date.now()}`,
+          title: `${rdv.type_rdv || rdv.motif_consultation || 'Consultation'} ${rdv.nom || 'Patient'} ${rdv.prenom || ''}`,
+          patient: `${rdv.nom || 'Nom'} ${rdv.prenom || 'Prénom'}`,
+          patientId: rdv.patient_id || rdv.id_patient,
+          startTime: startTime,
+          endTime: endTime,
+          type: rdv.type_rdv || 'consultation',
+          color: getAppointmentColor(rdv.type_rdv || 'consultation'),
+          status: (rdv.statut || 'programme') === 'confirme' ? 'confirmed' : 'pending',
+          notes: rdv.notes || rdv.motif_consultation || rdv.motif || '',
+          duration: rdv.duree || 30,
+          // Données de l'API
+          apiId: rdv.id || rdv.id_rendezvous,
+          createdAt: rdv.createdAt,
+          lieu: rdv.lieu || 'Cabinet médical'
+        };
+        
+        console.log(`📋 [loadRealAppointments] RDV ${index + 1} converti:`, appointment);
+        return appointment;
+      });
+      
+      console.log('✅ [loadRealAppointments] Rendez-vous réels convertis:', realAppointments);
+      console.log('💾 [loadRealAppointments] Mise à jour du state appointments...');
+      setAppointments(realAppointments);
+      
+      // Log pour déboguer l'affichage
+      console.log('🎯 [loadRealAppointments] État des rendez-vous après mise à jour:', {
+        count: realAppointments.length,
+        appointments: realAppointments,
+        stateUpdated: true
+      });
+      
+      // Retourner le nombre de rendez-vous pour confirmation
+      console.log(`✅ [loadRealAppointments] Fonction terminée avec succès, retour de ${realAppointments.length} rendez-vous`);
+      return realAppointments.length;
       
     } catch (error) {
       console.error('❌ [loadRealAppointments] Erreur lors du chargement des rendez-vous:', error);
@@ -385,6 +354,28 @@ function Agenda() {
     console.log('🔄 [useEffect] Déclenchement de l\'initialisation...');
     initializeAgenda();
   }, [loadRealData, loadRealAppointments]); // Ajouter les dépendances
+
+  // Effect pour ajuster la date du calendrier quand les rendez-vous sont chargés
+  useEffect(() => {
+    if (appointments.length > 0) {
+      const firstAppointmentDate = new Date(appointments[0].startTime);
+      // Vérifier si la date actuelle du calendrier inclut déjà ce rendez-vous
+      const currentMonth = currentDate.getMonth();
+      const currentYear = currentDate.getFullYear();
+      const appointmentMonth = firstAppointmentDate.getMonth();
+      const appointmentYear = firstAppointmentDate.getFullYear();
+      
+      // Si le calendrier n'affiche pas le bon mois/année, l'ajuster
+      if (currentMonth !== appointmentMonth || currentYear !== appointmentYear) {
+        setCurrentDate(firstAppointmentDate);
+        setSelectedDate(firstAppointmentDate);
+        console.log(`📅 [useEffect - appointments] Date de l'agenda ajustée au premier RDV: ${firstAppointmentDate.toLocaleDateString('fr-FR')}`);
+        console.log(`📅 [useEffect - appointments] Ancienne date: ${currentDate.toLocaleDateString('fr-FR')} → Nouvelle date: ${firstAppointmentDate.toLocaleDateString('fr-FR')}`);
+      } else {
+        console.log(`📅 [useEffect - appointments] Le calendrier affiche déjà la bonne période (${firstAppointmentDate.toLocaleDateString('fr-FR')})`);
+      }
+    }
+  }, [appointments, currentDate]);
 
   // Navigation dans le calendrier
   const goToPrevious = () => {
@@ -806,6 +797,48 @@ function Agenda() {
                 Rafraîchir
               </button>
               <button
+                onClick={async () => {
+                  console.log('🔍 [Bouton Debug] Début du debug des données serveur...');
+                  try {
+                    const medecinId = getMedecinConnecteId();
+                    console.log('🔍 [Debug] Médecin ID:', medecinId);
+                    
+                    // Appel direct à l'API pour voir la réponse brute
+                    const response = await getRendezVousByMedecin(medecinId);
+                    console.log('🔍 [Debug] Réponse brute du serveur:', response);
+                    console.log('🔍 [Debug] Type de réponse:', typeof response);
+                    console.log('🔍 [Debug] Clés de la réponse:', Object.keys(response || {}));
+                    console.log('🔍 [Debug] Réponse JSON:', JSON.stringify(response, null, 2));
+                    
+                    // Analyser la structure
+                    if (response && typeof response === 'object') {
+                      console.log('🔍 [Debug] Analyse de la structure:');
+                      for (const key in response) {
+                        const value = response[key];
+                        console.log(`  - ${key}:`, {
+                          type: typeof value,
+                          isArray: Array.isArray(value),
+                          length: Array.isArray(value) ? value.length : 'N/A',
+                          sample: Array.isArray(value) && value.length > 0 ? value[0] : 'N/A'
+                        });
+                      }
+                    }
+                    
+                    alert(`Debug terminé. Vérifiez la console pour les détails.\nRendez-vous reçus: ${Array.isArray(response) ? response.length : 'Structure inconnue'}`);
+                  } catch (error) {
+                    console.error('❌ [Debug] Erreur lors du debug:', error);
+                    alert(`Erreur de debug: ${error.message}`);
+                  }
+                }}
+                className="bg-yellow-600 text-white px-4 py-2 rounded-md hover:bg-yellow-700 transition-colors"
+                title="Debug des données serveur"
+              >
+                <svg className="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Debug
+              </button>
+              <button
                 onClick={() => navigate('/medecin')}
                 className="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 transition-colors"
               >
@@ -899,7 +932,7 @@ function Agenda() {
            {/* Rendez-vous du jour */}
            <div>
             <h2 className="text-lg font-semibold text-gray-900 mb-4">
-              Rendez-vous du {new Date().toLocaleDateString('fr-FR', { 
+              Rendez-vous du {selectedDate.toLocaleDateString('fr-FR', { 
                 weekday: 'long', 
                 year: 'numeric', 
                 month: 'long', 
@@ -938,13 +971,13 @@ function Agenda() {
                 </div>
               ) : appointments.filter(appointment => {
                 const appointmentDate = new Date(appointment.startTime);
-                return appointmentDate.toDateString() === new Date().toDateString();
+                return appointmentDate.toDateString() === selectedDate.toDateString();
               }).length > 0 ? (
                 <div className="space-y-3">
                   {appointments
                     .filter(appointment => {
                       const appointmentDate = new Date(appointment.startTime);
-                      return appointmentDate.toDateString() === new Date().toDateString();
+                      return appointmentDate.toDateString() === selectedDate.toDateString();
                     })
                     .sort((a, b) => new Date(a.startTime) - new Date(b.startTime))
                     .map(appointment => (

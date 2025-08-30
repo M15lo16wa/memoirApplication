@@ -2,7 +2,7 @@ import React, { createContext, useContext, useReducer, useEffect, useMemo } from
 import { getCurrentUser, getStoredPatient } from '../services/api/authApi';
 import * as dmpApi from '../services/api/dmpApi';
 import * as medicalApi from '../services/api/medicalApi';
-
+import { isAuthenticated, logAuthStatus } from '../utils/authUtils';
 
 
 const DMPContext = createContext();
@@ -150,6 +150,15 @@ export const DMPProvider = ({ children }) => {
     // Charger les données initiales quand le patientId est disponible
     useEffect(() => {
         if (state.patientId) {
+            // ✅ VÉRIFICATION D'AUTHENTIFICATION : Ne charger les données que si l'utilisateur est connecté
+            if (!isAuthenticated()) {
+                logAuthStatus('DMPContext');
+                console.log('🔒 DMPContext - Utilisateur non authentifié, pas de chargement automatique des données');
+                return;
+            }
+            
+            console.log('🔐 DMPContext - Utilisateur authentifié, chargement des données initiales...');
+            
             // Charger les documents automatiquement
             const loadInitialDocuments = async () => {
                 try {
@@ -229,11 +238,19 @@ export const DMPProvider = ({ children }) => {
     const actions = useMemo(() => ({
         // Charger le DMP complet
         loadDMP: async () => {
-            // if (!state.patientId) return;
-            if (!state.patientId) {
+            // ✅ VÉRIFICATION D'AUTHENTIFICATION : Ne charger le DMP que si l'utilisateur est connecté
+            if (!isAuthenticated()) {
+                logAuthStatus('DMPContext.loadDMP');
+                console.log('🔒 DMPContext - Utilisateur non authentifié, pas de chargement du DMP');
                 return;
             }
             
+            if (!state.patientId) {
+                console.log('⚠️ DMPContext - Pas de patient ID, pas de chargement du DMP');
+                return;
+            }
+            
+            console.log('🔐 DMPContext - Chargement du DMP pour le patient:', state.patientId);
             dispatch({ type: 'SET_LOADING', payload: true });
             try {
                 const response = await dmpApi.getDMP(state.patientId); // Utilise l'ID du patient connecté
