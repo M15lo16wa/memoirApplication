@@ -796,48 +796,7 @@ function Agenda() {
                 </svg>
                 Rafraîchir
               </button>
-              <button
-                onClick={async () => {
-                  console.log('🔍 [Bouton Debug] Début du debug des données serveur...');
-                  try {
-                    const medecinId = getMedecinConnecteId();
-                    console.log('🔍 [Debug] Médecin ID:', medecinId);
-                    
-                    // Appel direct à l'API pour voir la réponse brute
-                    const response = await getRendezVousByMedecin(medecinId);
-                    console.log('🔍 [Debug] Réponse brute du serveur:', response);
-                    console.log('🔍 [Debug] Type de réponse:', typeof response);
-                    console.log('🔍 [Debug] Clés de la réponse:', Object.keys(response || {}));
-                    console.log('🔍 [Debug] Réponse JSON:', JSON.stringify(response, null, 2));
-                    
-                    // Analyser la structure
-                    if (response && typeof response === 'object') {
-                      console.log('🔍 [Debug] Analyse de la structure:');
-                      for (const key in response) {
-                        const value = response[key];
-                        console.log(`  - ${key}:`, {
-                          type: typeof value,
-                          isArray: Array.isArray(value),
-                          length: Array.isArray(value) ? value.length : 'N/A',
-                          sample: Array.isArray(value) && value.length > 0 ? value[0] : 'N/A'
-                        });
-                      }
-                    }
-                    
-                    alert(`Debug terminé. Vérifiez la console pour les détails.\nRendez-vous reçus: ${Array.isArray(response) ? response.length : 'Structure inconnue'}`);
-                  } catch (error) {
-                    console.error('❌ [Debug] Erreur lors du debug:', error);
-                    alert(`Erreur de debug: ${error.message}`);
-                  }
-                }}
-                className="bg-yellow-600 text-white px-4 py-2 rounded-md hover:bg-yellow-700 transition-colors"
-                title="Debug des données serveur"
-              >
-                <svg className="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                Debug
-              </button>
+              
               <button
                 onClick={() => navigate('/medecin')}
                 className="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 transition-colors"
