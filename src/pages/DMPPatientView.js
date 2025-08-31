@@ -1,6 +1,15 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getDMP, getHistoriqueMedical, getAutorisations, getDocumentsPersonnelsDMP, getAutoMesuresDMP, revokerAutorisation } from '../services/api/dmpApi';
+import { 
+  getDMP, 
+  getDMPUrgence,
+  getHistoriqueMedical, 
+  getHistoriqueMedicalUrgence,
+  getAutorisations, 
+  getDocumentsPersonnelsDMP, 
+  getAutoMesuresDMP, 
+  revokerAutorisation 
+} from '../services/api/dmpApi';
 import { downloadDocument } from '../services/api/medicalApi';
 import PDFPreviewModal from '../components/common/PDFPreviewModal';
 
@@ -15,6 +24,7 @@ function DMPPatientView() {
   const [pdfPreview, setPdfPreview] = useState({ open: false, url: null, title: '' });
   const [showRevokeModal, setShowRevokeModal] = useState(false);
   const [revokingAccess, setRevokingAccess] = useState(false);
+  const [isUrgenceMode, setIsUrgenceMode] = useState(false);
   const previewBlobUrlRef = useRef(null);
 
   // 🔍 DEBUG - Vérifier l'état des tokens au chargement du composant
@@ -34,6 +44,18 @@ function DMPPatientView() {
     console.log('  - localStorage.getItem("medecin"):', localStorage.getItem('medecin'));
     console.log('  - localStorage.getItem("professionnel"):', localStorage.getItem('professionnel'));
     console.log('  - localStorage.getItem("tempTokenId_urgence"):', localStorage.getItem('tempTokenId_urgence'));
+    
+    // Détecter le mode urgence
+    const tempTokenIdUrgence = localStorage.getItem('tempTokenId_urgence');
+    const hasValidTokens = localStorage.getItem('jwt') || localStorage.getItem('token');
+    
+    if (tempTokenIdUrgence && !hasValidTokens) {
+      console.log('🚨 Mode urgence détecté - Pas de tokens JWT valides, utilisation du mode urgence');
+      setIsUrgenceMode(true);
+    } else {
+      console.log('✅ Mode normal détecté - Tokens JWT présents');
+      setIsUrgenceMode(false);
+    }
   }, [patientId]);
 
   // Normalise une URL de fichier potentiellement relative vers une URL absolue côté backend
@@ -308,7 +330,8 @@ function DMPPatientView() {
 
   // Charger les données DMP
   const loadDMPData = useCallback(async () => {
-    if (!checkPatientAuthorization()) {
+    // En mode urgence, on ne vérifie pas l'autorisation
+    if (!isUrgenceMode && !checkPatientAuthorization()) {
       setCurrentStatus('unauthorized');
       setLoading(false);
       return;
@@ -319,12 +342,23 @@ function DMPPatientView() {
     
     try {
       console.log('🚀 Chargement des données DMP pour le patient:', patientId);
+      console.log('🔍 Mode urgence détecté:', isUrgenceMode ? '🚨 OUI' : '✅ NON');
+      
+      // Choisir les fonctions appropriées selon le mode
+      const dmpFunction = isUrgenceMode ? getDMPUrgence : getDMP;
+      const historiqueFunction = isUrgenceMode ? getHistoriqueMedicalUrgence : getHistoriqueMedical;
+      
+      console.log('🔧 Fonctions sélectionnées:', {
+        dmp: isUrgenceMode ? 'getDMPUrgence' : 'getDMP',
+        historique: isUrgenceMode ? 'getHistoriqueMedicalUrgence' : 'getHistoriqueMedical'
+      });
       
       // Charger les données en parallèle
       const [dmpResponse, historiqueResponse, autorisationsResponse] = await Promise.all([
-        getDMP(patientId),
-        getHistoriqueMedical(patientId),
-        getAutorisations(patientId)
+        dmpFunction(patientId),
+        historiqueFunction(patientId),
+        // En mode urgence, on peut passer les autorisations ou les ignorer
+        isUrgenceMode ? Promise.resolve({ data: [] }) : getAutorisations(patientId)
       ]);
       
       setDmpData(dmpResponse?.data || dmpResponse);
@@ -349,7 +383,7 @@ function DMPPatientView() {
     } finally {
       setLoading(false);
     }
-  }, [patientId, checkPatientAuthorization, loadDocumentsAndMesures]);
+  }, [patientId, checkPatientAuthorization, loadDocumentsAndMesures, isUrgenceMode]);
 
   // Effet initial
   useEffect(() => {

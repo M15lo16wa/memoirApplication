@@ -1190,6 +1190,61 @@ export const getDMP = async (patientId = null) => {
     return response.data.data;
 };
 
+// --- Mode urgence - Accès sans autorisation ---
+export const getDMPUrgence = async (patientId = null) => {
+    try {
+        console.log(`🚨 Mode urgence - Accès au dossier patient ${patientId} sans autorisation`);
+        
+        // Créer une instance axios temporaire sans intercepteur pour le mode urgence
+        const urgenceApi = axios.create({
+            baseURL: API_URL,
+            headers: { 
+                "Content-Type": "application/json", 
+                "Accept": "application/json",
+                // Ajouter un header spécial pour indiquer le mode urgence
+                "X-Mode-Urgence": "true"
+            }
+        });
+        
+        const url = patientId ? `/dossierMedical/patient/${patientId}/complet` : '/dossierMedical';
+        console.log(`🔗 URL appelée en mode urgence: ${url}`);
+        
+        const response = await urgenceApi.get(url);
+        console.log(`✅ Mode urgence - Dossier récupéré avec succès:`, response.data);
+        
+        return response.data.data;
+    } catch (error) {
+        console.error(`❌ Mode urgence - Erreur lors de l'accès au dossier:`, error);
+        throw error;
+    }
+};
+
+export const getHistoriqueMedicalUrgence = async (patientId = null) => {
+    try {
+        console.log(`🚨 Mode urgence - Accès à l'historique médical patient ${patientId} sans autorisation`);
+        
+        // Créer une instance axios temporaire sans intercepteur pour le mode urgence
+        const urgenceApi = axios.create({
+            baseURL: API_URL,
+            headers: { 
+                "Content-Type": "application/json", 
+                "Accept": "application/json",
+                "X-Mode-Urgence": "true"
+            }
+        });
+        
+        const url = patientId ? `/dossierMedical/patient/${patientId}/complet` : '/dossierMedical';
+        const response = await urgenceApi.get(url);
+        
+        // Extraire l'historique du dossier médical
+        const dossier = response.data.data;
+        return { data: dossier?.historique || dossier?.historiqueMedical || [] };
+    } catch (error) {
+        console.error(`❌ Mode urgence - Erreur lors de l'accès à l'historique:`, error);
+        throw error;
+    }
+};
+
 export const updateDMP = async (patientId, dmpData) => {
     const response = await dmpApi.put(`/dossierMedical/${patientId}`, dmpData);
     return response.data.data;
