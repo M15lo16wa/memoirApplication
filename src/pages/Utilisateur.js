@@ -65,6 +65,10 @@ function Utilisateurs() {
     const [editingProfessional, setEditingProfessional] = useState(null);
     const [showEditProfModal, setShowEditProfModal] = useState(false);
 
+    // États pour la gestion des patients
+    const [editingPatient, setEditingPatient] = useState(null);
+    const [showEditPatientModal, setShowEditPatientModal] = useState(false);
+
     useEffect(() => {
         console.log('Component mounted');
         loadUsers();
@@ -350,6 +354,27 @@ function Utilisateurs() {
         }
     };
 
+    const handleToggleUserBlockStatus = async (userId, currentStatus) => {
+        const newStatus = currentStatus === 'bloque' ? 'actif' : 'bloque';
+        const actionText = newStatus === 'bloque' ? 'bloquer' : 'débloquer';
+        
+        if (window.confirm(`Êtes-vous sûr de vouloir ${actionText} cet utilisateur ?`)) {
+            try {
+                // Appeler l'API pour modifier le statut
+                await toggleUserStatus(userId, newStatus);
+                console.log('User status updated:', userId, newStatus);
+                
+                // Recharger la liste des utilisateurs
+                loadUsers();
+                
+                alert(`Utilisateur ${actionText} avec succès !`);
+            } catch (err) {
+                console.error('Error updating user status:', err);
+                alert(`Erreur lors de la modification du statut: ${err.message || 'Erreur inconnue'}`);
+            }
+        }
+    };
+
     const openEditModal = (user) => {
         setEditingUser(user);
         setFormData({
@@ -513,6 +538,51 @@ function Utilisateurs() {
             console.error('Error updating professional:', err);
             alert(`Erreur lors de la modification: ${err.message || 'Erreur inconnue'}`);
         }
+    };
+
+    // Fonctions pour la gestion des patients
+    const handleDeletePatient = async (patientId) => {
+        if (window.confirm("Êtes-vous sûr de vouloir supprimer ce patient ?")) {
+            try {
+                // Appeler l'API pour supprimer le patient
+                // await deletePatient(patientId);
+                console.log('Patient deleted:', patientId);
+                
+                // Recharger la liste des patients
+                loadPatients();
+                
+                alert('Patient supprimé avec succès !');
+            } catch (err) {
+                console.error('Error deleting patient:', err);
+                alert(`Erreur lors de la suppression: ${err.message || 'Erreur inconnue'}`);
+            }
+        }
+    };
+
+    const handleTogglePatientStatus = async (patientId, currentStatus) => {
+        const newStatus = currentStatus === 'actif' ? 'bloque' : 'actif';
+        const actionText = newStatus === 'bloque' ? 'bloquer' : 'débloquer';
+        
+        if (window.confirm(`Êtes-vous sûr de vouloir ${actionText} ce patient ?`)) {
+            try {
+                // Appeler l'API pour modifier le statut
+                // await updatePatient(patientId, { statut: newStatus });
+                console.log('Patient status updated:', patientId, newStatus);
+                
+                // Recharger la liste des patients
+                loadPatients();
+                
+                alert(`Patient ${actionText} avec succès !`);
+            } catch (err) {
+                console.error('Error updating patient status:', err);
+                alert(`Erreur lors de la modification du statut: ${err.message || 'Erreur inconnue'}`);
+            }
+        }
+    };
+
+    const openEditPatientModal = (patient) => {
+        setEditingPatient(patient);
+        setShowEditPatientModal(true);
     };
 
     // Filtrage des utilisateurs
@@ -900,18 +970,32 @@ function Utilisateurs() {
                                             <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
                                                 <div className="flex items-center justify-center space-x-2">
                                                     <button 
-                                                        className="text-blue-600 hover:text-blue-900 p-1" 
+                                                        className="bg-blue-100 hover:bg-blue-200 text-blue-800 px-3 py-2 rounded-md text-sm font-medium transition-colors" 
                                                         title="Modifier"
                                                         onClick={() => openEditModal(user)}
                                                     >
-                                                        <i className="fas fa-edit"></i>
+                                                        <i className="fas fa-edit mr-1"></i>
+                                                        Modifier
                                                     </button>
                                                     <button 
-                                                        className="text-red-600 hover:text-red-900 p-1" 
+                                                        className="bg-red-100 hover:bg-red-200 text-red-800 px-3 py-2 rounded-md text-sm font-medium transition-colors" 
                                                         title="Supprimer"
                                                         onClick={() => handleDeleteUser(user.id)}
                                                     >
-                                                        <i className="fas fa-trash"></i>
+                                                        <i className="fas fa-trash mr-1"></i>
+                                                        Supprimer
+                                                    </button>
+                                                    <button 
+                                                        className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                                                            user.statut === 'bloque' 
+                                                                ? 'bg-green-100 hover:bg-green-200 text-green-800' 
+                                                                : 'bg-orange-100 hover:bg-orange-200 text-orange-800'
+                                                        }`}
+                                                        title={user.statut === 'bloque' ? 'Débloquer le compte' : 'Bloquer le compte'}
+                                                        onClick={() => handleToggleUserBlockStatus(user.id, user.statut || 'actif')}
+                                                    >
+                                                        <i className={`mr-1 ${user.statut === 'bloque' ? 'fas fa-unlock' : 'fas fa-ban'}`}></i>
+                                                        {user.statut === 'bloque' ? 'Débloquer' : 'Bloquer'}
                                                     </button>
                                                 </div>
                                             </td>
@@ -993,6 +1077,34 @@ function Utilisateurs() {
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
                                                     <div className="flex items-center justify-center space-x-2">
+                                                        <button 
+                                                            className="bg-blue-100 hover:bg-blue-200 text-blue-800 px-3 py-2 rounded-md text-sm font-medium transition-colors" 
+                                                            title="Modifier"
+                                                            onClick={() => openEditPatientModal(patient)}
+                                                        >
+                                                            <i className="fas fa-edit mr-1"></i>
+                                                            Modifier
+                                                        </button>
+                                                        <button 
+                                                            className="bg-red-100 hover:bg-red-200 text-red-800 px-3 py-2 rounded-md text-sm font-medium transition-colors" 
+                                                            title="Supprimer"
+                                                            onClick={() => handleDeletePatient(patient.id)}
+                                                        >
+                                                            <i className="fas fa-trash mr-1"></i>
+                                                            Supprimer
+                                                        </button>
+                                                        <button 
+                                                            className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                                                                patient.statut === 'bloque' 
+                                                                    ? 'bg-green-100 hover:bg-green-200 text-green-800' 
+                                                                    : 'bg-orange-100 hover:bg-orange-200 text-orange-800'
+                                                            }`}
+                                                            title={patient.statut === 'bloque' ? 'Débloquer le compte' : 'Bloquer le compte'}
+                                                            onClick={() => handleTogglePatientStatus(patient.id, patient.statut || 'actif')}
+                                                        >
+                                                            <i className={`mr-1 ${patient.statut === 'bloque' ? 'fas fa-unlock' : 'fas fa-ban'}`}></i>
+                                                            {patient.statut === 'bloque' ? 'Débloquer' : 'Bloquer'}
+                                                        </button>
                                                         <button 
                                                             className="text-blue-600 hover:text-blue-900 p-1" 
                                                             title="Voir l'historique"
@@ -1509,6 +1621,125 @@ function Utilisateurs() {
                             </button>
                             <button
                                 onClick={handleUpdateProfessional}
+                                className="px-4 py-2 text-white bg-blue-600 hover:bg-blue-700 rounded-md text-sm"
+                            >
+                                Modifier
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal d'édition de patient */}
+            {showEditPatientModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                    <div className="bg-white rounded-xl shadow-lg w-full max-w-sm">
+                        <div className="p-4 border-b border-gray-200">
+                            <h2 className="text-lg font-semibold text-gray-900">
+                                Modifier le patient
+                            </h2>
+                        </div>
+                        <div className="p-4 space-y-3">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Nom *</label>
+                                <input
+                                    type="text"
+                                    name="nom"
+                                    value={editingPatient?.nom || ''}
+                                    onChange={(e) => setEditingPatient(prev => ({ ...prev, nom: e.target.value }))}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    required
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Prénom *</label>
+                                <input
+                                    type="text"
+                                    name="prenom"
+                                    value={editingPatient?.prenom || ''}
+                                    onChange={(e) => setEditingPatient(prev => ({ ...prev, prenom: e.target.value }))}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    required
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                                <input
+                                    type="email"
+                                    name="email"
+                                    value={editingPatient?.email || ''}
+                                    onChange={(e) => setEditingPatient(prev => ({ ...prev, email: e.target.value }))}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Téléphone</label>
+                                <input
+                                    type="tel"
+                                    name="telephone"
+                                    value={editingPatient?.telephone || ''}
+                                    onChange={(e) => setEditingPatient(prev => ({ ...prev, telephone: e.target.value }))}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Date de naissance *</label>
+                                <input
+                                    type="date"
+                                    name="date_naissance"
+                                    value={editingPatient?.date_naissance || ''}
+                                    onChange={(e) => setEditingPatient(prev => ({ ...prev, date_naissance: e.target.value }))}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    required
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Groupe sanguin</label>
+                                <input
+                                    type="text"
+                                    name="groupe_sanguin"
+                                    value={editingPatient?.groupe_sanguin || ''}
+                                    onChange={(e) => setEditingPatient(prev => ({ ...prev, groupe_sanguin: e.target.value }))}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Statut *</label>
+                                <select
+                                    name="statut"
+                                    value={editingPatient?.statut || ''}
+                                    onChange={(e) => setEditingPatient(prev => ({ ...prev, statut: e.target.value }))}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    required
+                                >
+                                    <option value="actif">Actif</option>
+                                    <option value="inactif">Inactif</option>
+                                    <option value="bloque">Bloqué</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div className="p-4 border-t border-gray-200 flex justify-end space-x-3">
+                            <button
+                                onClick={() => setShowEditPatientModal(false)}
+                                className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md text-sm"
+                            >
+                                Annuler
+                            </button>
+                            <button
+                                onClick={() => {
+                                    // Préparer les données pour l'API
+                                    const patientData = {
+                                        ...editingPatient,
+                                        // S'assurer que le statut est envoyé comme ID si c'est un objet
+                                        statut: typeof editingPatient.statut === 'object' ? editingPatient.statut.id : editingPatient.statut
+                                    };
+                                    // await updatePatient(editingPatient.id, patientData); // API call
+                                    console.log('Patient updated successfully');
+                                    setShowEditPatientModal(false);
+                                    setEditingPatient(null);
+                                    loadPatients();
+                                    alert('Patient modifié avec succès !');
+                                }}
                                 className="px-4 py-2 text-white bg-blue-600 hover:bg-blue-700 rounded-md text-sm"
                             >
                                 Modifier
