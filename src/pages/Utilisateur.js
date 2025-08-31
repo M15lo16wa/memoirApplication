@@ -375,6 +375,24 @@ function Utilisateurs() {
         }
     };
 
+    const handleActivateUser = async (userId) => {
+        if (window.confirm("Êtes-vous sûr de vouloir activer cet utilisateur ?")) {
+            try {
+                // Appeler l'API pour activer l'utilisateur
+                await toggleUserStatus(userId, 'actif');
+                console.log('User activated:', userId);
+                
+                // Recharger la liste des utilisateurs
+                loadUsers();
+                
+                alert('Utilisateur activé avec succès !');
+            } catch (err) {
+                console.error('Error activating user:', err);
+                alert(`Erreur lors de l'activation: ${err.message || 'Erreur inconnue'}`);
+            }
+        }
+    };
+
     const openEditModal = (user) => {
         setEditingUser(user);
         setFormData({
@@ -491,6 +509,24 @@ function Utilisateurs() {
         }
     };
 
+    const handleActivateProfessional = async (professionalId) => {
+        if (window.confirm("Êtes-vous sûr de vouloir activer ce professionnel ?")) {
+            try {
+                // Appeler l'API pour activer le professionnel
+                // await updateProfSante(professionalId, { statut: 'actif' });
+                console.log('Professional activated:', professionalId);
+                
+                // Recharger la liste des professionnels
+                loadHealthcareProfessionals();
+                
+                alert('Professionnel activé avec succès !');
+            } catch (err) {
+                console.error('Error activating professional:', err);
+                alert(`Erreur lors de l'activation: ${err.message || 'Erreur inconnue'}`);
+            }
+        }
+    };
+
     const openEditProfessionalModal = (professional) => {
         setEditingProfessional(professional);
         setProfFormData({
@@ -576,6 +612,24 @@ function Utilisateurs() {
             } catch (err) {
                 console.error('Error updating patient status:', err);
                 alert(`Erreur lors de la modification du statut: ${err.message || 'Erreur inconnue'}`);
+            }
+        }
+    };
+
+    const handleActivatePatient = async (patientId) => {
+        if (window.confirm("Êtes-vous sûr de vouloir activer ce patient ?")) {
+            try {
+                // Appeler l'API pour activer le patient
+                // await updatePatient(patientId, { statut: 'actif' });
+                console.log('Patient activated:', patientId);
+                
+                // Recharger la liste des patients
+                loadPatients();
+                
+                alert('Patient activé avec succès !');
+            } catch (err) {
+                console.error('Error activating patient:', err);
+                alert(`Erreur lors de l'activation: ${err.message || 'Erreur inconnue'}`);
             }
         }
     };
@@ -997,6 +1051,16 @@ function Utilisateurs() {
                                                         <i className={`mr-1 ${user.statut === 'bloque' ? 'fas fa-unlock' : 'fas fa-ban'}`}></i>
                                                         {user.statut === 'bloque' ? 'Débloquer' : 'Bloquer'}
                                                     </button>
+                                                    {user.statut === 'bloque' && (
+                                                        <button 
+                                                            className="bg-green-100 hover:bg-green-200 text-green-800 px-3 py-2 rounded-md text-sm font-medium transition-colors"
+                                                            title="Activer le compte"
+                                                            onClick={() => handleActivateUser(user.id)}
+                                                        >
+                                                            <i className="fas fa-check mr-1"></i>
+                                                            Activer
+                                                        </button>
+                                                    )}
                                                 </div>
                                             </td>
                                         </tr>
@@ -1093,157 +1157,39 @@ function Utilisateurs() {
                                                             <i className="fas fa-trash mr-1"></i>
                                                             Supprimer
                                                         </button>
-                                                        <button 
-                                                            className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                                                                patient.statut === 'bloque' 
-                                                                    ? 'bg-green-100 hover:bg-green-200 text-green-800' 
-                                                                    : 'bg-orange-100 hover:bg-orange-200 text-orange-800'
-                                                            }`}
-                                                            title={patient.statut === 'bloque' ? 'Débloquer le compte' : 'Bloquer le compte'}
-                                                            onClick={() => handleTogglePatientStatus(patient.id, patient.statut || 'actif')}
-                                                        >
-                                                            <i className={`mr-1 ${patient.statut === 'bloque' ? 'fas fa-unlock' : 'fas fa-ban'}`}></i>
-                                                            {patient.statut === 'bloque' ? 'Débloquer' : 'Bloquer'}
-                                                        </button>
-                                                        <button 
-                                                            className="text-blue-600 hover:text-blue-900 p-1" 
-                                                            title="Voir l'historique"
-                                                        >
-                                                            <i className="fas fa-history"></i>
-                                                        </button>
-                                                        <button 
-                                                            className="text-green-600 hover:text-green-900 p-1" 
-                                                            title="Voir les rendez-vous"
-                                                        >
-                                                            <i className="fas fa-calendar"></i>
-                                                        </button>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        ))
-                                    ) : (
-                                        <tr>
-                                            <td colSpan="4" className="px-6 py-4 text-center">
-                                                <div className="text-gray-500">Aucun patient trouvé</div>
-                                            </td>
-                                        </tr>
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                )}
-
-                                 {/* Onglet Professionnels de Santé */}
-                 {activeTab === "professionals" && (
-                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                         {/* En-tête avec compteur filtré */}
-                         <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
-                             <div className="flex items-center justify-between">
-                                 <h3 className="text-lg font-medium text-gray-900">
-                                     Professionnels de Santé
-                                 </h3>
-                                 <div className="text-sm text-gray-500">
-                                     {filteredProfessionals.length} sur {healthcareProfessionals.length} professionnels
-                                     {searchTerm !== "" && (
-                                         <span className="ml-2 text-blue-600">
-                                             • Recherche: "{searchTerm}"
-                                         </span>
-                                     )}
-                                     {selectedRole !== "all" && (
-                                         <span className="ml-2 text-green-600">
-                                             • Rôle: {selectedRole === 'medecin' ? 'Médecin' : 'Infirmier'}
-                                         </span>
-                                     )}
-                                 </div>
-                             </div>
-                         </div>
-                         
-                         <div className="overflow-x-auto">
-                             <table className="min-w-full divide-y divide-gray-200">
-                                 <thead className="bg-gray-50">
-                                     <tr>
-                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Professionnel</th>
-                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</th>
-                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Spécialité</th>
-                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                                     </tr>
-                                 </thead>
-                                <tbody className="bg-white divide-y divide-gray-200">
-                                    {loadingProfessionals ? (
-                                        <tr>
-                                            <td colSpan="4" className="px-6 py-4 text-center">
-                                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-                                                <div className="mt-2 text-sm text-gray-500">Chargement des professionnels...</div>
-                                            </td>
-                                        </tr>
-                                                                         ) : filteredProfessionals.length > 0 ? (
-                                         filteredProfessionals.map((professional) => (
-                                            <tr key={professional.id} className="hover:bg-gray-50">
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <div className="flex items-center">
-                                                        <div className="flex-shrink-0 h-10 w-10">
-                                                            <div className="h-10 w-10 rounded-full bg-purple-100 flex items-center justify-center">
-                                                                <span className="text-sm font-medium text-purple-600">
-                                                                    {professional.nom?.charAt(0)}{professional.prenom?.charAt(0)}
-                                                                </span>
-                                                            </div>
-                                                        </div>
-                                                        <div className="ml-4">
-                                                            <div className="text-sm font-medium text-gray-900">
-                                                                {professional.nom} {professional.prenom}
-                                                            </div>
-                                                            <div className="text-sm text-gray-500">ID: {professional.id}</div>
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <div className="text-sm text-gray-900">{professional.email}</div>
-                                                    {professional.telephone && (
-                                                        <div className="text-sm text-gray-500">{professional.telephone}</div>
-                                                    )}
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <div className="text-sm text-gray-900">
-                                                        <div className="font-medium">{professional.specialite}</div>
-                                                        {professional.role && (
-                                                            <div className="text-gray-500">{professional.role}</div>
+                                                        {patient.statut === 'bloque' ? (
+                                                            <>
+                                                                <button 
+                                                                    className="bg-green-100 hover:bg-green-200 text-green-800 px-3 py-2 rounded-md text-sm font-medium transition-colors"
+                                                                    title="Activer le compte"
+                                                                    onClick={() => handleActivatePatient(patient.id)}
+                                                                >
+                                                                    <i className="fas fa-check mr-1"></i>
+                                                                    Activer
+                                                                </button>
+                                                                <button 
+                                                                    className="bg-orange-100 hover:bg-orange-200 text-orange-800 px-3 py-2 rounded-md text-sm font-medium transition-colors"
+                                                                    title="Débloquer le compte"
+                                                                    onClick={() => handleTogglePatientStatus(patient.id, patient.statut)}
+                                                                >
+                                                                    <i className="fas fa-unlock mr-1"></i>
+                                                                    Débloquer
+                                                                </button>
+                                                            </>
+                                                        ) : (
+                                                            <button 
+                                                                className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                                                                    patient.statut === 'bloque' 
+                                                                        ? 'bg-green-100 hover:bg-green-200 text-green-800' 
+                                                                        : 'bg-orange-100 hover:bg-orange-200 text-orange-800'
+                                                                }`}
+                                                                title={patient.statut === 'bloque' ? 'Débloquer le compte' : 'Bloquer le compte'}
+                                                                onClick={() => handleTogglePatientStatus(patient.id, patient.statut || 'actif')}
+                                                            >
+                                                                <i className={`mr-1 ${patient.statut === 'bloque' ? 'fas fa-unlock' : 'fas fa-ban'}`}></i>
+                                                                {patient.statut === 'bloque' ? 'Débloquer' : 'Bloquer'}
+                                                            </button>
                                                         )}
-                                                        {professional.numero_adeli && (
-                                                            <div className="text-gray-500">ADELI: {professional.numero_adeli}</div>
-                                                        )}
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
-                                                    <div className="flex items-center justify-center space-x-2">
-                                                        <button 
-                                                            className="bg-blue-100 hover:bg-blue-200 text-blue-800 px-3 py-2 rounded-md text-sm font-medium transition-colors" 
-                                                            title="Modifier"
-                                                            onClick={() => openEditProfessionalModal(professional)}
-                                                        >
-                                                            <i className="fas fa-edit mr-1"></i>
-                                                            Modifier
-                                                        </button>
-                                                        <button 
-                                                            className="bg-red-100 hover:bg-red-200 text-red-800 px-3 py-2 rounded-md text-sm font-medium transition-colors" 
-                                                            title="Supprimer"
-                                                            onClick={() => handleDeleteProfessional(professional.id)}
-                                                        >
-                                                            <i className="fas fa-trash mr-1"></i>
-                                                            Supprimer
-                                                        </button>
-                                                        <button 
-                                                            className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                                                                professional.statut === 'bloque' 
-                                                                    ? 'bg-green-100 hover:bg-green-200 text-green-800' 
-                                                                    : 'bg-orange-100 hover:bg-orange-200 text-orange-800'
-                                                            }`}
-                                                            title={professional.statut === 'bloque' ? 'Débloquer le compte' : 'Bloquer le compte'}
-                                                            onClick={() => handleToggleProfessionalStatus(professional.id, professional.statut || 'actif')}
-                                                        >
-                                                            <i className={`mr-1 ${professional.statut === 'bloque' ? 'fas fa-unlock' : 'fas fa-ban'}`}></i>
-                                                            {professional.statut === 'bloque' ? 'Débloquer' : 'Bloquer'}
-                                                        </button>
                                                         <button 
                                                             className="bg-green-100 hover:bg-green-200 text-green-800 px-3 py-2 rounded-md text-sm font-medium transition-colors" 
                                                             title="Voir le planning"
