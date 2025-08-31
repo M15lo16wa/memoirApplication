@@ -9,6 +9,7 @@ import { FaComments, FaCalendarAlt, FaUserInjured, FaChartBar, FaSearch, FaSpinn
 import { MessagingButton, MessagingWidget, ChatMessage } from "../messaging";
 import signalingService from "../services/signalingService";
 import { getPatientsByMedecin } from "../services/api/patientApi";
+import { getRendezVousByMedecin } from "../services/api/rendezVous";
 
 function Medecin() {
     const [activeSection, setActiveSection] = useState('dashboard');
@@ -18,7 +19,7 @@ function Medecin() {
     const [remoteStream, setRemoteStream] = useState(null);
     const [dashboardStats, setDashboardStats] = useState({
         patientsAujourdhui: 0,
-        rdvRestants: 0,
+        rendezVous: 0,
         messagesPatients: 0
     });
     const [recentMessages, setRecentMessages] = useState([]);
@@ -72,7 +73,11 @@ function Medecin() {
 
     // Charger les messages récents depuis le service de messagerie
     useEffect(() => {
+        console.log('🔍 [useEffect] Déclenchement - userId:', userId, 'role:', role, 'jwtToken:', jwtToken ? 'Présent' : 'Absent');
+        
         if (userId && role && jwtToken) {
+            console.log('✅ [useEffect] Conditions remplies, chargement des données...');
+            
             const loadRecentMessages = async () => {
                 try {
                     setLoading(true);
@@ -92,8 +97,71 @@ function Medecin() {
             };
             
             loadRecentMessages();
+            console.log('🔄 [useEffect] Appel de loadDashboardStats...');
+            loadDashboardStats(); // Charger aussi les statistiques du tableau de bord
+        } else {
+            console.log('❌ [useEffect] Conditions non remplies, pas de chargement');
         }
     }, [userId, role, jwtToken]);
+
+    // Surveiller les changements du state dashboardStats
+    useEffect(() => {
+        console.log('🔄 [useEffect - dashboardStats] State mis à jour:', dashboardStats);
+    }, [dashboardStats]);
+
+    // Charger les statistiques du tableau de bord
+    const loadDashboardStats = async () => {
+        try {
+            if (!userId) {
+                console.error('❌ ID utilisateur non disponible pour charger les statistiques');
+                return;
+            }
+            
+            console.log('🔍 Chargement des statistiques pour le médecin:', userId);
+            
+            // Charger le nombre de rendez-vous
+            const rendezVousData = await getRendezVousByMedecin(userId);
+            console.log('🔍 [loadDashboardStats] Données brutes des rendez-vous:', rendezVousData);
+            console.log('🔍 [loadDashboardStats] Type des données:', typeof rendezVousData);
+            console.log('🔍 [loadDashboardStats] Clés des données:', Object.keys(rendezVousData || {}));
+            
+            let rendezVousCount = 0;
+            
+            if (rendezVousData && Array.isArray(rendezVousData)) {
+                rendezVousCount = rendezVousData.length;
+                console.log('🔍 [loadDashboardStats] Données directes (array):', rendezVousData);
+            } else if (rendezVousData && rendezVousData.data && Array.isArray(rendezVousData.data)) {
+                rendezVousCount = rendezVousData.data.length;
+                console.log('🔍 [loadDashboardStats] Données dans .data (array):', rendezVousData.data);
+            } else if (rendezVousData && rendezVousData.data && rendezVousData.data.rendezVous && Array.isArray(rendezVousData.data.rendezVous)) {
+                rendezVousCount = rendezVousData.data.rendezVous.length;
+                console.log('🔍 [loadDashboardStats] Données dans .data.rendezVous (array):', rendezVousData.data.rendezVous);
+            } else if (rendezVousData && rendezVousData.rendezVous && Array.isArray(rendezVousData.rendezVous)) {
+                rendezVousCount = rendezVousData.rendezVous.length;
+                console.log('🔍 [loadDashboardStats] Données dans .rendezVous (array):', rendezVousData.rendezVous);
+            } else if (rendezVousData && rendezVousData.appointments && Array.isArray(rendezVousData.appointments)) {
+                rendezVousCount = rendezVousData.appointments.length;
+                console.log('🔍 [loadDashboardStats] Données dans .appointments (array):', rendezVousData.appointments);
+            } else {
+                console.warn('⚠️ [loadDashboardStats] Format de données non reconnu:', rendezVousData);
+                console.log('🔍 [loadDashboardStats] Structure complète:', JSON.stringify(rendezVousData, null, 2));
+            }
+            
+            console.log('✅ [loadDashboardStats] Nombre de rendez-vous final:', rendezVousCount);
+            
+            setDashboardStats(prev => {
+                const newStats = {
+                    ...prev,
+                    rendezVous: rendezVousCount
+                };
+                console.log('🔄 [loadDashboardStats] Mise à jour des stats:', newStats);
+                return newStats;
+            });
+            
+        } catch (error) {
+            console.error('❌ Erreur lors du chargement des statistiques:', error);
+        }
+    };
 
     // Charger la liste des patients depuis le serveur
     const loadPatients = async () => {
@@ -371,29 +439,20 @@ function Medecin() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Section principale du tableau de bord */}
                 <div className="lg:col-span-2 space-y-6">
-                    <h2 className="text-xl font-semibold">Tableau de Bord</h2>
-                    {/* ... Vos cartes de statistiques ... */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div className="bg-white rounded-lg shadow-md p-6">
-                            <div className="flex items-center">
-                                <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                                    <FaUserInjured className="w-6 h-6 text-blue-600" />
-                                </div>
-                                <div className="ml-4">
-                                    {loading ? <FaSpinner className="animate-spin" /> : <p className="text-2xl font-semibold">{dashboardStats.patientsAujourdhui}</p>}
-                                    <p className="text-gray-600">Patients</p>
-                                </div>
-                            </div>
-                        </div>
+                                         <h2 className="text-xl font-semibold">Tableau de Bord</h2>
+                     
+
+                     
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="bg-white rounded-lg shadow-md p-6">
                             <div className="flex items-center">
                                 <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
                                     <FaCalendarAlt className="w-6 h-6 text-green-600" />
                                 </div>
-                                <div className="ml-4">
-                                    {loading ? <FaSpinner className="animate-spin" /> : <p className="text-2xl font-semibold">{dashboardStats.rdvRestants}</p>}
-                                    <p className="text-gray-600">RDV restants</p>
-                                </div>
+                                                                 <div className="ml-4">
+                                     {loading ? <FaSpinner className="animate-spin" /> : <p className="text-2xl font-semibold">{dashboardStats.rendezVous}</p>}
+                                     <p className="text-gray-600">Rendez-vous</p>
+                                 </div>
                             </div>
                         </div>
                         <div className="bg-white rounded-lg shadow-md p-6">

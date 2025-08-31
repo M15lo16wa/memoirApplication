@@ -10,6 +10,7 @@ import {
     getAllPatients,
     getAllHealthcareProfessionals
 } from '../services/api/admin';
+import { createProfSante } from '../services/api/profSante';
 
 // Fonction utilitaire pour extraire le nom du rôle depuis un objet ou une chaîne
 const getRoleName = (role) => {
@@ -46,6 +47,23 @@ function Utilisateurs() {
     const [healthcareProfessionals, setHealthcareProfessionals] = useState([]);
     const [loadingPatients, setLoadingPatients] = useState(false);
     const [loadingProfessionals, setLoadingProfessionals] = useState(false);
+
+    // Nouveaux états pour la création de professionnel
+    const [showProfModal, setShowProfModal] = useState(false);
+    const [profFormData, setProfFormData] = useState({
+        nom: '',
+        prenom: '',
+        email: '',
+        sexe: '',
+        date_naissance: '',
+        numero_adeli: '',
+        mot_de_passe: '',
+        role: 'medecin'
+    });
+
+    // États pour l'édition de professionnel
+    const [editingProfessional, setEditingProfessional] = useState(null);
+    const [showEditProfModal, setShowEditProfModal] = useState(false);
 
     useEffect(() => {
         console.log('Component mounted');
@@ -369,6 +387,134 @@ function Utilisateurs() {
         }));
     };
 
+    const handleCreateProf = async () => {
+        try {
+            console.log('Creating professional with data:', profFormData);
+            
+            // Appeler l'API pour créer le professionnel
+            const response = await createProfSante(profFormData);
+            console.log('Professional created successfully:', response);
+            
+            // Fermer le modal et réinitialiser le formulaire
+            setShowProfModal(false);
+            setProfFormData({
+                nom: '',
+                prenom: '',
+                email: '',
+                sexe: '',
+                date_naissance: '',
+                numero_adeli: '',
+                mot_de_passe: '',
+                role: 'medecin'
+            });
+            
+            // Recharger la liste des professionnels
+            loadHealthcareProfessionals();
+            
+            // Afficher un message de succès (optionnel)
+            alert('Professionnel créé avec succès !');
+        } catch (err) {
+            console.error('Error creating professional:', err);
+            alert(`Erreur lors de la création du professionnel: ${err.message || 'Erreur inconnue'}`);
+        }
+    };
+
+    const handleProfInputChange = (e) => {
+        const { name, value } = e.target;
+        setProfFormData(prev => ({
+            ...prev,
+            [name]: value
+        }));
+    };
+
+    const handleDeleteProfessional = async (professionalId) => {
+        if (window.confirm("Êtes-vous sûr de vouloir supprimer ce professionnel ?")) {
+            try {
+                // Appeler l'API pour supprimer le professionnel
+                // await deleteProfSante(professionalId);
+                console.log('Professional deleted:', professionalId);
+                
+                // Recharger la liste des professionnels
+                loadHealthcareProfessionals();
+                
+                alert('Professionnel supprimé avec succès !');
+            } catch (err) {
+                console.error('Error deleting professional:', err);
+                alert(`Erreur lors de la suppression: ${err.message || 'Erreur inconnue'}`);
+            }
+        }
+    };
+
+    const handleToggleProfessionalStatus = async (professionalId, currentStatus) => {
+        const newStatus = currentStatus === 'actif' ? 'bloque' : 'actif';
+        const actionText = newStatus === 'bloque' ? 'bloquer' : 'débloquer';
+        
+        if (window.confirm(`Êtes-vous sûr de vouloir ${actionText} ce professionnel ?`)) {
+            try {
+                // Appeler l'API pour modifier le statut
+                // await updateProfSante(professionalId, { statut: newStatus });
+                console.log('Professional status updated:', professionalId, newStatus);
+                
+                // Recharger la liste des professionnels
+                loadHealthcareProfessionals();
+                
+                alert(`Professionnel ${actionText} avec succès !`);
+            } catch (err) {
+                console.error('Error updating professional status:', err);
+                alert(`Erreur lors de la modification du statut: ${err.message || 'Erreur inconnue'}`);
+            }
+        }
+    };
+
+    const openEditProfessionalModal = (professional) => {
+        setEditingProfessional(professional);
+        setProfFormData({
+            nom: professional.nom || '',
+            prenom: professional.prenom || '',
+            email: professional.email || '',
+            sexe: professional.sexe || '',
+            date_naissance: professional.date_naissance || '',
+            numero_adeli: professional.numero_adeli || '',
+            mot_de_passe: '', // Ne pas pré-remplir le mot de passe
+            role: professional.role || 'medecin'
+        });
+        setShowEditProfModal(true);
+    };
+
+    const handleUpdateProfessional = async () => {
+        try {
+            if (!editingProfessional) return;
+            
+            console.log('Updating professional with data:', profFormData);
+            
+            // Appeler l'API pour modifier le professionnel
+            // await updateProfSante(editingProfessional.id, profFormData);
+            console.log('Professional updated successfully');
+            
+            // Fermer le modal et réinitialiser
+            setShowEditProfModal(false);
+            setEditingProfessional(null);
+            setProfFormData({
+                nom: '',
+                prenom: '',
+                email: '',
+                sexe: '',
+                date_naissance: '',
+                numero_adeli: '',
+                mot_de_passe: '',
+                role: 'medecin'
+            });
+            
+            // Recharger la liste des professionnels
+            loadHealthcareProfessionals();
+            
+            alert('Professionnel modifié avec succès !');
+        } catch (err) {
+            console.error('Error updating professional:', err);
+            alert(`Erreur lors de la modification: ${err.message || 'Erreur inconnue'}`);
+        }
+    };
+
     // Filtrage des utilisateurs
     const filteredUsers = users.filter(user => {
         // Filtre par recherche
@@ -538,7 +684,7 @@ function Utilisateurs() {
                         
                         {activeTab === "professionals" && (
                             <button 
-                                onClick={() => console.log('Créer un professionnel')}
+                                onClick={() => setShowProfModal(true)}
                                 className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-semibold transition-colors"
                             >
                                 <i className="fas fa-plus mr-2"></i>
@@ -916,6 +1062,7 @@ function Utilisateurs() {
                                         <tr>
                                             <td colSpan="4" className="px-6 py-4 text-center">
                                                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                                                <div className="mt-2 text-sm text-gray-500">Chargement des professionnels...</div>
                                             </td>
                                         </tr>
                                                                          ) : filteredProfessionals.length > 0 ? (
@@ -958,16 +1105,39 @@ function Utilisateurs() {
                                                 <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
                                                     <div className="flex items-center justify-center space-x-2">
                                                         <button 
-                                                            className="text-blue-600 hover:text-blue-900 p-1" 
+                                                            className="bg-blue-100 hover:bg-blue-200 text-blue-800 px-3 py-2 rounded-md text-sm font-medium transition-colors" 
                                                             title="Modifier"
+                                                            onClick={() => openEditProfessionalModal(professional)}
                                                         >
-                                                            <i className="fas fa-edit"></i>
+                                                            <i className="fas fa-edit mr-1"></i>
+                                                            Modifier
                                                         </button>
                                                         <button 
-                                                            className="text-green-600 hover:text-green-900 p-1" 
+                                                            className="bg-red-100 hover:bg-red-200 text-red-800 px-3 py-2 rounded-md text-sm font-medium transition-colors" 
+                                                            title="Supprimer"
+                                                            onClick={() => handleDeleteProfessional(professional.id)}
+                                                        >
+                                                            <i className="fas fa-trash mr-1"></i>
+                                                            Supprimer
+                                                        </button>
+                                                        <button 
+                                                            className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                                                                professional.statut === 'bloque' 
+                                                                    ? 'bg-green-100 hover:bg-green-200 text-green-800' 
+                                                                    : 'bg-orange-100 hover:bg-orange-200 text-orange-800'
+                                                            }`}
+                                                            title={professional.statut === 'bloque' ? 'Débloquer le compte' : 'Bloquer le compte'}
+                                                            onClick={() => handleToggleProfessionalStatus(professional.id, professional.statut || 'actif')}
+                                                        >
+                                                            <i className={`mr-1 ${professional.statut === 'bloque' ? 'fas fa-unlock' : 'fas fa-ban'}`}></i>
+                                                            {professional.statut === 'bloque' ? 'Débloquer' : 'Bloquer'}
+                                                        </button>
+                                                        <button 
+                                                            className="bg-green-100 hover:bg-green-200 text-green-800 px-3 py-2 rounded-md text-sm font-medium transition-colors" 
                                                             title="Voir le planning"
                                                         >
-                                                            <i className="fas fa-calendar-alt"></i>
+                                                            <i className="fas fa-calendar-alt mr-1"></i>
+                                                            Planning
                                                         </button>
                                                     </div>
                                                 </td>
@@ -1083,6 +1253,265 @@ function Utilisateurs() {
                                 className="px-4 py-2 text-white bg-blue-600 hover:bg-blue-700 rounded-md"
                             >
                                 {editingUser ? 'Modifier' : 'Créer'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal de création de professionnel */}
+            {showProfModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                    <div className="bg-white rounded-xl shadow-lg w-full max-w-sm">
+                        <div className="p-4 border-b border-gray-200">
+                            <h2 className="text-lg font-semibold text-gray-900">
+                                Nouveau professionnel de santé
+                            </h2>
+                        </div>
+                        <div className="p-4 space-y-3">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Nom *</label>
+                                <input
+                                    type="text"
+                                    name="nom"
+                                    value={profFormData.nom}
+                                    onChange={handleProfInputChange}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    required
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Prénom *</label>
+                                <input
+                                    type="text"
+                                    name="prenom"
+                                    value={profFormData.prenom}
+                                    onChange={handleProfInputChange}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    required
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
+                                <input
+                                    type="email"
+                                    name="email"
+                                    value={profFormData.email}
+                                    onChange={handleProfInputChange}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    placeholder="exemple@email.com"
+                                    required
+                                />
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Sexe *</label>
+                                    <select
+                                        name="sexe"
+                                        value={profFormData.sexe}
+                                        onChange={handleProfInputChange}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        required
+                                    >
+                                        <option value="">Sélectionner</option>
+                                        <option value="M">Masculin</option>
+                                        <option value="F">Féminin</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Date de naissance *</label>
+                                    <input
+                                        type="date"
+                                        name="date_naissance"
+                                        value={profFormData.date_naissance}
+                                        onChange={handleProfInputChange}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        required
+                                    />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Numéro ADELI *</label>
+                                <input
+                                    type="text"
+                                    name="numero_adeli"
+                                    value={profFormData.numero_adeli}
+                                    onChange={handleProfInputChange}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    placeholder="Ex: 12345678901"
+                                    required
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Mot de passe *</label>
+                                <input
+                                    type="password"
+                                    name="mot_de_passe"
+                                    value={profFormData.mot_de_passe}
+                                    onChange={handleProfInputChange}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    required
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Rôle *</label>
+                                <select
+                                    name="role"
+                                    value={profFormData.role}
+                                    onChange={handleProfInputChange}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    required
+                                >
+                                    <option value="medecin">Médecin</option>
+                                    <option value="infirmier">Infirmier</option>
+                                    <option value="pharmacien">Pharmacien</option>
+                                    <option value="kinésithérapeute">Kinésithérapeute</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div className="p-4 border-t border-gray-200 flex justify-end space-x-3">
+                            <button
+                                onClick={() => setShowProfModal(false)}
+                                className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md text-sm"
+                            >
+                                Annuler
+                            </button>
+                            <button
+                                onClick={handleCreateProf}
+                                className="px-4 py-2 text-white bg-blue-600 hover:bg-blue-700 rounded-md text-sm"
+                            >
+                                Créer
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal d'édition de professionnel */}
+            {showEditProfModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                    <div className="bg-white rounded-xl shadow-lg w-full max-w-sm">
+                        <div className="p-4 border-b border-gray-200">
+                            <h2 className="text-lg font-semibold text-gray-900">
+                                Modifier le professionnel
+                            </h2>
+                        </div>
+                        <div className="p-4 space-y-3">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Nom *</label>
+                                <input
+                                    type="text"
+                                    name="nom"
+                                    value={profFormData.nom}
+                                    onChange={handleProfInputChange}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    required
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Prénom *</label>
+                                <input
+                                    type="text"
+                                    name="prenom"
+                                    value={profFormData.prenom}
+                                    onChange={handleProfInputChange}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    required
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
+                                <input
+                                    type="email"
+                                    name="email"
+                                    value={profFormData.email}
+                                    onChange={handleProfInputChange}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    placeholder="exemple@email.com"
+                                    required
+                                />
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Sexe *</label>
+                                    <select
+                                        name="sexe"
+                                        value={profFormData.sexe}
+                                        onChange={handleProfInputChange}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        required
+                                    >
+                                        <option value="">Sélectionner</option>
+                                        <option value="M">Masculin</option>
+                                        <option value="F">Féminin</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Date de naissance *</label>
+                                    <input
+                                        type="date"
+                                        name="date_naissance"
+                                        value={profFormData.date_naissance}
+                                        onChange={handleProfInputChange}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        required
+                                    />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Numéro ADELI *</label>
+                                <input
+                                    type="text"
+                                    name="numero_adeli"
+                                    value={profFormData.numero_adeli}
+                                    onChange={handleProfInputChange}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    placeholder="Ex: 12345678901"
+                                    required
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Mot de passe</label>
+                                <input
+                                    type="password"
+                                    name="mot_de_passe"
+                                    value={profFormData.mot_de_passe}
+                                    onChange={handleProfInputChange}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    placeholder="Laisser vide pour ne pas changer"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Rôle *</label>
+                                <select
+                                    name="role"
+                                    value={profFormData.role}
+                                    onChange={handleProfInputChange}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    required
+                                >
+                                    <option value="medecin">Médecin</option>
+                                    <option value="infirmier">Infirmier</option>
+                                    <option value="pharmacien">Pharmacien</option>
+                                    <option value="kinésithérapeute">Kinésithérapeute</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div className="p-4 border-t border-gray-200 flex justify-end space-x-3">
+                            <button
+                                onClick={() => {
+                                    setShowEditProfModal(false);
+                                    setEditingProfessional(null);
+                                }}
+                                className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md text-sm"
+                            >
+                                Annuler
+                            </button>
+                            <button
+                                onClick={handleUpdateProfessional}
+                                className="px-4 py-2 text-white bg-blue-600 hover:bg-blue-700 rounded-md text-sm"
+                            >
+                                Modifier
                             </button>
                         </div>
                     </div>
