@@ -476,8 +476,16 @@ prescription.redacteur.id_professionnel || prescription.redacteur.id_medecin)) {
           
           // Informations médicales (gérer les différents noms de propriétés)
           resume_medical: dossierInfo.resume || dossierInfo.resume_medical || 'Aucun résumé disponible',
-          antecedents_medicaux: dossierInfo.antecedent_medicaux || dossierInfo.antecedents_medicaux || dossierInfo.antecedents || 'Aucun antécédent connu',
-          allergies: dossierInfo.allergies || 'Aucune allergie connue',
+          antecedents_medicaux: Array.isArray(dossierInfo.antecedent_medicaux) 
+            ? dossierInfo.antecedent_medicaux.join(', ') 
+            : dossierInfo.antecedent_medicaux || dossierInfo.antecedents_medicaux || dossierInfo.antecedents 
+              ? String(dossierInfo.antecedent_medicaux || dossierInfo.antecedents_medicaux || dossierInfo.antecedents)
+              : 'Aucun antécédent connu',
+          allergies: Array.isArray(dossierInfo.allergies) 
+            ? dossierInfo.allergies.join(', ') 
+            : dossierInfo.allergies 
+              ? String(dossierInfo.allergies)
+              : 'Aucune allergie connue',
           traitement: dossierInfo.traitements_chroniques || dossierInfo.traitement || dossierInfo.traitements || 'Aucun traitement en cours',
           
           // Signes vitaux

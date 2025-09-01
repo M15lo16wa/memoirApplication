@@ -62,8 +62,11 @@ function DossierPatient() {
     notifications: false
   });
 
-  // Formulaires avec useRef pour éviter les re-renders
-  const editDossierFormRef = useRef({
+  // État pour forcer la re-render du formulaire de création de dossier
+  const [formKey, setFormKey] = useState(0);
+  
+  // État local pour le formulaire d'édition (remplace useRef pour permettre la re-render)
+  const [editFormData, setEditFormData] = useState({
     statut: '',
     type_dossier: '',
     service_id: '',
@@ -160,9 +163,6 @@ function DossierPatient() {
 
   // État pour forcer la re-render quand on décoche un patient
   const [patientSelectionKey, setPatientSelectionKey] = useState(0);
-  
-  // État pour forcer la re-render du formulaire de création de dossier
-  const [formKey, setFormKey] = useState(0);
   
   // États locaux pour le formulaire de création de dossier
   const [formData, setFormData] = useState({
@@ -268,12 +268,16 @@ function DossierPatient() {
   };
 
   const handleEditDossier = (dossier) => {
+    console.log('🔍 handleEditDossier - Ouverture du modal d\'édition');
+    console.log('🔍 handleEditDossier - Dossier sélectionné:', dossier);
+    console.log('🔍 handleEditDossier - uiState.loading:', uiState.loading);
+    
     selectedDossierRef.current = dossier;
     
     // Pre-fill the form with existing data
-    editDossierFormRef.current = {
-      statut: dossier.statut || '',
-      type_dossier: dossier.type_dossier || '',
+    setEditFormData({
+      statut: dossier.statut || 'actif',
+      type_dossier: dossier.type_dossier || 'principal',
       service_id: dossier.service_id || '',
       medecin_referent_id: dossier.medecin_referent_id || '',
       resume: dossier.resume || '',
@@ -291,13 +295,29 @@ function DossierPatient() {
       observations: dossier.observations || '',
       date_fermeture: dossier.date_fermeture || '',
       motif_fermeture: dossier.motif_fermeture || ''
-    };
+    });
+    
+    console.log('🔍 handleEditDossier - Formulaire pré-rempli:', editFormData);
+    console.log('🔍 handleEditDossier - Vérification des valeurs du formulaire:', {
+      statut: editFormData.statut,
+      type_dossier: editFormData.type_dossier,
+      resume: editFormData.resume,
+      antecedent_medicaux: editFormData.antecedent_medicaux,
+      allergies: editFormData.allergies
+    });
     updateModalState({ showEditDossierModal: true });
   };
 
   const handleEditDossierInputChange = useCallback((e) => {
     const { name, value } = e.target;
-    editDossierFormRef.current = { ...editDossierFormRef.current, [name]: value };
+    console.log('🔍 handleEditDossierInputChange - Changement détecté:', { name, value });
+    console.log('🔍 handleEditDossierInputChange - uiState.loading:', uiState.loading);
+    
+    setEditFormData(prev => {
+      const newData = { ...prev, [name]: value };
+      console.log('🔍 handleEditDossierInputChange - Nouvel état du formulaire:', newData);
+      return newData;
+    });
   }, []);
 
   const handleUpdateDossier = useCallback(async (e) => {
@@ -309,8 +329,8 @@ function DossierPatient() {
       
       // Convert date to ISO format if provided
       const formData = {
-        ...editDossierFormRef.current,
-        date_fermeture: editDossierFormRef.current.date_fermeture ? new Date(editDossierFormRef.current.date_fermeture).toISOString() : null
+        ...editFormData,
+        date_fermeture: editFormData.date_fermeture ? new Date(editFormData.date_fermeture).toISOString() : null
       };
       
       await updateDossierPatient(dossierId, formData);
@@ -325,12 +345,11 @@ function DossierPatient() {
     } finally {
       updateUIState({ loading: false });
     }
-  }, []);
+  }, [editFormData]);
 
   const closeEditDossierModal = useCallback(() => {
     updateModalState({ showEditDossierModal: false });
-    selectedDossierRef.current = null;
-    editDossierFormRef.current = {
+    setEditFormData({
       statut: '',
       type_dossier: '',
       service_id: '',
@@ -350,7 +369,7 @@ function DossierPatient() {
       observations: '',
       date_fermeture: '',
       motif_fermeture: ''
-    };
+    });
   }, []);
 
   const handleCloseDossier = async (dossier) => {
@@ -632,47 +651,73 @@ function DossierPatient() {
   };
 
   const loadDossiersPatients = async () => {
+    console.log('🔍 loadDossiersPatients - Début de la fonction');
     updateLoadingState({ dossiers: true });
     try {
+      console.log('🔍 loadDossiersPatients - Appel de getAllDossiersMedical()...');
       const dossiersData = await getAllDossiersMedical();
+      console.log('🔍 loadDossiersPatients - Réponse de getAllDossiersMedical():', dossiersData);
+      console.log('🔍 loadDossiersPatients - Type de dossiersData:', typeof dossiersData);
+      console.log('🔍 loadDossiersPatients - Est un tableau:', Array.isArray(dossiersData));
       
       let dossiers = [];
       if (dossiersData && dossiersData.status === 'success' && dossiersData.data && Array.isArray(dossiersData.data)) {
+        console.log('🔍 loadDossiersPatients - Format success avec data array');
         dossiers = dossiersData.data;
       } else if (Array.isArray(dossiersData)) {
+        console.log('🔍 loadDossiersPatients - Format array direct');
         dossiers = dossiersData;
       } else {
+        console.log('🔍 loadDossiersPatients - Format non reconnu, retour tableau vide');
+        console.log('🔍 loadDossiersPatients - Structure de dossiersData:', dossiersData);
         updateDataState({ dossiersPatients: [] });
         return;
       }
 
+      console.log('🔍 loadDossiersPatients - Dossiers traités:', dossiers);
+      console.log('🔍 loadDossiersPatients - Nombre de dossiers:', dossiers.length);
+      
       updateDataState({ dossiersPatients: dossiers });
+      console.log('🔍 loadDossiersPatients - État dataState mis à jour avec dossiersPatients:', dossiers);
     } catch (error) {
-      console.error('Erreur lors du chargement des dossiers dataState.patients:', error);
+      console.error('🔍 loadDossiersPatients - Erreur lors du chargement des dossiers:', error);
       updateDataState({ dossiersPatients: [] });
     } finally {
       updateLoadingState({ dossiers: false });
+      console.log('🔍 loadDossiersPatients - Fin de la fonction, loading mis à false');
     }
   };
 
   // Fonction pour charger les patients
   const loadPatients = useCallback(async () => {
+    console.log('🔍 loadPatients - Début de la fonction');
     updateUIState({ loading: true });
     try {
+      console.log('🔍 loadPatients - Appel de getPatients()...');
       const patientsData = await getPatients();
+      console.log('🔍 loadPatients - Réponse de getPatients():', patientsData);
+      console.log('🔍 loadPatients - Type de patientsData:', typeof patientsData);
+      console.log('🔍 loadPatients - Est un tableau:', Array.isArray(patientsData));
+      console.log('🔍 loadPatients - Longueur:', patientsData ? patientsData.length : 'null/undefined');
 
       if (!patientsData) {
+        console.log('🔍 loadPatients - patientsData est null/undefined, retour tableau vide');
         updateDataState({ patients: [] });
         return [];
       }
 
       if (!Array.isArray(patientsData)) {
+        console.log('🔍 loadPatients - patientsData n\'est pas un tableau, retour tableau vide');
+        console.log('🔍 loadPatients - Structure de patientsData:', patientsData);
         updateDataState({ patients: [] });
         return [];
       }
       
+      console.log('🔍 loadPatients - patientsData est un tableau valide, traitement...');
+      
       // Map the patients to the expected format
       const formattedPatients = patientsData.map(patient => {
+        console.log('🔍 loadPatients - Traitement du patient:', patient);
         const patientId = patient.id_patient || patient.id || patient.patient_id || patient._id || patient.numero_patient || patient.numero_dossier || 'unknown';
         
         return {
@@ -696,12 +741,17 @@ function DossierPatient() {
         };
       });
 
+      console.log('🔍 loadPatients - Patients formatés:', formattedPatients);
+      console.log('🔍 loadPatients - Nombre de patients formatés:', formattedPatients.length);
+      
       updateDataState({ patients: formattedPatients });
+      console.log('🔍 loadPatients - État dataState mis à jour avec patients:', formattedPatients);
       
       // Initialiser automatiquement le premier patient comme sélection par défaut
       // seulement si aucun patient n'est déjà sélectionné
       if (formattedPatients.length > 0 && !selectedPatientForPrescriptionRef.current) {
         selectedPatientForPrescriptionRef.current = formattedPatients[0];
+        console.log('🔍 loadPatients - Premier patient sélectionné par défaut:', formattedPatients[0]);
       }
       
       return formattedPatients;
@@ -732,24 +782,37 @@ function DossierPatient() {
       return [];
     } finally {
       updateUIState({ loading: false });
+      console.log('🔍 loadPatients - Fin de la fonction, loading mis à false');
     }
   }, [navigate]); // Suppression des dépendances loadPatients et loadServices
 
   // Vérification de l'authentification
   useEffect(() => {
     const checkAuthentication = async () => {
+      console.log('🔍 checkAuthentication - Début de la vérification');
       const isAuth = isAuthenticated();
       const isMedecin = isMedecinAuthenticated();
       const isPatient = isPatientAuthenticated();
       
+      console.log('🔍 checkAuthentication - Résultats de vérification:', {
+        isAuth,
+        isMedecin,
+        isPatient
+      });
+      
       if (isAuth) {
+        console.log('🔍 checkAuthentication - Utilisateur authentifié, chargement des données...');
         // Mettre à jour l'état d'authentification
         updateAuthState({ isAuthenticated: true, loading: false });
         
         // Charger les données directement
+        console.log('🔍 checkAuthentication - Appel de loadPatients()...');
         await loadPatients();
+        console.log('🔍 checkAuthentication - Appel de loadServices()...');
         await loadServices();
+        console.log('🔍 checkAuthentication - Données chargées avec succès');
       } else {
+        console.log('🔍 checkAuthentication - Utilisateur non authentifié, redirection...');
         updateAuthState({ isAuthenticated: false, loading: false });
         // Rediriger vers la page de connexion
         navigate("/connexion", { 
@@ -761,6 +824,7 @@ function DossierPatient() {
       }
     };
 
+    console.log('🔍 checkAuthentication - useEffect déclenché');
     checkAuthentication();
   }, [navigate]);
 
@@ -803,9 +867,99 @@ function DossierPatient() {
 
 
 
+  // Fonction utilitaire pour afficher en toute sécurité les données
+  const safeDisplay = (value, fallback = 'N/A') => {
+    if (value === null || value === undefined) return fallback;
+    if (typeof value === 'string') return value;
+    if (typeof value === 'number') return value.toString();
+    if (Array.isArray(value)) {
+      if (value.length === 0) return fallback;
+      return value.join(', ');
+    }
+    if (typeof value === 'object') {
+      // Si c'est un objet avec des clés, essayer d'extraire des informations utiles
+      const keys = Object.keys(value);
+      if (keys.length === 0) return fallback;
+      // Essayer de trouver des valeurs string ou number dans l'objet
+      const values = Object.values(value).filter(v => 
+        typeof v === 'string' || typeof v === 'number'
+      );
+      if (values.length > 0) return values.join(', ');
+      return fallback;
+    }
+    return fallback;
+  };
+
+  // Fonction pour normaliser les données patient
+  const normalizePatientData = (patient) => {
+    if (!patient) return null;
+    console.log('🔍 normalizePatientData - Patient reçu:', patient);
+    console.log('🔍 normalizePatientData - Allergies:', patient.allergies);
+    console.log('🔍 normalizePatientData - Type allergies:', typeof patient.allergies);
+    console.log('🔍 normalizePatientData - Est tableau allergies:', Array.isArray(patient.allergies));
+
+    const extractAllergies = (allergiesData) => {
+      if (!allergiesData) return [];
+      if (Array.isArray(allergiesData)) return allergiesData;
+      if (typeof allergiesData === 'string') {
+        // Si c'est une chaîne, essayer de la diviser par des virgules ou des points-virgules
+        return allergiesData.split(/[,;]/).map(item => item.trim()).filter(item => item);
+      }
+      if (typeof allergiesData === 'object') {
+        // Si c'est un objet, essayer d'extraire les valeurs
+        if (allergiesData.allergies && Array.isArray(allergiesData.allergies)) {
+          return allergiesData.allergies;
+        }
+        if (allergiesData.allergies && typeof allergiesData.allergies === 'string') {
+          return allergiesData.allergies.split(/[,;]/).map(item => item.trim()).filter(item => item);
+        }
+        // Essayer d'extraire toutes les valeurs de l'objet
+        return Object.values(allergiesData).filter(value => 
+          typeof value === 'string' && value.trim()
+        );
+      }
+      return [];
+    };
+
+    const extractPathologies = (pathologiesData) => {
+      if (!pathologiesData) return [];
+      if (Array.isArray(pathologiesData)) return pathologiesData;
+      if (typeof pathologiesData === 'string') {
+        return pathologiesData.split(/[,;]/).map(item => item.trim()).filter(item => item);
+      }
+      if (typeof pathologiesData === 'object') {
+        if (pathologiesData.pathologies && Array.isArray(pathologiesData.pathologies)) {
+          return pathologiesData.pathologies;
+        }
+        if (pathologiesData.pathologies && typeof pathologiesData.pathologies === 'string') {
+          return pathologiesData.pathologies.split(/[,;]/).map(item => item.trim()).filter(item => item);
+        }
+        return Object.values(pathologiesData).filter(value => 
+          typeof value === 'string' && value.trim()
+        );
+      }
+      return [];
+    };
+
+    const normalizedPatient = {
+      ...patient,
+      allergies: extractAllergies(patient.allergies),
+      pathologies: extractPathologies(patient.pathologies),
+      consultations: patient.consultations || [],
+      treatments: patient.treatments || [],
+      emergencyContacts: patient.emergencyContacts || []
+    };
+    
+    console.log('🔍 normalizePatientData - Patient normalisé:', normalizedPatient);
+    console.log('🔍 normalizePatientData - Allergies normalisées:', normalizedPatient.allergies);
+    console.log('🔍 normalizePatientData - Pathologies normalisées:', normalizedPatient.pathologies);
+    return normalizedPatient;
+  };
+
   // Gestion des modals
   const openPatientModal = async (patient) => {
-    modalPatientRef.current = patient;
+    const normalizedPatient = normalizePatientData(patient);
+    modalPatientRef.current = normalizedPatient;
     updateModalState({ showPatientModal: true });
   };
 
@@ -3165,6 +3319,8 @@ Dr. Dupont`
             </div>
             
             <form onSubmit={handleUpdateDossier} className="p-4 sm:p-6">
+
+              
               {/* Information Banner */}
               <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
                 <div className="flex items-start">
@@ -3186,7 +3342,7 @@ Dr. Dupont`
                     <label className="block text-sm font-medium text-gray-700 mb-1">Statut</label>
                     <select
                       name="statut"
-                      value={editDossierFormRef.current.statut}
+                      value={editFormData.statut}
                       onChange={handleEditDossierInputChange}
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       disabled={uiState.loading}
@@ -3202,7 +3358,7 @@ Dr. Dupont`
                     <label className="block text-sm font-medium text-gray-700 mb-1">Type de dossier</label>
                     <select
                       name="type_dossier"
-                      value={editDossierFormRef.current.type_dossier}
+                      value={editFormData.type_dossier}
                       onChange={handleEditDossierInputChange}
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       disabled={uiState.loading}
@@ -3220,7 +3376,7 @@ Dr. Dupont`
                     <label className="block text-sm font-medium text-gray-700 mb-1">Service</label>
                     <select
                       name="service_id"
-                      value={editDossierFormRef.current.service_id}
+                      value={editFormData.service_id}
                       onChange={handleEditDossierInputChange}
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       disabled={uiState.loading}
@@ -3245,15 +3401,16 @@ Dr. Dupont`
                 <h4 className="text-md font-semibold text-gray-800 mb-4 border-b pb-2">Résumé Médical</h4>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Résumé clinique</label>
-                  <textarea
-                    name="resume"
-                    value={editDossierFormRef.current.resume}
-                    onChange={handleEditDossierInputChange}
-                    className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    rows={4}
-                    placeholder="Résumé clinique du patient et de sa situation médicale"
-                    disabled={uiState.loading}
-                  />
+                                      <textarea
+                      name="resume"
+                      value={editFormData.resume || ''}
+                      onChange={handleEditDossierInputChange}
+                      className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      rows={4}
+                      placeholder="Résumé clinique du patient et de sa situation médicale"
+                      disabled={uiState.loading}
+                    />
+                    
                 </div>
               </div>
 
@@ -3265,7 +3422,7 @@ Dr. Dupont`
                     <label className="block text-sm font-medium text-gray-700 mb-1">Antécédents médicaux</label>
                     <textarea
                       name="antecedent_medicaux"
-                      value={editDossierFormRef.current.antecedent_medicaux}
+                      value={editFormData.antecedent_medicaux}
                       onChange={handleEditDossierInputChange}
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       rows={4}
@@ -3278,7 +3435,7 @@ Dr. Dupont`
                     <label className="block text-sm font-medium text-gray-700 mb-1">Allergies</label>
                     <textarea
                       name="allergies"
-                      value={editDossierFormRef.current.allergies}
+                      value={editFormData.allergies}
                       onChange={handleEditDossierInputChange}
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       rows={4}
@@ -3296,7 +3453,7 @@ Dr. Dupont`
                   <label className="block text-sm font-medium text-gray-700 mb-1">Traitements chroniques</label>
                   <textarea
                     name="traitements_chroniques"
-                    value={editDossierFormRef.current.traitements_chroniques}
+                    value={editFormData.traitements_chroniques}
                     onChange={handleEditDossierInputChange}
                     className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     rows={4}
@@ -3315,7 +3472,7 @@ Dr. Dupont`
                     <input
                       type="text"
                       name="heart_rate"
-                      value={editDossierFormRef.current.heart_rate}
+                      value={editFormData.heart_rate}
                       onChange={handleEditDossierInputChange}
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="ex: 72 bpm"
@@ -3328,7 +3485,7 @@ Dr. Dupont`
                     <input
                       type="text"
                       name="blood_pressure"
-                      value={editDossierFormRef.current.blood_pressure}
+                      value={editFormData.blood_pressure}
                       onChange={handleEditDossierInputChange}
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="ex: 120/80 mmHg"
@@ -3341,7 +3498,7 @@ Dr. Dupont`
                     <input
                       type="text"
                       name="temperature"
-                      value={editDossierFormRef.current.temperature}
+                      value={editFormData.temperature}
                       onChange={handleEditDossierInputChange}
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="ex: 37.2°C"
@@ -3354,7 +3511,7 @@ Dr. Dupont`
                     <input
                       type="text"
                       name="respiratory_rate"
-                      value={editDossierFormRef.current.respiratory_rate}
+                      value={editFormData.respiratory_rate}
                       onChange={handleEditDossierInputChange}
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="ex: 16/min"
@@ -3367,7 +3524,7 @@ Dr. Dupont`
                     <input
                       type="text"
                       name="oxygen_saturation"
-                      value={editDossierFormRef.current.oxygen_saturation}
+                      value={editFormData.oxygen_saturation}
                       onChange={handleEditDossierInputChange}
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="ex: 98%"
@@ -3385,7 +3542,7 @@ Dr. Dupont`
                     <label className="block text-sm font-medium text-gray-700 mb-1">Habitudes de vie</label>
                     <textarea
                       name="habitudes_vie"
-                      value={editDossierFormRef.current.habitudes_vie}
+                      value={editFormData.habitudes_vie}
                       onChange={handleEditDossierInputChange}
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       rows={4}
@@ -3398,7 +3555,7 @@ Dr. Dupont`
                     <label className="block text-sm font-medium text-gray-700 mb-1">Historique familial</label>
                     <textarea
                       name="historique_familial"
-                      value={editDossierFormRef.current.historique_familial}
+                      value={editFormData.historique_familial}
                       onChange={handleEditDossierInputChange}
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       rows={4}
@@ -3417,7 +3574,7 @@ Dr. Dupont`
                     <label className="block text-sm font-medium text-gray-700 mb-1">Directives anticipées</label>
                     <textarea
                       name="directives_anticipées"
-                      value={editDossierFormRef.current.directives_anticipées}
+                      value={editFormData.directives_anticipées}
                       onChange={handleEditDossierInputChange}
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       rows={4}
@@ -3430,7 +3587,7 @@ Dr. Dupont`
                     <label className="block text-sm font-medium text-gray-700 mb-1">Observations</label>
                     <textarea
                       name="observations"
-                      value={editDossierFormRef.current.observations}
+                      value={editFormData.observations}
                       onChange={handleEditDossierInputChange}
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       rows={4}
@@ -3450,7 +3607,7 @@ Dr. Dupont`
                     <input
                       type="date"
                       name="date_fermeture"
-                      value={editDossierFormRef.current.date_fermeture}
+                      value={editFormData.date_fermeture}
                       onChange={handleEditDossierInputChange}
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       disabled={uiState.loading}
@@ -3462,7 +3619,7 @@ Dr. Dupont`
                     <input
                       type="text"
                       name="motif_fermeture"
-                      value={editDossierFormRef.current.motif_fermeture}
+                      value={editFormData.motif_fermeture}
                       onChange={handleEditDossierInputChange}
                       className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="Raison de la fermeture du dossier"
