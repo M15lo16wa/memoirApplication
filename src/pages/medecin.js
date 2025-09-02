@@ -3,7 +3,8 @@
 import React, { useState, useEffect, useCallback } from "react";
 import MedHeader from "../components/layout/headerMed";
 import { ProtectedMedecinRoute } from "../services/api/protectedRoute";
-import { FaComments, FaCalendarAlt, FaUserInjured, FaChartBar, FaSearch, FaSpinner, FaBell, FaUser } from "react-icons/fa";
+import { FaComments, FaCalendarAlt, FaUserInjured, FaChartBar, FaSearch, FaSpinner, FaBell, FaUser, FaVideo } from "react-icons/fa";
+import WebRTCWidget from "../messaging/components/WebRTCWidget";
 
 // Import des composants de messagerie
 import { MessagingButton, MessagingWidget, ChatMessage } from "../messaging";
@@ -16,7 +17,6 @@ function Medecin() {
     const [messages, setMessages] = useState([]);
     const [input, setInput] = useState('');
     const [callActive, setCallActive] = useState(false);
-    const [remoteStream, setRemoteStream] = useState(null);
     const [dashboardStats, setDashboardStats] = useState({
         patientsAujourdhui: 0,
         rendezVous: 0,
@@ -39,6 +39,13 @@ function Medecin() {
     const [loadingPatients, setLoadingPatients] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [error, setError] = useState(null);
+
+    // États pour les appels WebRTC
+    const [activeCall, setActiveCall] = useState(null);
+    const [callStatus, setCallStatus] = useState('idle'); // idle, connecting, connected, ended
+    const [localStream, setLocalStream] = useState(null);
+    const [remoteStream, setRemoteStream] = useState(null);
+    const [conferenceLink, setConferenceLink] = useState(null);
 
     const handleSend = useCallback(() => {
         if (input.trim()) {
@@ -223,6 +230,238 @@ function Medecin() {
         setSelectedConversationId(null);
     };
 
+    // Fonction pour démarrer un appel vidéo
+    const handleStartVideoCall = async (patientId) => {
+        try {
+            console.log('🎥 Démarrage d\'un appel vidéo avec le patient:', patientId);
+            console.log('🔍 État actuel - activeCall:', activeCall, 'callStatus:', callStatus);
+            
+            // Initialiser le service de signalisation si nécessaire
+            if (!signalingService.isConnected()) {
+                console.log('🔌 Initialisation du service de signalisation...');
+                signalingService.initialize();
+                signalingService.connectSocket(userId, role, jwtToken);
+            }
+            
+            // Créer une session WebRTC pour l'appel vidéo avec code de conférence
+            console.log('📡 Création de la session WebRTC avec code de conférence...');
+            const result = await signalingService.createWebRTCSessionWithConferenceLink(
+                `temp_conv_${patientId}_${userId}`, // ID de conversation temporaire
+                'audio_video',
+                null, // SDP offer sera généré par le composant vidéo
+                true // Générer un lien de conférence
+            );
+            
+            console.log('📡 Résultat de création de session:', result);
+            
+            if (result.success) {
+                console.log('✅ Session WebRTC vidéo créée:', result.session);
+                
+                // Afficher le code de conférence si généré
+                if (result.conferenceLink) {
+                    console.log('🔐 Code de conférence généré:', result.conferenceLink);
+                    setConferenceLink(result.conferenceLink);
+                }
+                
+                // Utiliser la nouvelle fonction pour ouvrir l'interface vidéo
+                openVideoInterface(result, 'video');
+                
+                // Émettre l'événement pour démarrer l'appel
+                signalingService.emit('start_video_call', {
+                    conversationId: `temp_conv_${patientId}_${userId}`,
+                    sessionId: result.session.id,
+                    patientId: patientId,
+                    medecinId: userId,
+                    conferenceLink: result.conferenceLink
+                });
+                
+                console.log('✅ Appel vidéo initié avec succès');
+            } else {
+                console.error('❌ Erreur lors de la création de la session vidéo:', result.error);
+                setError(`Erreur lors de la création de la session vidéo: ${result.error}`);
+            }
+        } catch (error) {
+            console.error('❌ Erreur lors du démarrage de l\'appel vidéo:', error);
+            setError(`Erreur lors du démarrage de l'appel vidéo: ${error.message}`);
+        }
+    };
+
+    // Fonction pour démarrer un appel audio
+    const handleStartAudioCall = async (patientId) => {
+        try {
+            console.log('📞 Démarrage d\'un appel audio avec le patient:', patientId);
+            
+            // Initialiser le service de signalisation si nécessaire
+            if (!signalingService.isConnected()) {
+                signalingService.initialize();
+                signalingService.connectSocket(userId, role, jwtToken);
+            }
+            
+            // Créer une session WebRTC pour l'appel audio avec code de conférence
+            const result = await signalingService.createWebRTCSessionWithConferenceLink(
+                `temp_conv_${patientId}_${userId}`, // ID de conversation temporaire
+                'audio_only',
+                null, // SDP offer sera généré par le composant audio
+                true // Générer un lien de conférence
+            );
+            
+            if (result.success) {
+                console.log('✅ Session WebRTC audio créée:', result.session);
+                
+                // Afficher le code de conférence si généré
+                if (result.conferenceLink) {
+                    console.log('🔐 Code de conférence généré:', result.conferenceLink);
+                    setConferenceLink(result.conferenceLink);
+                }
+                
+                // Utiliser la nouvelle fonction pour ouvrir l'interface audio
+                openVideoInterface(result, 'audio');
+                
+                // Émettre l'événement pour démarrer l'appel
+                signalingService.emit('start_audio_call', {
+                    conversationId: `temp_conv_${patientId}_${userId}`,
+                    sessionId: result.session.id,
+                    patientId: patientId,
+                    medecinId: userId,
+                    conferenceLink: result.conferenceLink
+                });
+                
+                console.log('✅ Appel audio initié avec succès');
+            } else {
+                console.error('❌ Erreur lors de la création de la session audio:', result.error);
+                setError(`Erreur lors de la création de la session audio: ${result.error}`);
+            }
+        } catch (error) {
+            console.error('❌ Erreur lors du démarrage de l\'appel audio:', error);
+            setError(`Erreur lors du démarrage de l'appel audio: ${error.message}`);
+        }
+    };
+
+    // Fonction pour démarrer le flux vidéo local
+    const startLocalVideoStream = async () => {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                video: true, 
+                audio: true 
+            });
+            setLocalStream(stream);
+            console.log('✅ Flux vidéo local démarré');
+        } catch (error) {
+            console.error('❌ Erreur lors de la capture vidéo locale:', error);
+            setError('Impossible d\'accéder à la caméra/microphone');
+        }
+    };
+
+    // Fonction pour ouvrir l'interface vidéo avec les données du serveur
+    const openVideoInterface = (serverResponse, desiredType = null) => {
+        try {
+            console.log('🎬 Ouverture de l\'interface vidéo avec la réponse serveur:', serverResponse);
+            console.log('🔍 Structure complète de la réponse:', JSON.stringify(serverResponse, null, 2));
+            
+            // Vérifier la structure de la réponse et s'adapter
+            let sessionData, conversationData;
+            
+            if (serverResponse.session) {
+                // Structure avec .session
+                sessionData = serverResponse.session;
+                conversationData = serverResponse.conversation;
+            } else if (serverResponse.id) {
+                // Structure directe (session créée directement)
+                sessionData = serverResponse;
+                conversationData = serverResponse;
+            } else {
+                console.error('❌ Structure de réponse serveur non reconnue:', serverResponse);
+                setError('Structure de réponse serveur non reconnue');
+                return;
+            }
+            
+            console.log('🔍 Session data extraite:', sessionData);
+            console.log('🔍 Conversation data extraite:', conversationData);
+            
+            // Récupérer l'ID du patient depuis le contexte actuel
+            const currentPatientId = selectedPatientId;
+            const currentPatient = patients.find(p => (p.id || p.id_patient) === currentPatientId);
+            const patientName = currentPatient ? `${currentPatient.prenom} ${currentPatient.nom}` : 'Patient inconnu';
+            
+            // Créer l'objet d'appel avec les vraies données du serveur
+            const callData = {
+                type: desiredType || (sessionData.type === 'audio_video' || sessionData.session_type === 'audio_video' ? 'video' : 'audio'),
+                sessionId: sessionData.id || sessionData.session_id,
+                patientId: currentPatientId,
+                patientName: patientName,
+                conversationId: conversationData?.id || conversationData?.conversation_id || `temp_conv_${currentPatientId}_${userId}`,
+                serverData: serverResponse // Stocker toute la réponse serveur pour référence
+            };
+
+            console.log('📞 Données d\'appel finales:', callData);
+            console.log('🔍 État avant mise à jour - activeCall:', activeCall, 'callStatus:', callStatus);
+
+            // Mettre à jour l'état de l'appel
+            setActiveCall(callData);
+            setCallStatus('connecting');
+            
+            // Nettoyer les erreurs précédentes
+            setError(null);
+            
+            console.log('✅ Interface vidéo ouverte avec succès');
+            console.log('🔍 État après mise à jour - activeCall devrait être:', callData);
+            
+            // Démarrer automatiquement la capture vidéo si c'est un appel vidéo
+            if (callData.type === 'video') {
+                startLocalVideoStream();
+            }
+            
+            // Émettre l'événement pour notifier le serveur que l'interface est ouverte
+            if (signalingService.isConnected()) {
+                signalingService.emit('video_interface_opened', {
+                    sessionId: callData.sessionId,
+                    conversationId: callData.conversationId,
+                    timestamp: new Date().toISOString()
+                });
+            }
+            
+        } catch (error) {
+            console.error('❌ Erreur lors de l\'ouverture de l\'interface vidéo:', error);
+            setError(`Erreur lors de l'ouverture de l'interface vidéo: ${error.message}`);
+        }
+    };
+
+    // Fonction pour terminer l'appel
+    const handleEndCall = async () => {
+        try {
+            if (activeCall) {
+                console.log('📞 Terminaison de l\'appel:', activeCall.sessionId);
+                
+                // Terminer la session WebRTC côté serveur
+                if (signalingService.isConnected()) {
+                    await signalingService.endWebRTCSession(activeCall.sessionId);
+                }
+                
+                // Émettre l'événement de fin d'appel
+                signalingService.emit('end_call', {
+                    sessionId: activeCall.sessionId,
+                    conversationId: activeCall.conversationId
+                });
+                
+                // Nettoyer les flux
+                if (localStream) {
+                    localStream.getTracks().forEach(track => track.stop());
+                    setLocalStream(null);
+                }
+                setRemoteStream(null);
+                
+                // Réinitialiser l'état de l'appel
+                setActiveCall(null);
+                setCallStatus('idle');
+                
+                console.log('✅ Appel terminé avec succès');
+            }
+        } catch (error) {
+            console.error('❌ Erreur lors de la terminaison de l\'appel:', error);
+            setError(`Erreur lors de la terminaison de l'appel: ${error.message}`);
+        }
+    };
+
     const renderContent = () => {
         if (activeSection === 'messaging') {
             return (
@@ -396,12 +635,31 @@ function Medecin() {
                                         </div>
                                     )}
                                 </div>
-                                <button
-                                    onClick={handleCloseMessaging}
-                                    className="text-gray-500 hover:text-gray-700 text-sm"
-                                >
-                                    ← Retour
-                                </button>
+                                <div className="flex items-center space-x-3">
+                                    {/* Boutons WebRTC - Appels vidéo et audio */}
+                                    {selectedPatientId && (
+                                        <div className="flex space-x-2 mr-4">
+                                            <button
+                                                onClick={() => handleStartVideoCall(selectedPatientId)}
+                                                disabled={activeCall !== null}
+                                                className={`p-3 rounded-lg transition-colors flex items-center space-x-2 ${
+                                                    activeCall ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700 text-white'
+                                                }`}
+                                                title={activeCall ? "Appel en cours..." : "Démarrer un appel vidéo avec le patient"}
+                                            >
+                                                <FaVideo className="w-4 h-4" />
+                                                <span className="text-sm">Appel Vidéo</span>
+                                            </button>
+                                            
+                                        </div>
+                                    )}
+                                    <button
+                                        onClick={handleCloseMessaging}
+                                        className="text-gray-500 hover:text-gray-700 text-sm"
+                                    >
+                                        ← Retour
+                                    </button>
+                                </div>
                             </div>
                             
                             <div className="h-96">
@@ -412,6 +670,101 @@ function Medecin() {
                                     conversationId={selectedConversationId}
                                     patientId={selectedPatientId}
                                 />
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Interface d'appel WebRTC */}
+                    {console.log('🔍 RENDU - activeCall:', activeCall, 'callStatus:', callStatus, 'Type:', typeof activeCall)}
+                    {activeCall && (
+                        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+                            <div className="bg-white rounded-lg p-6 max-w-4xl w-full mx-4">
+                                <div className="flex justify-between items-center mb-4">
+                                    <h3 className="text-xl font-semibold text-gray-800">
+                                        Appel {activeCall.type === 'video' ? 'Vidéo' : 'Audio'} - {activeCall.patientName}
+                                    </h3>
+                                    <div className="flex items-center space-x-2">
+                                        <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                                            callStatus === 'connecting' ? 'bg-yellow-100 text-yellow-800' :
+                                            callStatus === 'connected' ? 'bg-green-100 text-green-800' :
+                                            'bg-gray-100 text-gray-800'
+                                        }`}>
+                                            {callStatus === 'connecting' ? 'Connexion...' :
+                                             callStatus === 'connected' ? 'Connecté' : 'En cours'}
+                                        </span>
+                                        <button
+                                            onClick={handleEndCall}
+                                            className="bg-red-600 text-white px-3 py-2 rounded-lg hover:bg-red-700 transition-colors text-sm"
+                                            title="Terminer l'appel"
+                                        >
+                                            Terminer
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                {/* Affichage du code de conférence */}
+                                {conferenceLink && (
+                                    <div className="mb-4 p-4 bg-green-50 rounded-lg border border-green-200">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center space-x-2">
+                                                <span className="text-green-600">
+                                                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                                    </svg>
+                                                </span>
+                                                <span className="text-sm font-medium text-green-800">Code de conférence généré</span>
+                                            </div>
+                                            <button
+                                                onClick={() => {
+                                                    navigator.clipboard.writeText(conferenceLink);
+                                                    // Afficher une notification de copie
+                                                    setError(null); // Nettoyer les erreurs précédentes
+                                                    setTimeout(() => {
+                                                        setError('Code de conférence copié !');
+                                                        setTimeout(() => setError(null), 2000);
+                                                    }, 100);
+                                                }}
+                                                className="bg-green-600 text-white px-3 py-1 rounded text-sm font-medium hover:bg-green-700 transition-colors"
+                                                title="Copier le code"
+                                            >
+                                                Copier
+                                            </button>
+                                        </div>
+                                        <div className="mt-3 text-center">
+                                            <div className="bg-white border-2 border-green-300 rounded-lg p-4 inline-block">
+                                                <p className="text-xs text-green-600 mb-1">Code de conférence</p>
+                                                <p className="text-2xl font-bold text-green-800 font-mono tracking-wider">
+                                                    {conferenceLink}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div className="mt-3 text-center">
+                                            <p className="text-xs text-green-600">
+                                                Partagez ce code avec le patient pour qu'il puisse rejoindre l'appel
+                                            </p>
+                                        </div>
+                                    </div>
+                                )}
+                                
+                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                    {/* WebRTCWidget: gère le flux vidéo et l'offre SDP */}
+                                    {activeCall.type === 'video' && (
+                                        <div className="lg:col-span-2">
+                                            <WebRTCWidget
+                                                conversationId={activeCall.conversationId}
+                                                isInitiator={true}
+                                                onClose={handleEndCall}
+                                            />
+                                        </div>
+                                    )}
+                                    
+                                    {/* Interface audio retirée */}
+                                </div>
+                                
+                                                                 <div className="mt-6 text-center text-sm text-gray-600">
+                                     <p>Session ID: {activeCall.sessionId}</p>
+                                     <p>Patient: {activeCall.patientName}</p>
+                                 </div>
                             </div>
                         </div>
                     )}

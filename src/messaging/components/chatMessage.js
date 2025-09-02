@@ -1,7 +1,8 @@
 // src/messaging/components/chatMessage.js
 import React, { useState, useEffect, useCallback } from "react";
 import signalingService from '../../services/signalingService';
-import { FaComments, FaSpinner, FaPlus, FaUser, FaUserMd } from "react-icons/fa";
+import { FaComments, FaSpinner, FaPlus, FaUser, FaUserMd, FaVideo } from "react-icons/fa";
+import WebRTCWidget from './WebRTCWidget';
 
 export default function ChatMessage({ userId: propUserId, role: propRole, token: propToken, conversationId: propConversationId, medecinId: propMedecinId, patientId: propPatientId }) {
   const [isLoading, setIsLoading] = useState(false);
@@ -11,6 +12,9 @@ export default function ChatMessage({ userId: propUserId, role: propRole, token:
   const [inputMessage, setInputMessage] = useState("");
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState(null);
+  const [showCallWidget, setShowCallWidget] = useState(false);
+  const [callType, setCallType] = useState(null); // 'video' | 'audio'
+  const [conferenceLink, setConferenceLink] = useState(null);
   
   // Utiliser les props ou fallback sur localStorage
   const [userId, setUserId] = useState(() => {
@@ -56,20 +60,15 @@ export default function ChatMessage({ userId: propUserId, role: propRole, token:
     if (userId && userRole) {
       console.log('🔌 Initialisation du service de messagerie:', { userId, userRole });
       
-      // Initialiser le service
+      // ✅ Initialiser le service avec la nouvelle méthode
       signalingService.initialize();
       
-      // Se connecter au WebSocket
+      // ✅ Se connecter au WebSocket avec la nouvelle méthode
       const socket = signalingService.connectSocket(userId, userRole, propToken);
       
       if (socket) {
-        // Nettoyer les anciens événements avant d'en ajouter de nouveaux
-        socket.off('connect');
-        socket.off('disconnect');
-        socket.off('connect_error');
-        socket.off('new_message');
-        
-        socket.on('connect', () => {
+        // ✅ Utiliser les méthodes du service pour configurer les écouteurs
+        signalingService.on('connect', () => {
           console.log('✅ Connecté au service de messagerie');
           setIsConnected(true);
           setError(null);
@@ -78,20 +77,29 @@ export default function ChatMessage({ userId: propUserId, role: propRole, token:
           loadUserConversations();
         });
 
-        socket.on('disconnect', (reason) => {
+        signalingService.on('disconnect', (reason) => {
           console.log('❌ Déconnecté du service de messagerie:', reason);
           setIsConnected(false);
           setError("Connexion perdue");
         });
 
-        socket.on('connect_error', (error) => {
+        signalingService.on('connect_error', (error) => {
           console.error('❌ Erreur de connexion messagerie:', error);
           setIsConnected(false);
           setError("Erreur de connexion au serveur");
         });
 
-        // Écouter les nouveaux messages
-        socket.on('new_message', (data) => {
+        // Capture du lien de conférence via socket
+        signalingService.on('webrtc:session_created', (data) => {
+          const link = data?.conferenceLink || data?.conference_link || data?.conference_code || data?.session?.conference_link || data?.session?.conference_code || null;
+          if (link) {
+            setConferenceLink(link);
+            console.log('🔐 Lien de conférence (socket):', link);
+          }
+        });
+
+        // ✅ Écouter les nouveaux messages avec la nouvelle méthode
+        signalingService.on('new_message', (data) => {
           console.log('📨 Nouveau message reçu:', data);
           if (data.conversationId === selectedConversation) {
             setMessages(prev => [...prev, {
@@ -104,8 +112,8 @@ export default function ChatMessage({ userId: propUserId, role: propRole, token:
           }
         });
 
-        // Vérifier l'état de connexion immédiatement
-        if (socket.connected) {
+        // ✅ Vérifier l'état de connexion immédiatement
+        if (signalingService.isConnected()) {
           console.log('✅ Socket déjà connecté');
           setIsConnected(true);
           loadUserConversations();
@@ -118,12 +126,8 @@ export default function ChatMessage({ userId: propUserId, role: propRole, token:
     
     // Cleanup function
     return () => {
-      if (signalingService.socket) {
-        signalingService.socket.off('connect');
-        signalingService.socket.off('disconnect');
-        signalingService.socket.off('connect_error');
-        signalingService.socket.off('new_message');
-      }
+      // ✅ Utiliser la méthode de nettoyage du service
+      signalingService.cleanup();
     };
   }, [userId, userRole, propToken]);
 
@@ -134,8 +138,9 @@ export default function ChatMessage({ userId: propUserId, role: propRole, token:
       
       console.log('🔍 Chargement des conversations pour l\'utilisateur:', { userId, userRole });
       
+      // ✅ Utiliser la méthode du service
       const result = await signalingService.getUserConversations();
-      console.log('📨 Réponse du serveur pour les conversations:', result);
+      console.log('�� Réponse du serveur pour les conversations:', result);
       
       if (result.success) {
         // Éviter les doublons en utilisant un Map avec l'ID comme clé
@@ -173,8 +178,9 @@ export default function ChatMessage({ userId: propUserId, role: propRole, token:
       
       console.log('🔍 Chargement des messages pour la conversation:', conversationId);
       
+      // ✅ Utiliser la méthode du service
       const result = await signalingService.getConversationMessages(conversationId, 50, 0);
-      console.log('📨 Réponse du serveur pour les messages:', result);
+      console.log('�� Réponse du serveur pour les messages:', result);
       
       if (result.success) {
         // Éviter les doublons en utilisant un Map avec l'ID comme clé
@@ -197,7 +203,7 @@ export default function ChatMessage({ userId: propUserId, role: propRole, token:
             type: msg.type_message || msg.type || 'texte'
           };
           
-          console.log('📝 Message formaté:', formattedMsg);
+          console.log('�� Message formaté:', formattedMsg);
           return formattedMsg;
         });
         
@@ -238,6 +244,7 @@ export default function ChatMessage({ userId: propUserId, role: propRole, token:
       
       console.log('🔍 Création d\'une nouvelle conversation:', { medecinId: userId, patientId, type: 'patient_medecin' });
       
+      // ✅ Utiliser la méthode du service
       const result = await signalingService.createConversation(
         patientId,  // ID du patient (premier paramètre)
         userId,     // ID du médecin (deuxième paramètre)
@@ -305,6 +312,7 @@ export default function ChatMessage({ userId: propUserId, role: propRole, token:
 
       console.log('🔍 Envoi du message dans la conversation:', targetConversationId);
       
+      // ✅ Utiliser la méthode du service
       const result = await signalingService.sendMessage(
         targetConversationId, 
         inputMessage.trim(), 
@@ -331,6 +339,47 @@ export default function ChatMessage({ userId: propUserId, role: propRole, token:
     } catch (error) {
       console.error('❌ Erreur lors de l\'envoi du message:', error);
       setError(`Erreur lors de l'envoi du message: ${error.message}`);
+    }
+  };
+
+  // ✅ NOUVELLE FONCTION : Démarrer un appel vidéo
+  const startVideoCall = async () => {
+    if (!selectedConversation) {
+      setError("Veuillez sélectionner une conversation pour démarrer un appel vidéo");
+      return;
+    }
+
+    try {
+      console.log('🎥 Démarrage d\'un appel vidéo pour la conversation:', selectedConversation);
+      
+      // ✅ Utiliser la méthode du service pour créer une session WebRTC avec code de conférence
+      const result = await signalingService.createWebRTCSessionWithConferenceLink(
+        selectedConversation,
+        'audio_video',
+        null, // SDP offer sera généré par le composant vidéo
+        true // Générer un code de conférence
+      );
+
+      if (result.success) {
+        console.log('✅ Session WebRTC créée:', result.session);
+        if (result.conferenceLink) {
+          setConferenceLink(result.conferenceLink);
+          console.log('🔐 Lien de conférence (REST):', result.conferenceLink);
+        }
+        // Émettre l'événement pour démarrer l'appel
+        signalingService.emit('start_video_call', {
+          conversationId: selectedConversation,
+          sessionId: result.session.id
+        });
+        // Ouvrir le widget WebRTC en initiateur
+        setCallType('video');
+        setShowCallWidget(true);
+      } else {
+        setError(`Erreur lors de la création de la session vidéo: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('❌ Erreur lors du démarrage de l\'appel vidéo:', error);
+      setError(`Erreur lors du démarrage de l'appel vidéo: ${error.message}`);
     }
   };
 
@@ -387,8 +436,7 @@ export default function ChatMessage({ userId: propUserId, role: propRole, token:
       // Créer une vraie conversation côté serveur
       console.log('📝 Création d\'une vraie conversation côté serveur...');
       
-      // Utiliser le service de signalisation pour créer la conversation
-      // Note: Le service doit permettre aux patients de créer des conversations
+      // ✅ Utiliser le service de signalisation pour créer la conversation
       const result = await signalingService.createConversation(
         userId,        // ID du patient (premier paramètre)
         medecinId,     // ID du médecin (deuxième paramètre)
@@ -457,7 +505,7 @@ export default function ChatMessage({ userId: propUserId, role: propRole, token:
     return 'Connexion...';
   };
 
-    return (
+  return (
     <div className="w-full h-full bg-gray-50 flex flex-col">
       <div className="bg-white h-full flex flex-col overflow-hidden">
         {/* En-tête */}
@@ -495,7 +543,7 @@ export default function ChatMessage({ userId: propUserId, role: propRole, token:
                   title="Rafraîchir les conversations"
                   disabled={isLoading}
                 >
-                  🔄
+                  ��
                 </button>
               </div>
               {userRole === 'medecin' ? (
@@ -563,12 +611,51 @@ export default function ChatMessage({ userId: propUserId, role: propRole, token:
           <div className="flex-1 flex flex-col min-h-0">
             {selectedConversation ? (
               <>
-                {/* En-tête de la conversation */}
+                {/* En-tête de la conversation avec boutons d'appel */}
                 <div className="p-4 border-b border-gray-200 bg-gray-50 flex-shrink-0">
-                  <h3 className="font-semibold text-gray-800">
-                    Conversation {selectedConversation}
-                  </h3>
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-semibold text-gray-800">
+                      Conversation {selectedConversation}
+                    </h3>
+                    <div className="flex items-center space-x-3">
+                      {conferenceLink && (
+                        <div className="flex items-center space-x-2 bg-blue-50 border border-blue-200 text-blue-700 px-2 py-1 rounded">
+                          <span className="text-xs">Lien:</span>
+                          <code className="text-xs font-semibold">{conferenceLink}</code>
+                          <button
+                            onClick={() => navigator.clipboard.writeText(String(conferenceLink))}
+                            className="text-xs bg-blue-600 text-white px-2 py-0.5 rounded"
+                            title="Copier le lien"
+                          >
+                            Copier
+                          </button>
+                        </div>
+                      )}
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={startVideoCall}
+                          disabled={!isConnected}
+                          className="bg-green-600 text-white p-2 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Démarrer un appel vidéo"
+                        >
+                          <FaVideo className="text-sm" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
+                {showCallWidget && (
+                  <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-lg shadow-xl w-full max-w-5xl p-2">
+                      <WebRTCWidget
+                        conversationId={selectedConversation}
+                        isInitiator={true}
+                        initialConferenceLink={conferenceLink}
+                        onClose={() => setShowCallWidget(false)}
+                      />
+                    </div>
+                  </div>
+                )}
 
                 {/* Messages */}
                 <div className="flex-1 overflow-y-auto p-4 space-y-3">
@@ -663,14 +750,14 @@ export default function ChatMessage({ userId: propUserId, role: propRole, token:
                       value={inputMessage}
                       onChange={(e) => setInputMessage(e.target.value)}
                       onKeyPress={handleKeyPress}
-                                             placeholder={userRole === 'medecin' 
-                         ? propPatientId 
-                           ? "Écrire un message... (appuyez sur Entrée pour créer une conversation)"
-                           : "Sélectionnez d'abord un patient pour créer une conversation"
-                         : propMedecinId
-                           ? "Écrire un message au médecin... (appuyez sur Entrée pour envoyer)"
-                           : "Écrire un message au médecin..."
-                       }
+                      placeholder={userRole === 'medecin' 
+                        ? propPatientId 
+                          ? "Écrire un message... (appuyez sur Entrée pour créer une conversation)"
+                          : "Sélectionnez d'abord un patient pour créer une conversation"
+                        : propMedecinId
+                          ? "Écrire un message au médecin... (appuyez sur Entrée pour envoyer)"
+                          : "Écrire un message au médecin..."
+                      }
                       disabled={!isConnected}
                       className="flex-1 border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
                     />
@@ -687,22 +774,22 @@ export default function ChatMessage({ userId: propUserId, role: propRole, token:
                       >
                         {propPatientId ? 'Créer conversation' : 'Sélectionner patient'}
                       </button>
-                                         ) : propMedecinId ? (
-                       <button
-                         onClick={sendMessage}
-                         disabled={!inputMessage.trim() || !isConnected || isLoading}
-                         className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                         title="Envoyer un message au médecin"
-                       >
-                         Envoyer au médecin
-                       </button>
-                     ) : (
-                       <div className="text-center px-4 py-2 bg-gray-100 rounded-lg">
-                         <p className="text-sm text-gray-600">
-                           Sélectionnez une conversation existante
-                         </p>
-                       </div>
-                     )}
+                    ) : propMedecinId ? (
+                      <button
+                        onClick={sendMessage}
+                        disabled={!inputMessage.trim() || !isConnected || isLoading}
+                        className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Envoyer un message au médecin"
+                      >
+                        Envoyer au médecin
+                      </button>
+                    ) : (
+                      <div className="text-center px-4 py-2 bg-gray-100 rounded-lg">
+                        <p className="text-sm text-gray-600">
+                          Sélectionnez une conversation existante
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

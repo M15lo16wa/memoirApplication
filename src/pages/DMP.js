@@ -6,7 +6,7 @@ import {
   FaSignOutAlt, FaPlus, FaDownload,
   FaHeartbeat, FaPills, FaThermometerHalf, FaWeight,
   FaTint, FaPrint, FaUserShield, FaCheck, FaTimes,
-  FaComments, FaCalendar
+  FaComments, FaCalendar, FaVideo, FaMicrophone
 } from "react-icons/fa";
 
 // Routes et protection
@@ -26,6 +26,7 @@ import AutorisationsEnAttente from "../components/dmp/AutorisationsEnAttente";
 import DMPHistory from "../components/dmp/DMPHistory";
 import NotificationManager from "../components/ui/NotificationManager";
 import { MessagingButton, MessagingWidget, ChatMessage } from "../messaging";
+import signalingService from "../services/signalingService";
 // ...existing code...
 
 // APIs
@@ -2208,6 +2209,13 @@ const DMP = () => {
   const [currentNotification, setCurrentNotification] = useState(null);
   const [showNotification, setShowNotification] = useState(false);
 
+  // États pour les appels WebRTC
+  const [activeCall, setActiveCall] = useState(null);
+  const [callStatus, setCallStatus] = useState('idle'); // idle, incoming, connecting, connected, ended
+  const [localStream, setLocalStream] = useState(null);
+  const [remoteStream, setRemoteStream] = useState(null);
+  const [incomingCall, setIncomingCall] = useState(null);
+
   // tats pour la protection 2FA des dossiers patients (grs par le hook use2FA)
 
   const navigate = useNavigate();
@@ -2277,6 +2285,137 @@ const DMP = () => {
     // Nettoyer l'ID du médecin
     localStorage.removeItem('currentMedecinId');
   };
+
+  // ===== FONCTIONS WEBRTC POUR LE CLIENT =====
+
+  // Fonction pour accepter un appel entrant
+  const handleAcceptCall = async (callData) => {
+    try {
+      console.log('📞 Acceptation de l\'appel entrant:', callData);
+      
+      // Initialiser le service de signalisation si nécessaire
+      if (!signalingService.isConnected()) {
+        signalingService.initialize();
+        signalingService.connectSocket(
+          patientProfile.id_patient || patientProfile.id,
+          'patient',
+          localStorage.getItem('jwt') || localStorage.getItem('token')
+        );
+      }
+
+      // Mettre à jour l'état de l'appel
+      setActiveCall(callData);
+      setCallStatus('connecting');
+      setIncomingCall(null);
+
+      // Démarrer la capture vidéo/audio locale
+      if (callData.type === 'video' || callData.type === 'audio_video') {
+        await startLocalVideoStream();
+      }
+
+      // Répondre à la session WebRTC avec validation via lien de conférence si disponible
+      const result = await signalingService.answerWebRTCSessionWithConferenceValidation(
+        callData.sessionId,
+        null, // SDP answer sera généré par le composant vidéo
+        callData.conferenceLink || null // Lien de conférence pour validation
+      );
+
+      if (result.success) {
+        console.log('✅ Appel accepté avec succès');
+        setCallStatus('connected');
+        
+        // Émettre l'événement d'acceptation
+        signalingService.emit('call_accepted', {
+          sessionId: callData.sessionId,
+          patientId: patientProfile.id_patient || patientProfile.id
+        });
+      } else {
+        console.error('❌ Erreur lors de l\'acceptation de l\'appel:', result.error);
+        setError(`Erreur lors de l'acceptation de l'appel: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('❌ Erreur lors de l\'acceptation de l\'appel:', error);
+      setError(`Erreur lors de l'acceptation de l'appel: ${error.message}`);
+    }
+  };
+
+  // Fonction pour refuser un appel entrant
+  const handleRejectCall = async (callData) => {
+    try {
+      console.log('❌ Refus de l\'appel entrant:', callData);
+      
+      // Terminer la session WebRTC
+      if (signalingService.isConnected()) {
+        await signalingService.endWebRTCSession(callData.sessionId);
+      }
+
+      // Émettre l'événement de refus
+      signalingService.emit('call_rejected', {
+        sessionId: callData.sessionId,
+        patientId: patientProfile.id_patient || patientProfile.id
+      });
+
+      // Réinitialiser l'état
+      setIncomingCall(null);
+      setCallStatus('idle');
+      
+      console.log('✅ Appel refusé avec succès');
+    } catch (error) {
+      console.error('❌ Erreur lors du refus de l\'appel:', error);
+      setError(`Erreur lors du refus de l'appel: ${error.message}`);
+    }
+  };
+
+  // Fonction pour démarrer le flux vidéo local
+  const startLocalVideoStream = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: true, 
+        audio: true 
+      });
+      setLocalStream(stream);
+      console.log('✅ Flux vidéo local démarré');
+    } catch (error) {
+      console.error('❌ Erreur lors de la capture vidéo locale:', error);
+      setError('Impossible d\'accéder à la caméra/microphone');
+    }
+  };
+
+  // Fonction pour terminer l'appel
+  const handleEndCall = async () => {
+    try {
+      if (activeCall) {
+        console.log('📞 Terminaison de l\'appel:', activeCall.sessionId);
+        
+        // Terminer la session WebRTC côté serveur
+        if (signalingService.isConnected()) {
+          await signalingService.endWebRTCSession(activeCall.sessionId);
+        }
+        
+        // Émettre l'événement de fin d'appel
+        signalingService.emit('end_call', {
+          sessionId: activeCall.sessionId,
+          patientId: patientProfile.id_patient || patientProfile.id
+        });
+        
+        // Nettoyer les flux
+        if (localStream) {
+          localStream.getTracks().forEach(track => track.stop());
+          setLocalStream(null);
+        }
+        setRemoteStream(null);
+        
+        // Réinitialiser l'état de l'appel
+        setActiveCall(null);
+        setCallStatus('idle');
+        
+        console.log('✅ Appel terminé avec succès');
+      }
+    } catch (error) {
+      console.error('❌ Erreur lors de la terminaison de l\'appel:', error);
+      setError(`Erreur lors de la terminaison de l'appel: ${error.message}`);
+    }
+  };
   
 // Misplaced return block removed. If you want to show this diagnostic UI, move it inside a component's render/return.
 
@@ -2318,6 +2457,45 @@ const DMP = () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [showProfileMenu]);
+
+  // Écouter les appels WebRTC entrants
+  useEffect(() => {
+    if (patientProfile) {
+      // Initialiser le service de signalisation
+      signalingService.initialize();
+      signalingService.connectSocket(
+        patientProfile.id_patient || patientProfile.id,
+        'patient',
+        localStorage.getItem('jwt') || localStorage.getItem('token')
+      );
+
+      // Écouter les appels entrants
+      signalingService.on('incoming_call', (callData) => {
+        console.log('📞 Appel entrant reçu:', callData);
+        setIncomingCall(callData);
+        setCallStatus('incoming');
+      });
+
+      // Écouter les sessions WebRTC créées
+      signalingService.on('webrtc:session_created', (sessionData) => {
+        console.log('🎥 Session WebRTC créée:', sessionData);
+      });
+
+      // Écouter les erreurs WebRTC
+      signalingService.on('webrtc:error', (errorData) => {
+        console.error('❌ Erreur WebRTC:', errorData);
+        setError(`Erreur WebRTC: ${errorData.message}`);
+      });
+
+      // Nettoyer les écouteurs au démontage
+      return () => {
+        signalingService.off('incoming_call');
+        signalingService.off('webrtc:session_created');
+        signalingService.off('webrtc:error');
+        signalingService.disconnect();
+      };
+    }
+  }, [patientProfile]);
 
   const loadInitialData = async () => {
     try {
@@ -3583,6 +3761,119 @@ ${activeTab === tab.id
                 conversationId={selectedConversationId}
                 medecinId={localStorage.getItem('currentMedecinId')}
               />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Interface d'appel entrant WebRTC */}
+      {incomingCall && (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-8 max-w-md w-full mx-4 text-center">
+            <div className="mb-6">
+              <FaVideo className="w-16 h-16 mx-auto mb-4 text-blue-600" />
+              <h3 className="text-xl font-semibold text-gray-800 mb-2">
+                Appel {incomingCall.type === 'video' || incomingCall.type === 'audio_video' ? 'Vidéo' : 'Audio'} Entrant
+              </h3>
+              <p className="text-gray-600 mb-4">
+                Appel de {incomingCall.callerName || 'Médecin'}
+              </p>
+              <div className="text-sm text-gray-500 mb-6">
+                <p>Session ID: {incomingCall.sessionId}</p>
+                <p>Type: {incomingCall.type}</p>
+              </div>
+            </div>
+            
+            <div className="flex justify-center space-x-4">
+              <button
+                onClick={() => handleAcceptCall(incomingCall)}
+                className="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition-colors flex items-center space-x-2"
+              >
+                <FaCheck className="w-4 h-4" />
+                <span>Accepter</span>
+              </button>
+              <button
+                onClick={() => handleRejectCall(incomingCall)}
+                className="bg-red-600 text-white px-6 py-3 rounded-lg hover:bg-red-700 transition-colors flex items-center space-x-2"
+              >
+                <FaTimes className="w-4 h-4" />
+                <span>Refuser</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Interface d'appel WebRTC actif */}
+      {activeCall && (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-4xl w-full mx-4">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-semibold text-gray-800">
+                Appel {activeCall.type === 'video' || activeCall.type === 'audio_video' ? 'Vidéo' : 'Audio'} - {activeCall.callerName || 'Médecin'}
+              </h3>
+              <div className="flex items-center space-x-2">
+                <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                  callStatus === 'connecting' ? 'bg-yellow-100 text-yellow-800' :
+                  callStatus === 'connected' ? 'bg-green-100 text-green-800' :
+                  'bg-gray-100 text-gray-800'
+                }`}>
+                  {callStatus === 'connecting' ? 'Connexion...' :
+                   callStatus === 'connected' ? 'Connecté' : 'En cours'}
+                </span>
+                <button
+                  onClick={handleEndCall}
+                  className="bg-red-600 text-white px-3 py-2 rounded-lg hover:bg-red-700 transition-colors text-sm"
+                  title="Terminer l'appel"
+                >
+                  Terminer
+                </button>
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {/* Flux vidéo local */}
+              {activeCall.type === 'video' || activeCall.type === 'audio_video' ? (
+                <>
+                  {localStream && (
+                    <div className="bg-gray-900 rounded-lg overflow-hidden">
+                      <video
+                        ref={(video) => {
+                          if (video) {
+                            video.srcObject = localStream;
+                            video.play();
+                          }
+                        }}
+                        className="w-full h-64 object-cover"
+                        muted
+                        autoPlay
+                        playsInline
+                      />
+                      <div className="p-3 bg-gray-800 text-white text-center">
+                        <p className="text-sm">Votre caméra</p>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Flux vidéo distant (placeholder pour l'instant) */}
+                  <div className="bg-gray-900 rounded-lg overflow-hidden">
+                    <div className="w-full h-64 bg-gray-800 flex items-center justify-center">
+                      <div className="text-center text-white">
+                        <FaUser className="w-16 h-16 mx-auto mb-2 opacity-50" />
+                        <p className="text-sm">En attente du médecin...</p>
+                      </div>
+                    </div>
+                    <div className="p-3 bg-gray-800 text-white text-center">
+                      <p className="text-sm">{activeCall.callerName || 'Médecin'}</p>
+                    </div>
+                  </div>
+                </>
+              ) : null}
+            </div>
+            
+            <div className="mt-6 text-center text-sm text-gray-600">
+              <p>Session ID: {activeCall.sessionId}</p>
+              <p>Type: {activeCall.type}</p>
             </div>
           </div>
         </div>

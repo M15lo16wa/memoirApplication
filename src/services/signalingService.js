@@ -1,3 +1,4 @@
+// src/services/signalingService.js
 import { io } from 'socket.io-client';
 
 /**
@@ -237,6 +238,45 @@ class SignalingService {
             console.log('�� Changement de statut utilisateur:', data);
             this.handleUserStatusChange(data);
         });
+
+            // ===== NOUVEAUX ÉCOUTEURS WEBRTC =====
+    
+    // Écouter les offres WebRTC entrantes
+    this.socket.on('webrtc_offer', (data) => {
+        console.log('   Offre WebRTC reçue:', data);
+        this.emit('webrtc:offer', data);
+    });
+
+    // Écouter les réponses WebRTC
+    this.socket.on('webrtc_answer', (data) => {
+        console.log('   Réponse WebRTC reçue:', data);
+        this.emit('webrtc:answer', data);
+    });
+
+    // Écouter les candidats ICE
+    this.socket.on('webrtc_ice_candidates', (data) => {
+        console.log('🎥 Candidats ICE reçus:', data);
+        this.emit('webrtc:ice_candidates', data);
+    });
+
+    // Écouter les sessions WebRTC créées
+    this.socket.on('webrtc_session_created', (data) => {
+        console.log('   Session WebRTC créée:', data);
+        this.emit('webrtc:session_created', data);
+    });
+
+    // Écouter les sessions WebRTC terminées
+    this.socket.on('webrtc_session_ended', (data) => {
+        console.log('🎥 Session WebRTC terminée:', data);
+        this.emit('webrtc:session_ended', data);
+    });
+
+    // Écouter les erreurs WebRTC
+    this.socket.on('webrtc_error', (data) => {
+        console.error('❌ Erreur WebRTC:', data);
+        this.emit('webrtc:error', data);
+    });
+
     }
 
     /**
@@ -644,6 +684,36 @@ class SignalingService {
     }
 
     /**
+     * Récupérer les candidats ICE d'une session
+     */
+    async getICECandidates(sessionId) {
+        try {
+            const response = await fetch(`${this.baseURL}/api/messaging/webrtc/sessions/${sessionId}/ice-candidates`, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${this.tokens.primaryToken}`
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            const data = await response.json();
+            return {
+                success: true,
+                candidates: data.data?.candidates || []
+            };
+        } catch (error) {
+            console.error('❌ Erreur lors de la récupération des candidats ICE:', error);
+            return {
+                success: false,
+                error: error.message
+            };
+        }
+    }
+
+    /**
      * Terminer une session WebRTC
      */
     async endWebRTCSession(sessionId) {
@@ -669,6 +739,124 @@ class SignalingService {
             };
         } catch (error) {
             console.error('❌ Erreur lors de la terminaison de la session WebRTC:', error);
+            return {
+                success: false,
+                error: error.message
+            };
+        }
+    }
+
+    // ===== NOUVELLES MÉTHODES WEBRTC AVEC LIENS DE CONFÉRENCE =====
+
+    /**
+     * Créer une session WebRTC avec génération de lien de conférence
+     */
+    async createWebRTCSessionWithConferenceLink(conversationId, sessionType, sdpOffer, generateLink = false) {
+        try {
+            const url = new URL(`${this.baseURL}/api/messaging/webrtc/sessions`);
+            if (generateLink) {
+                url.searchParams.append('generate_conference_link', 'true');
+            }
+
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${this.tokens.primaryToken}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    conversation_id: conversationId,
+                    session_type: sessionType,
+                    sdp_offer: sdpOffer
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            const data = await response.json();
+            return {
+                success: true,
+                session: data.data?.session,
+                conferenceLink: data.data?.conference_link || data.data?.conference_code || null
+            };
+        } catch (error) {
+            console.error('❌ Erreur lors de la création de la session WebRTC avec lien de conférence:', error);
+            return {
+                success: false,
+                error: error.message
+            };
+        }
+    }
+
+    /**
+     * Récupérer les détails d'une session avec lien de conférence
+     */
+    async getWebRTCSessionDetailsWithConferenceLink(sessionId) {
+        try {
+            const url = new URL(`${this.baseURL}/api/messaging/webrtc/sessions/${sessionId}`);
+            url.searchParams.append('include_conference_link', 'true');
+
+            const response = await fetch(url, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${this.tokens.primaryToken}`
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            const data = await response.json();
+            return {
+                success: true,
+                session: data.data?.session,
+                conferenceLink: data.data?.conference_link || null
+            };
+        } catch (error) {
+            console.error('❌ Erreur lors de la récupération des détails avec lien de conférence:', error);
+            return {
+                success: false,
+                error: error.message
+            };
+        }
+    }
+
+    /**
+     * Répondre à une session WebRTC avec validation via lien de conférence
+     */
+    async answerWebRTCSessionWithConferenceValidation(sessionId, sdpAnswer, conferenceLink = null) {
+        try {
+            const url = new URL(`${this.baseURL}/api/messaging/webrtc/sessions/${sessionId}/answer`);
+            if (conferenceLink) {
+                url.searchParams.append('validate_conference_access', 'true');
+            }
+
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${this.tokens.primaryToken}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    sdp_answer: sdpAnswer,
+                    conference_link: conferenceLink
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            const data = await response.json();
+            return {
+                success: true,
+                session: data.data?.session
+            };
+        } catch (error) {
+            console.error('❌ Erreur lors de la réponse WebRTC avec validation de conférence:', error);
             return {
                 success: false,
                 error: error.message

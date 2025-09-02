@@ -1,3 +1,4 @@
+// src/messaging/components/MessagingWidget.js
 import React, { useState, useEffect, useCallback } from 'react';
 import { FaComments, FaSpinner, FaPaperPlane } from 'react-icons/fa';
 import signalingService from '../../services/signalingService';
