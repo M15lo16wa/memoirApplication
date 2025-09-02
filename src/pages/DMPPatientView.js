@@ -487,10 +487,218 @@ function DMPPatientView() {
         </div>
       </div>
 
-      {/* Contenu principal - Documents et Auto-mesures */}
+      {/* Contenu principal - Dossier Patient, Documents et Auto-mesures */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <h2 className="text-xl font-bold text-gray-800 mb-4">Documents et Auto-mesures</h2>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          
+          {/* Section Dossier Patient */}
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center">
+              <svg className="w-6 h-6 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              Dossier Patient
+            </h2>
+            
+            {/* Informations du patient */}
+            {dmpData ? (
+              <div className="space-y-4">
+                {/* Informations de base */}
+                <div className="bg-blue-50 rounded-lg p-4">
+                  <h3 className="font-semibold text-blue-900 mb-3">Informations Personnelles</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-sm font-medium text-blue-700">Nom</label>
+                      <p className="text-sm text-blue-900 font-medium">
+                        {dmpData.patient?.nom || dmpData.nom || 'Non renseigné'}
+                      </p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-blue-700">Prénom</label>
+                      <p className="text-sm text-blue-900 font-medium">
+                        {dmpData.patient?.prenom || dmpData.prenom || 'Non renseigné'}
+                      </p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-blue-700">Date de naissance</label>
+                      <p className="text-sm text-blue-900">
+                        {dmpData.patient?.date_naissance || dmpData.date_naissance ? 
+                          new Date(dmpData.patient?.date_naissance || dmpData.date_naissance).toLocaleDateString('fr-FR') : 
+                          'Non renseigné'}
+                      </p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-blue-700">Sexe</label>
+                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                        {dmpData.patient?.sexe === 'M' ? 'Homme' : 
+                         dmpData.patient?.sexe === 'F' ? 'Femme' : 
+                         dmpData.patient?.sexe || dmpData.sexe || 'Non renseigné'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Informations médicales */}
+                <div className="bg-green-50 rounded-lg p-4">
+                  <h3 className="font-semibold text-green-900 mb-3">Informations Médicales</h3>
+                  <div className="space-y-3">
+                    {dmpData.resume_medical && (
+                      <div>
+                        <label className="block text-sm font-medium text-green-700">Résumé Médical</label>
+                        <p className="text-sm text-green-900 mt-1 whitespace-pre-wrap">{dmpData.resume_medical}</p>
+                      </div>
+                    )}
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {dmpData.antecedents_medicaux && (
+                        <div>
+                          <label className="block text-sm font-medium text-green-700">Antécédents Médicaux</label>
+                          <p className="text-sm text-green-900 mt-1 whitespace-pre-wrap">{dmpData.antecedents_medicaux}</p>
+                        </div>
+                      )}
+                      
+                      {dmpData.allergies && (
+                        <div>
+                          <label className="block text-sm font-medium text-green-700">Allergies</label>
+                          <p className="text-sm text-green-900 mt-1 whitespace-pre-wrap">{dmpData.allergies}</p>
+                        </div>
+                      )}
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {dmpData.traitement && (
+                        <div>
+                          <label className="block text-sm font-medium text-green-700">Traitements</label>
+                          <p className="text-sm text-green-900 mt-1 whitespace-pre-wrap">{dmpData.traitement}</p>
+                        </div>
+                      )}
+                      
+                      {dmpData.traitements_chroniques && (
+                        <div>
+                          <label className="block text-sm font-medium text-green-700">Traitements Chroniques</label>
+                          <p className="text-sm text-green-900 mt-1 whitespace-pre-wrap">{dmpData.traitements_chroniques}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Signes vitaux */}
+                {(dmpData.heart_rate || dmpData.blood_pressure || dmpData.temperature || dmpData.respiratory_rate || dmpData.oxygen_saturation) && (
+                  <div className="bg-purple-50 rounded-lg p-4">
+                    <h3 className="font-semibold text-purple-900 mb-3">Signes Vitaux</h3>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                      {dmpData.heart_rate && (
+                        <div className="bg-white p-3 rounded-lg">
+                          <label className="block text-xs font-medium text-purple-700">Fréquence cardiaque</label>
+                          <p className="text-sm font-semibold text-purple-900">{dmpData.heart_rate} bpm</p>
+                        </div>
+                      )}
+                      {dmpData.blood_pressure && (
+                        <div className="bg-white p-3 rounded-lg">
+                          <label className="block text-xs font-medium text-purple-700">Pression artérielle</label>
+                          <p className="text-sm font-semibold text-purple-900">{dmpData.blood_pressure} mmHg</p>
+                        </div>
+                      )}
+                      {dmpData.temperature && (
+                        <div className="bg-white p-3 rounded-lg">
+                          <label className="block text-xs font-medium text-purple-700">Température</label>
+                          <p className="text-sm font-semibold text-purple-900">{dmpData.temperature}°C</p>
+                        </div>
+                      )}
+                      {dmpData.respiratory_rate && (
+                        <div className="bg-white p-3 rounded-lg">
+                          <label className="block text-xs font-medium text-purple-700">Fréquence respiratoire</label>
+                          <p className="text-sm font-semibold text-purple-900">{dmpData.respiratory_rate} /min</p>
+                        </div>
+                      )}
+                      {dmpData.oxygen_saturation && (
+                        <div className="bg-white p-3 rounded-lg">
+                          <label className="block text-xs font-medium text-purple-700">Saturation O₂</label>
+                          <p className="text-sm font-semibold text-purple-900">{dmpData.oxygen_saturation}%</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Informations complémentaires */}
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <h3 className="font-semibold text-gray-900 mb-3">Informations Complémentaires</h3>
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {dmpData.histoire_familiale && (
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700">Histoire Familiale</label>
+                          <p className="text-sm text-gray-900 mt-1 whitespace-pre-wrap">{dmpData.histoire_familiale}</p>
+                        </div>
+                      )}
+                      
+                      {dmpData.habitudes_vie && (
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700">Habitudes de Vie</label>
+                          <p className="text-sm text-gray-900 mt-1 whitespace-pre-wrap">{dmpData.habitudes_vie}</p>
+                        </div>
+                      )}
+                    </div>
+                    
+                    {dmpData.observations && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Observations</label>
+                        <p className="text-sm text-gray-900 mt-1 whitespace-pre-wrap">{dmpData.observations}</p>
+                      </div>
+                    )}
+                    
+                    {dmpData.directives_anticipees && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Directives Anticipées</label>
+                        <p className="text-sm text-gray-900 mt-1 whitespace-pre-wrap">{dmpData.directives_anticipees}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Statut du dossier */}
+                <div className="bg-yellow-50 rounded-lg p-4">
+                  <h3 className="font-semibold text-yellow-900 mb-3">Statut du Dossier</h3>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
+                        dmpData.statut === 'actif' 
+                          ? 'bg-green-100 text-green-800' 
+                          : dmpData.statut === 'ferme'
+                            ? 'bg-red-100 text-red-800'
+                            : 'bg-yellow-100 text-yellow-800'
+                      }`}>
+                        {dmpData.statut === 'actif' ? 'Actif' : 
+                         dmpData.statut === 'ferme' ? 'Fermé' : 
+                         dmpData.statut || 'Inconnu'}
+                      </span>
+                    </div>
+                    <div className="text-sm text-yellow-700">
+                      {dmpData.dateCreation ? 
+                        `Créé le ${new Date(dmpData.dateCreation).toLocaleDateString('fr-FR')}` :
+                        dmpData.dateOuverture ? 
+                          `Ouvert le ${new Date(dmpData.dateOuverture).toLocaleDateString('fr-FR')}` :
+                          'Date inconnue'
+                      }
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="border border-gray-200 rounded-lg p-6 text-center text-gray-600">
+                <svg className="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <p>Aucune information de dossier disponible.</p>
+              </div>
+            )}
+          </div>
+
+          {/* Section Documents et Auto-mesures */}
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <h2 className="text-xl font-bold text-gray-800 mb-4">Documents et Auto-mesures</h2>
           
           {/* Section Documents Uploadés */}
           <div className="mb-8">
@@ -751,6 +959,7 @@ function DMPPatientView() {
           </div>
         </div>
       </div>
+    </div>
 
       {/* Modal de confirmation de révocation d'accès */}
       {showRevokeModal && (

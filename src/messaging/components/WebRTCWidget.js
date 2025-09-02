@@ -18,6 +18,8 @@ const WebRTCWidget = ({
     const [sessionId, setSessionId] = useState(null);
     const [conferenceLink, setConferenceLink] = useState(null);
     const [copied, setCopied] = useState(false);
+    const [connectionState, setConnectionState] = useState('new');
+    const [isRemoteWaiting, setIsRemoteWaiting] = useState(true);
     const iceQueueRef = useRef([]);
 
     const localVideoRef = useRef();
@@ -57,60 +59,116 @@ const WebRTCWidget = ({
                         signalingService.connectSocket(pid, 'patient', token);
                     }
                 }
-                // Emit a generic join event so server can send offer to this client
-                signalingService.emit && signalingService.emit('join_conference', {
-                    code: code,
-                    sessionId: maybeId,
-                    link: href
-                });
-                // Ask server to send SDP offer to this client
-                signalingService.emit && signalingService.emit('request_webrtc_offer', {
-                    code: code,
-                    sessionId: maybeId
-                });
+                const runJoinFlow = async () => {
+                    try {
+                        // Emit join + request for offer
+                        signalingService.emit && signalingService.emit('join_conference', {
+                            code: code,
+                            sessionId: maybeId,
+                            link: href
+                        });
+                        signalingService.emit && signalingService.emit('request_webrtc_offer', {
+                            code: code,
+                            sessionId: maybeId
+                        });
+
+                        // Fallback/optimisé: si l'API REST est dispo, récupérer les détails et répondre immédiatement
+                        if (typeof signalingService.getWebRTCSessionDetailsWithConferenceLink === 'function') {
+                            const details = await signalingService.getWebRTCSessionDetailsWithConferenceLink(maybeId);
+                            if (details && (details.session?.sdp_offer || details.sdp_offer)) {
+                                const sdpOffer = details.session?.sdp_offer || details.sdp_offer;
+                                const conversationIdFromServer = details.session?.conversation_id || details.conversation_id || null;
+                                if (conversationIdFromServer && typeof signalingService.joinConversation === 'function') {
+                                    console.log('🧩 Patient: joinConversation with conversationId =', conversationIdFromServer);
+                                    signalingService.joinConversation(conversationIdFromServer);
+                                    setIsRemoteWaiting(false);
+                                }
+                                const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                                setLocalStream(stream);
+                                if (localVideoRef.current) {
+                                    localVideoRef.current.srcObject = stream;
+                                }
+                                const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+                                peerConnectionRef.current = pc;
+                                stream.getTracks().forEach(tr => pc.addTrack(tr, stream));
+                                pc.ontrack = (e) => {
+                                    setRemoteStream(e.streams[0]);
+                                    if (remoteVideoRef.current) {
+                                        remoteVideoRef.current.srcObject = e.streams[0];
+                                    }
+                                };
+                                pc.onicecandidate = (e) => {
+                                    if (e.candidate) {
+                                        signalingService.addICECandidates && signalingService.addICECandidates(maybeId, [e.candidate]);
+                                    }
+                                };
+                                pc.onconnectionstatechange = () => {
+                                    setConnectionState(pc.connectionState);
+                                };
+                                await pc.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp: sdpOffer }));
+                                const answer = await pc.createAnswer();
+                                await pc.setLocalDescription(answer);
+                                if (typeof signalingService.answerWebRTCSessionWithConferenceValidation === 'function') {
+                                    await signalingService.answerWebRTCSessionWithConferenceValidation(
+                                        maybeId,
+                                        answer.sdp,
+                                        details?.conferenceLink?.joinCode || code
+                                    );
+                                } else {
+                                    await signalingService.answerWebRTCSession(maybeId, answer.sdp);
+                                }
+                                setIsInCall(true);
+                                setSessionId(maybeId);
+                            }
+                        }
+                    } catch (e) {}
+                };
+
+                if (signalingService.isConnected && signalingService.isConnected()) {
+                    runJoinFlow();
+                } else {
+                    // Attendre la connexion socket avant d'émettre
+                    const onConnect = () => {
+                        runJoinFlow();
+                        signalingService.off && signalingService.off('connect', onConnect);
+                    };
+                    signalingService.on && signalingService.on('connect', onConnect);
+                }
             }
         } catch {}
         return () => cleanup();
     }, []);
 
     const setupWebRTCEventListeners = () => {
+        // Supporter ':' et '_' pour compat
         signalingService.on('webrtc:offer', handleWebRTCOffer);
+        signalingService.on && signalingService.on('webrtc_offer', handleWebRTCOffer);
         signalingService.on('webrtc:answer', handleWebRTCAnswer);
+        signalingService.on && signalingService.on('webrtc_answer', handleWebRTCAnswer);
         signalingService.on('webrtc:ice_candidates', handleICECandidates);
+        signalingService.on && signalingService.on('webrtc_ice_candidates', handleICECandidates);
         signalingService.on('webrtc:session_ended', handleSessionEnded);
         signalingService.on('webrtc:session_created', handleSessionCreated);
+        signalingService.on && signalingService.on('webrtc_session_created', handleSessionCreated);
+        // Présence/état si disponibles côté serveur
+        signalingService.on && signalingService.on('conference:participant_joined', () => setIsRemoteWaiting(false));
+        signalingService.on && signalingService.on('conference:participant_left', ({ participantsCount }) => {
+            if (participantsCount <= 1) setIsRemoteWaiting(true);
+        });
+        // Nouveaux événements normalisés côté serveur
+        signalingService.on && signalingService.on('webrtc_participant_joined', ({ participantsCount }) => {
+            if (participantsCount >= 2) setIsRemoteWaiting(false);
+        });
+        signalingService.on && signalingService.on('webrtc_participant_left', ({ participantsCount }) => {
+            if (!participantsCount || participantsCount <= 1) setIsRemoteWaiting(true);
+        });
     };
 
     const startCall = async () => {
         try {
-            // Obtenir le flux média local
-            const stream = await navigator.mediaDevices.getUserMedia({
-                video: isVideoEnabled,
-                audio: isAudioEnabled
-            });
-
-            setLocalStream(stream);
-            if (localVideoRef.current) {
-                localVideoRef.current.srcObject = stream;
-            }
-
-            // Créer la connexion peer
-            createPeerConnection(stream);
-
-            // Générer et envoyer l'offre SDP côté initiateur
-            if (peerConnectionRef.current) {
-                const offer = await peerConnectionRef.current.createOffer();
-                await peerConnectionRef.current.setLocalDescription(offer);
-                signalingService.emit('webrtc_offer', {
-                    conversationId,
-                    sdpOffer: offer.sdp,
-                    sessionType: 'audio_video'
-                });
-            }
-
-            setIsInCall(true);
-
-            // Optionnel: demander un lien de conférence via REST si nécessaire
+            // 1) Créer la session côté serveur AVANT d'émettre l'offre pour garantir un sessionId
+            let createdSessionId = null;
+            let serverConversationId = conversationId || null;
             try {
                 const session = await signalingService.createWebRTCSessionWithConferenceLink(
                     conversationId,
@@ -118,24 +176,56 @@ const WebRTCWidget = ({
                     null,
                     true
                 );
-                // Utiliser l'id retourné si disponible (sinon on le recevra via webrtc:session_created)
                 if (session && (session.session?.id || session.id_session)) {
-                    setSessionId(session.session?.id || session.id_session);
-                    // Si des ICE ont été mis en file d'attente avant la création de session, les envoyer maintenant
-                    if (iceQueueRef.current.length > 0) {
-                        signalingService.addICECandidates(session.session?.id || session.id_session, iceQueueRef.current);
-                        iceQueueRef.current = [];
-                    }
+                    createdSessionId = session.session?.id || session.id_session;
+                    setSessionId(createdSessionId);
                 }
-                // Enregistrer le lien/conférence si fourni par l'API
+                if (session && (session.session?.conversation_id || session.data?.conversation_id)) {
+                    serverConversationId = session.session?.conversation_id || session.data?.conversation_id;
+                }
                 if (session && (session.conferenceLink || session.data?.conference_link || session.data?.conference_code)) {
                     const link = session.conferenceLink || session.data?.conference_link || session.data?.conference_code;
                     setConferenceLink(link);
                     console.log('🔐 Lien de conférence reçu (REST):', link);
                 }
             } catch (e) {
-                // Ignorer si l'API REST n'est pas nécessaire
+                console.warn('Création de session REST échouée ou non nécessaire:', e?.message);
             }
+
+            // 0) Rejoindre la salle avec l'identifiant exact attendu par le serveur
+            if (serverConversationId && typeof signalingService.joinConversation === 'function') {
+                try {
+                    console.log('🧩 Médecin: joinConversation with conversationId =', serverConversationId);
+                    signalingService.joinConversation(serverConversationId); // numérique
+                } catch (_) {}
+            }
+
+            // 2) Obtenir le flux média local
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: isVideoEnabled,
+                audio: isAudioEnabled
+            });
+            setLocalStream(stream);
+            if (localVideoRef.current) {
+                localVideoRef.current.srcObject = stream;
+            }
+
+            // 3) Créer la connexion peer
+            createPeerConnection(stream);
+
+            // 4) Générer et envoyer l'offre SDP avec un sessionId valide
+            if (peerConnectionRef.current) {
+                const offer = await peerConnectionRef.current.createOffer();
+                await peerConnectionRef.current.setLocalDescription(offer);
+                signalingService.emit('webrtc_offer', {
+                    sessionId: createdSessionId || sessionId, // préférer l'id créé
+                    conversationId: serverConversationId,
+                    sdpOffer: offer.sdp,
+                    sessionType: 'audio_video'
+                });
+            }
+
+            setIsInCall(true);
         } catch (error) {
             console.error('Erreur démarrage appel:', error);
         }
@@ -170,6 +260,18 @@ const WebRTCWidget = ({
             if (remoteVideoRef.current) {
                 remoteVideoRef.current.srcObject = event.streams[0];
             }
+            setIsRemoteWaiting(false);
+        };
+
+        // Suivre l'état de connexion
+        peerConnection.onconnectionstatechange = () => {
+            setConnectionState(peerConnection.connectionState);
+            if (peerConnection.connectionState === 'connected') {
+                setIsRemoteWaiting(false);
+            }
+            if (peerConnection.connectionState === 'failed' || peerConnection.connectionState === 'disconnected') {
+                setIsRemoteWaiting(true);
+            }
         };
 
         peerConnectionRef.current = peerConnection;
@@ -190,6 +292,15 @@ const WebRTCWidget = ({
         if (link) {
             setConferenceLink(link);
             console.log('🔐 Lien de conférence reçu (socket):', link);
+        }
+        // Rejoindre la salle conversation si fournie
+        const convId = data.conversationId || data.session?.conversation_id || data.conversation_id || null;
+        if (convId && typeof signalingService.joinConversation === 'function') {
+            try {
+                console.log('🧩 Join via session_created, conversationId =', convId);
+                signalingService.joinConversation(convId); // numérique
+                setIsRemoteWaiting(false);
+            } catch (e) {}
         }
     };
 
@@ -257,6 +368,8 @@ const WebRTCWidget = ({
             await peerConnectionRef.current.setRemoteDescription(
                 new RTCSessionDescription({ type: 'answer', sdp: data.sdpAnswer })
             );
+            // Optionnel: enlever l’état “en attente” une fois l'answer appliquée
+            setIsRemoteWaiting(false);
         } catch (error) {
             console.error('Erreur gestion réponse WebRTC:', error);
         }
@@ -406,17 +519,31 @@ const WebRTCWidget = ({
                 </div>
             )}
 
-            <div className="webrtc-videos">
-                <div className="local-video">
-                    <video ref={localVideoRef} autoPlay muted playsInline />
-                    <span>Vous</span>
+            <div className="webrtc-videos" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, padding: '12px 20px' }}>
+                <div className="local-video" style={{ background: '#111827', borderRadius: 8, overflow: 'hidden', position: 'relative' }}>
+                    <video
+                        ref={localVideoRef}
+                        autoPlay
+                        muted
+                        playsInline
+                        style={{ width: '100%', height: 360, objectFit: 'cover', transform: 'scaleX(-1)' }}
+                    />
+                    <span style={{ position: 'absolute', left: 8, bottom: 8, color: '#fff', fontSize: 12, background: 'rgba(0,0,0,0.35)', padding: '2px 6px', borderRadius: 4 }}>Vous</span>
                 </div>
-                {remoteStream && (
-                    <div className="remote-video">
-                        <video ref={remoteVideoRef} autoPlay playsInline />
-                        <span>Interlocuteur</span>
-                    </div>
-                )}
+                <div className="remote-video" style={{ background: '#111827', borderRadius: 8, overflow: 'hidden', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <video
+                        ref={remoteVideoRef}
+                        autoPlay
+                        playsInline
+                        style={{ width: '100%', height: 360, objectFit: 'cover' }}
+                    />
+                    {isRemoteWaiting && (
+                        <div style={{ position: 'absolute', color: '#d1d5db', fontSize: 14 }}>
+                            {connectionState === 'failed' || connectionState === 'disconnected' ? 'Connexion perdue. Tentative de reconnexion…' : 'En attente du participant…'}
+                        </div>
+                    )}
+                    <span style={{ position: 'absolute', left: 8, bottom: 8, color: '#fff', fontSize: 12, background: 'rgba(0,0,0,0.35)', padding: '2px 6px', borderRadius: 4 }}>Interlocuteur</span>
+                </div>
             </div>
 
             <div className="webrtc-controls">

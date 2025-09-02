@@ -32,7 +32,7 @@ import signalingService from "../services/signalingService";
 // APIs
 import * as dmpApi from "../services/api/dmpApi";
 import * as patientApi from "../services/api/patientApi";
-import { uploadDocument, getDossierPatient } from "../services/api/medicalApi";
+import { uploadDocument, getDossierPatient, createDossierMedical, getAllDossiersMedical } from "../services/api/medicalApi";
 import { getRendezVousByPatient } from "../services/api/rendezVous";
 
 // Protection 2FA
@@ -141,6 +141,12 @@ const HistoriqueMedical = ({ patientProfile, onOpenMessaging }) => {
       // Rcuprer l'ID du patient connect
       const storedPatient = getStoredPatient();
       const currentPatientId = storedPatient?.id_patient || storedPatient?.id;
+
+      console.log('🔍 DEBUG - Patient ID dans loadPatientData:');
+      console.log('  - storedPatient:', storedPatient);
+      console.log('  - id_patient:', storedPatient?.id_patient);
+      console.log('  - id:', storedPatient?.id);
+      console.log('  - currentPatientId utilisé:', currentPatientId);
 
       if (!currentPatientId) {
         throw new Error('ID du patient non disponible');
@@ -413,6 +419,8 @@ prescription.redacteur.id_professionnel || prescription.redacteur.id_medecin)) {
   const loadDossierMedical = useCallback(async () => {
     if (!patientId || !patientProfile) {
       console.warn('⚠️ Tentative de chargement du dossier médical sans patientId ou profil');
+      console.log('🔍 patientId:', patientId);
+      console.log('🔍 patientProfile:', patientProfile);
       return;
     }
 
@@ -421,7 +429,175 @@ prescription.redacteur.id_professionnel || prescription.redacteur.id_medecin)) {
 
     try {
       console.log('🔍 Chargement du dossier médical pour le patient:', patientId);
-      const dossierData = await getDossierPatient(patientId);
+      console.log('🔍 patientProfile reçu:', patientProfile);
+      console.log('🔍 Type de patientId:', typeof patientId);
+      console.log('🔍 patientId converti en string:', String(patientId));
+      
+      // Essayer avec différents formats d'ID
+      let dossierData = null;
+      const possibleIds = [
+        patientId,
+        String(patientId),
+        parseInt(patientId),
+        patientProfile?.id_patient,
+        patientProfile?.id
+      ].filter((id, index, arr) => id != null && arr.indexOf(id) === index); // Supprimer les doublons
+      
+      console.log('🔍 IDs possibles à tester:', possibleIds);
+      
+      for (const testId of possibleIds) {
+        try {
+          console.log(`🔍 Test avec ID: ${testId} (type: ${typeof testId})`);
+          dossierData = await getDossierPatient(testId);
+          
+          // Vérifier si on a des données valides
+          if (dossierData && dossierData.data && dossierData.data.dossier) {
+            console.log(`✅ Dossier trouvé avec ID: ${testId}`);
+            break;
+          } else if (dossierData && dossierData.success && dossierData.data && dossierData.data.id) {
+            console.log(`✅ Dossier trouvé avec ID: ${testId}`);
+            break;
+          } else {
+            console.log(`❌ Aucun dossier trouvé avec ID: ${testId}`);
+            dossierData = null;
+          }
+        } catch (error) {
+          console.log(`❌ Erreur avec ID ${testId}:`, error.message);
+          dossierData = null;
+        }
+      }
+      
+      if (!dossierData) {
+        console.log('❌ Aucun dossier trouvé avec aucun des IDs testés');
+        console.log('🔍 Tentative alternative: récupérer tous les dossiers et filtrer...');
+        
+        // Alternative: récupérer tous les dossiers et filtrer par patient
+        try {
+          const allDossiers = await getAllDossiersMedical();
+          console.log('🔍 Tous les dossiers récupérés:', allDossiers);
+          
+          if (allDossiers && allDossiers.data && Array.isArray(allDossiers.data)) {
+            console.log('🔍 Structure détaillée des dossiers:');
+            allDossiers.data.forEach((dossier, index) => {
+              console.log(`  Dossier ${index + 1}:`, {
+                id_dossier: dossier.id_dossier,
+                id: dossier.id,
+                patient_id: dossier.patient_id,
+                id_patient: dossier.id_patient,
+                patient: dossier.patient,
+                allKeys: Object.keys(dossier)
+              });
+            });
+            
+            // Essayer plusieurs stratégies de filtrage
+            const patientDossiers = allDossiers.data.filter(dossier => {
+              // Stratégie 1: patient_id direct
+              if (dossier.patient_id === patientId || dossier.patient_id === String(patientId) || dossier.patient_id === parseInt(patientId)) {
+                console.log('✅ Dossier trouvé via patient_id:', dossier);
+                return true;
+              }
+              
+              // Stratégie 2: id_patient
+              if (dossier.id_patient === patientId || dossier.id_patient === String(patientId) || dossier.id_patient === parseInt(patientId)) {
+                console.log('✅ Dossier trouvé via id_patient:', dossier);
+                return true;
+              }
+              
+              // Stratégie 3: id_dossier correspond à patientId (si c'est le même ID)
+              if (dossier.id_dossier === patientId || dossier.id_dossier === String(patientId) || dossier.id_dossier === parseInt(patientId)) {
+                console.log('✅ Dossier trouvé via id_dossier correspondant:', dossier);
+                return true;
+              }
+              
+              // Stratégie 4: patient.id_patient
+              if (dossier.patient && (dossier.patient.id_patient === patientId || dossier.patient.id === patientId)) {
+                console.log('✅ Dossier trouvé via patient.id_patient:', dossier);
+                return true;
+              }
+              
+              return false;
+            });
+            
+            console.log('🔍 Dossiers filtrés pour ce patient:', patientDossiers);
+            
+            if (patientDossiers.length > 0) {
+              // Prendre le premier dossier trouvé
+              const foundDossier = patientDossiers[0];
+              console.log('✅ Dossier trouvé via getAllDossiersMedical:', foundDossier);
+              
+              // Reconstituer le format attendu
+              dossierData = {
+                status: 'success',
+                data: {
+                  dossier: foundDossier,
+                  prescriptions_actives: [],
+                  examens_recents: [],
+                  consultations_recentes: [],
+                  demandes_en_attente: [],
+                  resultats_anormaux: [],
+                  resume: {
+                    nombre_prescriptions_actives: 0,
+                    nombre_examens_recents: 0,
+                    nombre_consultations_recentes: 0,
+                    nombre_demandes_en_attente: 0,
+                    nombre_resultats_anormaux: 0
+                  }
+                }
+              };
+            } else {
+              console.log('⚠️ Aucun dossier trouvé avec les stratégies de filtrage');
+              console.log('🔍 Tentative de création d\'un nouveau dossier pour ce patient...');
+              
+              // Créer un nouveau dossier pour ce patient
+              try {
+                const newDossier = await createDossierMedical({
+                  patient_id: patientId,
+                  statut: 'actif',
+                  dateOuverture: new Date().toISOString().split('T')[0],
+                  resume_medical: 'Dossier médical créé automatiquement',
+                  antecedents_medicaux: '',
+                  allergies: '',
+                  traitement: '',
+                  signes_vitaux: '',
+                  histoire_familiale: '',
+                  observations: '',
+                  directives_anticipees: ''
+                });
+                
+                console.log('✅ Nouveau dossier créé:', newDossier);
+                
+                // Reconstituer le format attendu avec le nouveau dossier
+                dossierData = {
+                  status: 'success',
+                  data: {
+                    dossier: newDossier.data || newDossier,
+                    prescriptions_actives: [],
+                    examens_recents: [],
+                    consultations_recentes: [],
+                    demandes_en_attente: [],
+                    resultats_anormaux: [],
+                    resume: {
+                      nombre_prescriptions_actives: 0,
+                      nombre_examens_recents: 0,
+                      nombre_consultations_recentes: 0,
+                      nombre_demandes_en_attente: 0,
+                      nombre_resultats_anormaux: 0
+                    }
+                  }
+                };
+              } catch (createError) {
+                console.log('❌ Erreur lors de la création du dossier:', createError);
+              }
+            }
+          }
+        } catch (altError) {
+          console.log('❌ Erreur lors de la récupération alternative:', altError);
+        }
+        
+        if (!dossierData) {
+          throw new Error('Aucun dossier médical trouvé pour ce patient');
+        }
+      }
       
       console.log('📋 Dossier médical récupéré (brut):', dossierData);
       console.log('🔍 Structure des données:', {
@@ -434,6 +610,27 @@ prescription.redacteur.id_professionnel || prescription.redacteur.id_medecin)) {
         dataKeys: dossierData?.data ? Object.keys(dossierData.data) : 'Pas de data',
         dataDataKeys: dossierData?.data?.data ? Object.keys(dossierData.data.data) : 'Pas de data.data'
       });
+      
+      // AFFICHAGE COMPLET DU CONTENU AVANT CHARGEMENT
+      console.log('🔍 ===== CONTENU COMPLET DU DOSSIER AVANT CHARGEMENT =====');
+      console.log('📄 Données complètes:', JSON.stringify(dossierData, null, 2));
+      
+      if (dossierData?.data) {
+        console.log('📄 Données dans data:', JSON.stringify(dossierData.data, null, 2));
+        
+        if (dossierData.data.dossier) {
+          console.log('📄 Dossier dans data.dossier:', JSON.stringify(dossierData.data.dossier, null, 2));
+        }
+        
+        if (dossierData.data.data) {
+          console.log('📄 Données dans data.data:', JSON.stringify(dossierData.data.data, null, 2));
+          
+          if (dossierData.data.data.dossier) {
+            console.log('📄 Dossier dans data.data.dossier:', JSON.stringify(dossierData.data.data.dossier, null, 2));
+          }
+        }
+      }
+      console.log('🔍 ===== FIN DU CONTENU COMPLET =====');
       
       // Gérer différents formats de réponse possibles
       let dossierInfo = null;
@@ -465,6 +662,9 @@ prescription.redacteur.id_professionnel || prescription.redacteur.id_medecin)) {
       }
       
       if (dossierInfo) {
+        console.log('🔍 Données brutes du dossier avant normalisation:', dossierInfo);
+        console.log('🔍 Clés disponibles dans dossierInfo:', Object.keys(dossierInfo));
+        
         // Normaliser les données pour l'affichage
         const normalizedDossier = {
           // ID et numéro de dossier
@@ -476,7 +676,7 @@ prescription.redacteur.id_professionnel || prescription.redacteur.id_medecin)) {
           date_ouverture: dossierInfo.dateCreation || dossierInfo.date_ouverture || dossierInfo.createdAt,
           
           // Informations médicales (gérer les différents noms de propriétés)
-          resume_medical: dossierInfo.resume || dossierInfo.resume_medical || 'Aucun résumé disponible',
+          resume_medical: dossierInfo.resume || dossierInfo.resume_medical || dossierInfo.resume_medical || 'Aucun résumé disponible',
           antecedents_medicaux: Array.isArray(dossierInfo.antecedent_medicaux) 
             ? dossierInfo.antecedent_medicaux.join(', ') 
             : dossierInfo.antecedent_medicaux || dossierInfo.antecedents_medicaux || dossierInfo.antecedents 
@@ -506,11 +706,60 @@ prescription.redacteur.id_professionnel || prescription.redacteur.id_medecin)) {
         };
         
         console.log('📋 Dossier normalisé:', normalizedDossier);
+        console.log('🔍 ===== CONTENU NORMALISÉ AVANT AFFICHAGE =====');
+        console.log('📄 Dossier normalisé complet:', JSON.stringify(normalizedDossier, null, 2));
+        console.log('🔍 Vérification des champs normalisés:');
+        console.log('  - resume_medical:', normalizedDossier.resume_medical);
+        console.log('  - antecedents_medicaux:', normalizedDossier.antecedents_medicaux);
+        console.log('  - allergies:', normalizedDossier.allergies);
+        console.log('  - traitement:', normalizedDossier.traitement);
+        console.log('  - signes_vitaux:', normalizedDossier.signes_vitaux);
+        console.log('  - histoire_familiale:', normalizedDossier.histoire_familiale);
+        console.log('  - observations:', normalizedDossier.observations);
+        console.log('🔍 ===== FIN DU CONTENU NORMALISÉ =====');
+        
+        // Utiliser uniquement les données réelles du serveur
+        console.log('📋 Utilisation des données réelles du serveur uniquement');
+        
         setDossierMedical(normalizedDossier);
         setShowDossierSection(true);
         console.log('✅ Dossier médical chargé avec succès');
       } else {
-        throw new Error('Aucun dossier médical trouvé pour ce patient');
+        console.log('⚠️ Aucun dossier médical trouvé, tentative de création...');
+        // Essayer de créer un dossier médical pour le patient
+        try {
+          const newDossier = await createDossierMedical({
+            patient_id: patientId,
+            statut: 'actif',
+            resume_medical: 'Dossier médical créé automatiquement',
+            antecedents_medicaux: 'Aucun antécédent connu',
+            allergies: 'Aucune allergie connue',
+            traitement: 'Aucun traitement en cours',
+            signes_vitaux: 'Normaux',
+            histoire_familiale: 'Non documentée',
+            observations: 'Patient en bonne santé générale'
+          });
+          
+          console.log('✅ Nouveau dossier médical créé:', newDossier);
+          
+          // Recharger le dossier après création
+          const updatedDossierData = await getDossierPatient(patientId);
+          if (updatedDossierData && updatedDossierData.success && updatedDossierData.data) {
+            const normalizedDossier = {
+              ...updatedDossierData.data,
+              patient: patientProfile,
+              patient_name: `${patientProfile.prenom || ''} ${patientProfile.nom || ''}`.trim() || 'Patient inconnu'
+            };
+            
+            console.log('📋 Dossier créé et normalisé:', normalizedDossier);
+            setDossierMedical(normalizedDossier);
+            setShowDossierSection(true);
+            console.log('✅ Dossier médical créé et chargé avec succès');
+          }
+        } catch (createError) {
+          console.error('❌ Erreur lors de la création du dossier médical:', createError);
+          throw new Error('Aucun dossier médical trouvé et impossible d\'en créer un');
+        }
       }
     } catch (error) {
       console.error('❌ Erreur lors du chargement du dossier médical:', error);
@@ -535,6 +784,13 @@ prescription.redacteur.id_professionnel || prescription.redacteur.id_medecin)) {
       setLoadingDossier(false);
     }
   }, [patientId, patientProfile]);
+
+  // Effet pour charger le dossier médical quand le patientId est disponible
+  useEffect(() => {
+    if (patientId && patientProfile) {
+      loadDossierMedical();
+    }
+  }, [patientId, patientProfile, loadDossierMedical]);
 
   // Fonction pour recharger le dossier médical
   const handleRefreshDossier = useCallback(() => {

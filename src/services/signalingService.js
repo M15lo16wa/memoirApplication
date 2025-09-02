@@ -90,7 +90,7 @@ const getAllAvailableTokens = () => {
  */
 class SignalingService {
     socket = null;
-    baseURL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
+    baseURL = process.env.REACT_APP_API_URL || 'http://192.168.4.81:3000';
     tokens = null;
     userInfo = null;
 

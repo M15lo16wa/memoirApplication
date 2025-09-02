@@ -339,6 +339,49 @@ function DossierPatient() {
       
       // Reload dossiers list
       await loadDossiersPatients();
+      
+      // Update the selected dossier reference after reload
+      if (selectedDossierRef.current) {
+        // We'll update the reference when the modal is reloaded
+        console.log('🔄 Référence du dossier sera mise à jour lors du rechargement du modal');
+      }
+      
+      // If the dossier modal is open, reload the dossier details
+      if (modalState.showDossierModal && selectedDossierRef.current) {
+        console.log('🔄 Rechargement des détails du dossier après modification...');
+        try {
+          const dossierId = selectedDossierRef.current.id || selectedDossierRef.current.Id || selectedDossierRef.current.dossier_id || selectedDossierRef.current.id_dossier;
+          const details = await getDossierMedical(dossierId);
+          
+          // Handle the response format from backend
+          let dossierData;
+          if (details && details.data) {
+            dossierData = details.data;
+          } else {
+            dossierData = details;
+          }
+          
+          // Enrich with patient information if not already present
+          if (dossierData && !dossierData.patient && selectedDossierRef.current.patient_info) {
+            dossierData.patient = selectedDossierRef.current.patient_info;
+          }
+          
+          // Add patient name if available from enriched dossier data
+          if (dossierData && !dossierData.patient_name && selectedDossierRef.current.patient_name) {
+            dossierData.patient_name = selectedDossierRef.current.patient_name;
+          }
+          
+          // Add file number if available
+          if (dossierData && !dossierData.numeroDossier) {
+            dossierData.numeroDossier = selectedDossierRef.current.numeroDossier || selectedDossierRef.current.id_dossier || selectedDossierRef.current.id;
+          }
+          
+          dossierDetailsRef.current = dossierData;
+          console.log('✅ Détails du dossier rechargés avec succès');
+        } catch (error) {
+          console.error('❌ Erreur lors du rechargement des détails du dossier:', error);
+        }
+      }
     } catch (error) {
       console.error('Erreur lors de la mise à jour du dossier:', error);
       alert('Erreur lors de la mise à jour du dossier: ' + error);
@@ -659,11 +702,15 @@ function DossierPatient() {
       console.log('🔍 loadDossiersPatients - Réponse de getAllDossiersMedical():', dossiersData);
       console.log('🔍 loadDossiersPatients - Type de dossiersData:', typeof dossiersData);
       console.log('🔍 loadDossiersPatients - Est un tableau:', Array.isArray(dossiersData));
+      console.log('🔍 loadDossiersPatients - Clés de dossiersData:', dossiersData ? Object.keys(dossiersData) : 'null');
       
       let dossiers = [];
       if (dossiersData && dossiersData.status === 'success' && dossiersData.data && Array.isArray(dossiersData.data)) {
-        console.log('🔍 loadDossiersPatients - Format success avec data array');
+        console.log('🔍 loadDossiersPatients - Format success avec data array (dossiers enrichis)');
         dossiers = dossiersData.data;
+      } else if (dossiersData && dossiersData.status === 'success' && dossiersData.data && dossiersData.data.dossiers && Array.isArray(dossiersData.data.dossiers)) {
+        console.log('🔍 loadDossiersPatients - Format success avec data.dossiers array');
+        dossiers = dossiersData.data.dossiers;
       } else if (Array.isArray(dossiersData)) {
         console.log('🔍 loadDossiersPatients - Format array direct');
         dossiers = dossiersData;
@@ -677,8 +724,19 @@ function DossierPatient() {
       console.log('🔍 loadDossiersPatients - Dossiers traités:', dossiers);
       console.log('🔍 loadDossiersPatients - Nombre de dossiers:', dossiers.length);
       
+      if (dossiers.length === 0) {
+        console.warn('⚠️ Aucun dossier trouvé dans la réponse API');
+      } else {
+        console.log('✅ Dossiers trouvés, mise à jour de l\'état...');
+      }
+      
       updateDataState({ dossiersPatients: dossiers });
       console.log('🔍 loadDossiersPatients - État dataState mis à jour avec dossiersPatients:', dossiers);
+      
+      // Vérification que l'état a été mis à jour
+      setTimeout(() => {
+        console.log('🔍 loadDossiersPatients - Vérification de l\'état après mise à jour:', dataState.dossiersPatients);
+      }, 100);
     } catch (error) {
       console.error('🔍 loadDossiersPatients - Erreur lors du chargement des dossiers:', error);
       updateDataState({ dossiersPatients: [] });
@@ -1624,8 +1682,8 @@ const loadOrdonnancesRecentes = useCallback(async () => {
                   onClick={() => updateUIState({ activeTab: "patients-list"})}
                   className={`w-full text-left px-4 py-3 rounded-xl flex items-center space-x-3 transition-all duration-200 ${
                     uiState.activeTab === "patients-list" 
-                      ? "bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg transform scale-105" 
-                      : "text-gray-700 hover:bg-white hover:shadow-md hover:scale-105"
+                      ? "bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg transform scale-105" 
+                      : "text-gray-700 hover:bg-blue-50 hover:shadow-md hover:scale-105"
                   }`}>
                   <span className="text-lg">👥</span>
                   <span className="font-medium">Liste des Patients</span>
@@ -1636,8 +1694,8 @@ const loadOrdonnancesRecentes = useCallback(async () => {
                   onClick={() => updateUIState({ activeTab: "shared-folder"})}
                   className={`w-full text-left px-4 py-3 rounded-xl flex items-center space-x-3 transition-all duration-200 ${
                     uiState.activeTab === "shared-folder" 
-                      ? "bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg transform scale-105" 
-                      : "text-gray-700 hover:bg-white hover:shadow-md hover:scale-105"
+                      ? "bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg transform scale-105" 
+                      : "text-gray-700 hover:bg-blue-50 hover:shadow-md hover:scale-105"
                   }`}>
                   <span className="text-lg">📁</span>
                   <span className="font-medium">Dossiers Patients</span>
@@ -1648,8 +1706,8 @@ const loadOrdonnancesRecentes = useCallback(async () => {
                   onClick={() => updateUIState({ activeTab: "notifications"})}
                   className={`w-full text-left px-4 py-3 rounded-xl flex items-center space-x-3 transition-all duration-200 relative ${
                     uiState.activeTab === "notifications" 
-                      ? "bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg transform scale-105" 
-                      : "text-gray-700 hover:bg-white hover:shadow-md hover:scale-105"
+                      ? "bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg transform scale-105" 
+                      : "text-gray-700 hover:bg-blue-50 hover:shadow-md hover:scale-105"
                   }`}>
                   <span className="text-lg">🔔</span>
                   <span className="font-medium">Notifications</span>
@@ -1661,8 +1719,8 @@ const loadOrdonnancesRecentes = useCallback(async () => {
                   onClick={() => updateUIState({ activeTab: "prescriptions"})}
                   className={`w-full text-left px-4 py-3 rounded-xl flex items-center space-x-3 transition-all duration-200 ${
                     uiState.activeTab === "prescriptions" 
-                      ? "bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg transform scale-105" 
-                      : "text-gray-700 hover:bg-white hover:shadow-md hover:scale-105"
+                      ? "bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg transform scale-105" 
+                      : "text-gray-700 hover:bg-blue-50 hover:shadow-md hover:scale-105"
                   }`}>
                   <span className="text-lg">💊</span>
                   <span className="font-medium">Prescriptions</span>
@@ -1720,7 +1778,7 @@ const loadOrdonnancesRecentes = useCallback(async () => {
           {uiState.activeTab === "patients-list" && (
             <div className="space-y-6">
               {/* Header avec statistiques */}
-              <div className="bg-gradient-to-r from-blue-500 to-indigo-600 rounded-2xl p-6 text-white shadow-xl">
+              <div className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-2xl p-6 text-white shadow-xl">
                 <div className="flex justify-between items-center mb-4">
                   <div>
                     <h2 className="text-3xl font-bold">Liste des Patients</h2>
@@ -1861,15 +1919,15 @@ const loadOrdonnancesRecentes = useCallback(async () => {
           {uiState.activeTab === "shared-folder" && (
             <div className="space-y-6">
               {/* Header avec statistiques */}
-              <div className="bg-gradient-to-r from-green-500 to-emerald-600 rounded-2xl p-6 text-white shadow-xl">
+              <div className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-2xl p-6 text-white shadow-xl">
                 <div className="flex justify-between items-center mb-4">
                   <div>
                     <h2 className="text-3xl font-bold">Dossiers Patients</h2>
-                    <p className="text-green-100 mt-1">Gérez les dossiers médicaux de vos patients</p>
+                    <p className="text-blue-100 mt-1">Gérez les dossiers médicaux de vos patients</p>
                   </div>
                   <div className="text-right">
                     <div className="text-4xl font-bold">{dataState.dossiersPatients.length}</div>
-                    <div className="text-green-100">Dossiers</div>
+                    <div className="text-blue-100">Dossiers</div>
                   </div>
                 </div>
                 <div className="flex space-x-4">
@@ -2015,15 +2073,15 @@ const loadOrdonnancesRecentes = useCallback(async () => {
           {uiState.activeTab === "notifications" && (
             <div className="space-y-6">
               {/* Header avec statistiques */}
-              <div className="bg-gradient-to-r from-purple-500 to-pink-600 rounded-2xl p-6 text-white shadow-xl">
+              <div className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-2xl p-6 text-white shadow-xl">
                 <div className="flex justify-between items-center mb-4">
                   <div>
                     <h2 className="text-3xl font-bold">Notifications & Rapports</h2>
-                    <p className="text-purple-100 mt-1">Suivez vos activités et restez informé</p>
+                    <p className="text-blue-100 mt-1">Suivez vos activités et restez informé</p>
                   </div>
                   <div className="text-right">
                     <div className="text-4xl font-bold">3</div>
-                    <div className="text-purple-100">Nouvelles</div>
+                    <div className="text-blue-100">Nouvelles</div>
                   </div>
                 </div>
                 <div className="flex space-x-4">
@@ -2218,15 +2276,15 @@ const loadOrdonnancesRecentes = useCallback(async () => {
           {uiState.activeTab === "prescriptions" && (
             <div className="space-y-6">
               {/* Header avec statistiques */}
-              <div className="bg-gradient-to-r from-emerald-500 to-teal-600 rounded-2xl p-6 text-white shadow-xl">
+              <div className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-2xl p-6 text-white shadow-xl">
                 <div className="flex justify-between items-center mb-4">
                   <div>
                     <h2 className="text-3xl font-bold">Prescriptions & Examens</h2>
-                    <p className="text-emerald-100 mt-1">Gérez les prescriptions et demandes d'examens</p>
+                    <p className="text-blue-100 mt-1">Gérez les prescriptions et demandes d'examens</p>
                   </div>
                   <div className="text-right">
                     <div className="text-4xl font-bold">{dataState.prescriptions.length}</div>
-                    <div className="text-emerald-100">Prescriptions</div>
+                    <div className="text-blue-100">Prescriptions</div>
                   </div>
                 </div>
                 
@@ -3155,6 +3213,22 @@ Dr. Dupont`
                         <p className="text-sm text-gray-900">{getServiceNameById(dossierDetailsRef.current.service_id)}</p>
                       </div>
                       
+                      {/* Type de dossier */}
+                      {dossierDetailsRef.current.type_dossier && (
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700">Type de dossier</label>
+                          <p className="text-sm text-gray-900">{dossierDetailsRef.current.type_dossier}</p>
+                        </div>
+                      )}
+                      
+                      {/* Médecin référent */}
+                      {dossierDetailsRef.current.medecin_referent_id && (
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700">Médecin référent</label>
+                          <p className="text-sm text-gray-900">ID: {dossierDetailsRef.current.medecin_referent_id}</p>
+                        </div>
+                      )}
+                      
                       {/* Status */}
                       <div>
                         <label className="block text-sm font-medium text-gray-700">Statut</label>
@@ -3241,13 +3315,60 @@ Dr. Dupont`
                           </div>
                         )}
                         
-                        {dossierDetailsRef.current.signes_vitaux && (
+                        {dossierDetailsRef.current.traitements_chroniques && (
                           <div>
-                            <label className="block text-sm font-medium text-gray-700">Signes Vitaux</label>
-                            <p className="text-sm text-gray-900 mt-1 whitespace-pre-wrap">{dossierDetailsRef.current.signes_vitaux}</p>
+                            <label className="block text-sm font-medium text-gray-700">Traitements Chroniques</label>
+                            <p className="text-sm text-gray-900 mt-1 whitespace-pre-wrap">{dossierDetailsRef.current.traitements_chroniques}</p>
                           </div>
                         )}
                       </div>
+                      
+                      {/* Signes vitaux détaillés */}
+                      {(dossierDetailsRef.current.heart_rate || dossierDetailsRef.current.blood_pressure || dossierDetailsRef.current.temperature || dossierDetailsRef.current.respiratory_rate || dossierDetailsRef.current.oxygen_saturation) && (
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-3">Signes Vitaux Détaillés</label>
+                          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                            {dossierDetailsRef.current.heart_rate && (
+                              <div className="bg-blue-50 p-3 rounded-lg">
+                                <label className="block text-xs font-medium text-blue-700">Fréquence cardiaque</label>
+                                <p className="text-sm font-semibold text-blue-900">{dossierDetailsRef.current.heart_rate} bpm</p>
+                              </div>
+                            )}
+                            {dossierDetailsRef.current.blood_pressure && (
+                              <div className="bg-green-50 p-3 rounded-lg">
+                                <label className="block text-xs font-medium text-green-700">Pression artérielle</label>
+                                <p className="text-sm font-semibold text-green-900">{dossierDetailsRef.current.blood_pressure} mmHg</p>
+                              </div>
+                            )}
+                            {dossierDetailsRef.current.temperature && (
+                              <div className="bg-red-50 p-3 rounded-lg">
+                                <label className="block text-xs font-medium text-red-700">Température</label>
+                                <p className="text-sm font-semibold text-red-900">{dossierDetailsRef.current.temperature}°C</p>
+                              </div>
+                            )}
+                            {dossierDetailsRef.current.respiratory_rate && (
+                              <div className="bg-purple-50 p-3 rounded-lg">
+                                <label className="block text-xs font-medium text-purple-700">Fréquence respiratoire</label>
+                                <p className="text-sm font-semibold text-purple-900">{dossierDetailsRef.current.respiratory_rate} /min</p>
+                              </div>
+                            )}
+                            {dossierDetailsRef.current.oxygen_saturation && (
+                              <div className="bg-yellow-50 p-3 rounded-lg">
+                                <label className="block text-xs font-medium text-yellow-700">Saturation O₂</label>
+                                <p className="text-sm font-semibold text-yellow-900">{dossierDetailsRef.current.oxygen_saturation}%</p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Signes vitaux généraux (fallback) */}
+                      {dossierDetailsRef.current.signes_vitaux && !dossierDetailsRef.current.heart_rate && !dossierDetailsRef.current.blood_pressure && !dossierDetailsRef.current.temperature && (
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700">Signes Vitaux</label>
+                          <p className="text-sm text-gray-900 mt-1 whitespace-pre-wrap">{dossierDetailsRef.current.signes_vitaux}</p>
+                        </div>
+                      )}
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {dossierDetailsRef.current.histoire_familiale && (
@@ -3257,10 +3378,26 @@ Dr. Dupont`
                           </div>
                         )}
                         
+                        {dossierDetailsRef.current.habitudes_vie && (
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700">Habitudes de Vie</label>
+                            <p className="text-sm text-gray-900 mt-1 whitespace-pre-wrap">{dossierDetailsRef.current.habitudes_vie}</p>
+                          </div>
+                        )}
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {dossierDetailsRef.current.observations && (
                           <div>
                             <label className="block text-sm font-medium text-gray-700">Observations</label>
                             <p className="text-sm text-gray-900 mt-1 whitespace-pre-wrap">{dossierDetailsRef.current.observations}</p>
+                          </div>
+                        )}
+                        
+                        {dossierDetailsRef.current.motif_fermeture && (
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700">Motif de Fermeture</label>
+                            <p className="text-sm text-gray-900 mt-1 whitespace-pre-wrap">{dossierDetailsRef.current.motif_fermeture}</p>
                           </div>
                         )}
                       </div>
