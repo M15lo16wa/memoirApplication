@@ -321,15 +321,32 @@ const getAllDossiersMedical = async () => {
             console.log('🔍 Enrichissement des dossiers avec les données patients et services...');
             
             try {
+                // Vérifier si c'est un patient connecté (pas un médecin)
+                const storedPatient = JSON.parse(localStorage.getItem('patient') || '{}');
+                const isPatientConnected = storedPatient && storedPatient.id_patient;
+                
+                console.log('🔍 Type d\'utilisateur connecté:', isPatientConnected ? 'Patient' : 'Médecin/Professionnel');
+                console.log('🔍 Patient connecté:', storedPatient);
+                
                 // Importer dynamiquement les fonctions nécessaires
-                const { getPatients } = await import('./patientApi.js');
                 const { getServices } = await import('./patientApi.js');
                 
-                // Récupérer les patients et services
-                const [patientsResponse, servicesResponse] = await Promise.all([
-                    getPatients(),
-                    getServices()
-                ]);
+                let patientsResponse = [];
+                let servicesResponse = [];
+                
+                if (isPatientConnected) {
+                    // Si c'est un patient connecté, utiliser ses propres informations
+                    console.log('👤 Patient connecté - utilisation des informations personnelles');
+                    patientsResponse = [storedPatient];
+                } else {
+                    // Si c'est un médecin, récupérer tous les patients
+                    console.log('👨‍⚕️ Médecin connecté - récupération de tous les patients');
+                    const { getPatients } = await import('./patientApi.js');
+                    patientsResponse = await getPatients();
+                }
+                
+                // Récupérer les services (accessible pour tous)
+                servicesResponse = await getServices();
                 
                 console.log('📊 Patients récupérés pour enrichissement:', patientsResponse);
                 console.log('📊 Services récupérés pour enrichissement:', servicesResponse);
@@ -343,6 +360,8 @@ const getAllDossiersMedical = async () => {
                         const patientId = patient.id_patient || patient.id || patient.patientId;
                         if (patientId) {
                             patientsMap.set(patientId.toString(), patient);
+                            // Aussi ajouter avec l'ID numérique pour plus de flexibilité
+                            patientsMap.set(patientId, patient);
                         }
                     });
                 }
@@ -369,12 +388,12 @@ const getAllDossiersMedical = async () => {
                         console.log(`🔍 Enrichissement dossier ${dossier.id_dossier || dossier.id}:`, {
                             patientId,
                             serviceId,
-                            patientFound: patientsMap.has(patientId?.toString()),
+                            patientFound: patientsMap.has(patientId?.toString()) || patientsMap.has(patientId),
                             serviceFound: servicesMap.has(serviceId?.toString())
                         });
                         
                         // Récupérer les informations du patient et du service
-                        const patient = patientsMap.get(patientId?.toString());
+                        const patient = patientsMap.get(patientId?.toString()) || patientsMap.get(patientId);
                         const service = servicesMap.get(serviceId?.toString());
                         
                         // Create proper file number
@@ -420,7 +439,9 @@ const getAllDossiersMedical = async () => {
                 // Fallback: enrichment de base sans API externe
                 const enrichedDossiers = dossiers.map((dossier) => {
                     try {
-                        const patient = dossier.patient_info || dossier.patient || dossier.Patient;
+                        // Essayer d'utiliser les informations du patient connecté en fallback
+                        const storedPatient = JSON.parse(localStorage.getItem('patient') || '{}');
+                        const patient = dossier.patient_info || dossier.patient || dossier.Patient || storedPatient;
                         const service = dossier.service_info || dossier.service || dossier.Service;
                         
                         let fileNumber = dossier.numeroDossier || dossier.numero_dossier;

@@ -452,13 +452,20 @@ prescription.redacteur.id_professionnel || prescription.redacteur.id_medecin)) {
           
           // Vérifier si on a des données valides
           if (dossierData && dossierData.data && dossierData.data.dossier) {
-            console.log(`✅ Dossier trouvé avec ID: ${testId}`);
+            console.log(`✅ Dossier trouvé avec ID: ${testId} (format data.dossier)`);
             break;
           } else if (dossierData && dossierData.success && dossierData.data && dossierData.data.id) {
-            console.log(`✅ Dossier trouvé avec ID: ${testId}`);
+            console.log(`✅ Dossier trouvé avec ID: ${testId} (format data.id)`);
+            break;
+          } else if (dossierData && dossierData.status === 'success' && dossierData.data && dossierData.data.id_dossier) {
+            console.log(`✅ Dossier trouvé avec ID: ${testId} (format data.id_dossier)`);
+            break;
+          } else if (dossierData && dossierData.status === 'success' && dossierData.data) {
+            console.log(`✅ Dossier trouvé avec ID: ${testId} (format data direct)`);
             break;
           } else {
             console.log(`❌ Aucun dossier trouvé avec ID: ${testId}`);
+            console.log(`🔍 Structure reçue:`, dossierData);
             dossierData = null;
           }
         } catch (error) {
@@ -525,11 +532,20 @@ prescription.redacteur.id_professionnel || prescription.redacteur.id_medecin)) {
               const foundDossier = patientDossiers[0];
               console.log('✅ Dossier trouvé via getAllDossiersMedical:', foundDossier);
               
+              // ✅ CORRECTION : Enrichir le dossier avec les informations du patient connecté
+              const enrichedDossier = {
+                ...foundDossier,
+                patient_name: patientProfile ? `${patientProfile.prenom || ''} ${patientProfile.nom || ''}`.trim() : 'Patient inconnu',
+                patient_info: patientProfile,
+                // S'assurer que le numéro de dossier est correct
+                numeroDossier: foundDossier.numeroDossier || `DOSSIER-${(foundDossier.id_dossier || foundDossier.id).toString().padStart(6, '0')}`
+              };
+              
               // Reconstituer le format attendu
               dossierData = {
                 status: 'success',
                 data: {
-                  dossier: foundDossier,
+                  dossier: enrichedDossier,
                   prescriptions_actives: [],
                   examens_recents: [],
                   consultations_recentes: [],
@@ -697,6 +713,10 @@ prescription.redacteur.id_professionnel || prescription.redacteur.id_medecin)) {
           // Autres informations
           histoire_familiale: dossierInfo.historique_familial || dossierInfo.histoire_familiale || 'Non documentée',
           observations: dossierInfo.observations || 'Aucune observation particulière',
+          
+          // ✅ CORRECTION : Ajouter les informations du patient connecté
+          patient_name: patientProfile ? `${patientProfile.prenom || ''} ${patientProfile.nom || ''}`.trim() : 'Patient inconnu',
+          patient_info: patientProfile,
           
           // Informations sur le médecin traitant
           medecin: dossierInfo.medecinReferent || dossierInfo.medecin || dossierInfo.medecin_traitant || dossierInfo.professionnel,
