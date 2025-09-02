@@ -17,6 +17,7 @@ import Agenda from './pages/agenda';
 
 // messagerie
 import { ChatMessage } from './messaging';
+import ConferencePage from './messaging/components/ConferencePage';
 
 
 
@@ -61,6 +62,9 @@ function App() {
       <Route path='/fiche-inscription' element={<FicheInscription/>}/>
       {/* Nouvelle route pour la messagerie */}
       <Route path="/chat-message" element={<ChatMessage />} />
+      {/* Routes publiques pour rejoindre une conférence */}
+      <Route path="/conference/:sessionId" element={<ConferencePage />} />
+      <Route path="/conference" element={<ConferencePage />} />
     </Routes>
   );
 }

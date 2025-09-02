@@ -1,7 +1,7 @@
 // src/messaging/components/WebRTCWidget.js
 import React, { useState, useEffect, useRef } from 'react';
 import { FaVideo, FaMicrophone, FaMicrophoneSlash, FaVideoSlash } from 'react-icons/fa';
-import { signalingService } from '../index';
+import signalingService from '../../services/signalingService';
 import './WebRTCWidget.css';
 
 const WebRTCWidget = ({ 
@@ -17,6 +17,7 @@ const WebRTCWidget = ({
     const [isInCall, setIsInCall] = useState(false);
     const [sessionId, setSessionId] = useState(null);
     const [conferenceLink, setConferenceLink] = useState(null);
+    const [copied, setCopied] = useState(false);
     const iceQueueRef = useRef([]);
 
     const localVideoRef = useRef();
@@ -32,6 +33,43 @@ const WebRTCWidget = ({
         if (isInitiator) {
             startCall();
         }
+        // Auto-join flow when opened via direct conference link
+        try {
+            const href = window?.location?.href || '';
+            if (href.includes('/conference')) {
+                // Extract code and optional session/conversation id from URL
+                const url = new URL(href);
+                const code = url.searchParams.get('code');
+                const pathParts = url.pathname.split('/').filter(Boolean);
+                const maybeId = pathParts[pathParts.length - 1];
+                // Initialize signaling if needed
+                if (!signalingService.isConnected()) {
+                    signalingService.initialize();
+                    // Try to connect as patient using localStorage
+                    const patientRaw = localStorage.getItem('patient');
+                    const token = localStorage.getItem('jwt') || localStorage.getItem('token');
+                    let pid = null;
+                    try {
+                        const p = patientRaw ? JSON.parse(patientRaw) : null;
+                        pid = p?.id_patient || p?.id || null;
+                    } catch (e) {}
+                    if (pid && token) {
+                        signalingService.connectSocket(pid, 'patient', token);
+                    }
+                }
+                // Emit a generic join event so server can send offer to this client
+                signalingService.emit && signalingService.emit('join_conference', {
+                    code: code,
+                    sessionId: maybeId,
+                    link: href
+                });
+                // Ask server to send SDP offer to this client
+                signalingService.emit && signalingService.emit('request_webrtc_offer', {
+                    code: code,
+                    sessionId: maybeId
+                });
+            }
+        } catch {}
         return () => cleanup();
     }, []);
 
@@ -295,49 +333,6 @@ const WebRTCWidget = ({
             <div className="webrtc-header">
                 <h3>Appel en cours</h3>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    {conferenceLink && (
-                        <div className="conference-link" style={{
-                            background: '#eef7ff',
-                            border: '1px solid #cfe5ff',
-                            color: '#0b5ed7',
-                            padding: '4px 8px',
-                            borderRadius: '6px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '6px'
-                        }}>
-                            <span>Lien de conférence:</span>
-                            <code style={{ fontWeight: 600 }}>{conferenceLink}</code>
-                            <button
-                                onClick={async () => {
-                                    try {
-                                        await navigator.clipboard?.writeText(conferenceLink);
-                                        console.log('Lien de conférence copié');
-                                    } catch (e) {
-                                        // Fallback
-                                        const textarea = document.createElement('textarea');
-                                        textarea.value = conferenceLink;
-                                        document.body.appendChild(textarea);
-                                        textarea.select();
-                                        document.execCommand('copy');
-                                        document.body.removeChild(textarea);
-                                    }
-                                }}
-                                className="copy-link"
-                                title="Copier le lien"
-                                style={{
-                                    background: '#0b5ed7',
-                                    color: '#fff',
-                                    border: 'none',
-                                    borderRadius: '4px',
-                                    padding: '2px 6px',
-                                    cursor: 'pointer'
-                                }}
-                            >
-                                Copier
-                            </button>
-                        </div>
-                    )}
                     <button className="close-button" onClick={onClose}>×</button>
                 </div>
             </div>
@@ -345,25 +340,43 @@ const WebRTCWidget = ({
             {/* Bandeau lien de conférence si disponible */}
             {conferenceLink && (
                 <div style={{
-                    background: '#e8f5e9',
-                    border: '1px solid #c8e6c9',
-                    color: '#1b5e20',
-                    padding: '8px 12px',
+                    background: '#f3f4ff',
+                    border: '1px solid #dcdcff',
+                    color: '#2b2b6f',
+                    padding: '12px 16px',
                     margin: '12px 20px 0 20px',
-                    borderRadius: '8px',
+                    borderRadius: '10px',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
-                    gap: '10px'
+                    gap: '12px'
                 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span style={{ fontWeight: 600 }}>Lien de conférence:</span>
-                        <code style={{ fontWeight: 700 }}>{conferenceLink}</code>
+                    <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 600, marginBottom: 6 }}>Lien de conférence</div>
+                        <input
+                            type="text"
+                            readOnly
+                            value={conferenceLink}
+                            onFocus={(e) => e.target.select()}
+                            style={{
+                                width: '100%',
+                                background: '#fff',
+                                border: '1px solid #cfd2f6',
+                                borderRadius: '6px',
+                                padding: '8px 10px',
+                                fontFamily: 'monospace',
+                                fontSize: 13,
+                                color: '#1b1b4d'
+                            }}
+                        />
+                        {copied && (
+                            <div style={{ color: '#1b5e20', fontSize: 12, marginTop: 6 }}>Lien copié ✅</div>
+                        )}
                     </div>
                     <button
                         onClick={async () => {
                             try {
-                                await navigator.clipboard?.writeText(conferenceLink);
+                                await navigator.clipboard.writeText(conferenceLink);
                             } catch (e) {
                                 const textarea = document.createElement('textarea');
                                 textarea.value = conferenceLink;
@@ -372,17 +385,23 @@ const WebRTCWidget = ({
                                 document.execCommand('copy');
                                 document.body.removeChild(textarea);
                             }
+                            setCopied(true);
+                            setTimeout(() => setCopied(false), 1500);
                         }}
+                        aria-label="Copier le lien de conférence"
+                        title="Copier le lien"
                         style={{
-                            background: '#1b5e20',
+                            background: '#4f46e5',
                             color: '#fff',
                             border: 'none',
-                            borderRadius: '6px',
-                            padding: '6px 10px',
-                            cursor: 'pointer'
+                            borderRadius: '8px',
+                            padding: '8px 12px',
+                            cursor: 'pointer',
+                            height: 38,
+                            alignSelf: 'flex-end'
                         }}
                     >
-                        Copier
+                        {copied ? 'Copié' : 'Copier'}
                     </button>
                 </div>
             )}

@@ -2191,6 +2191,9 @@ const DMP = () => {
   const [showMessagingTest, setShowMessagingTest] = useState(false);
   const [showMessagingInterface, setShowMessagingInterface] = useState(false);
   const [selectedConversationId, setSelectedConversationId] = useState(null);
+  const [showJoinConferenceModal, setShowJoinConferenceModal] = useState(false);
+  const [conferenceLink, setConferenceLink] = useState('');
+  const [conferenceError, setConferenceError] = useState(null);
   const [autoMesure, setAutoMesure] = useState({
     type_mesure: 'poids',
     valeur: '',
@@ -2274,6 +2277,65 @@ const DMP = () => {
     // Stocker l'ID du médecin pour l'utiliser dans ChatMessage
     if (medecinId) {
       localStorage.setItem('currentMedecinId', medecinId.toString());
+    }
+  };
+
+  // Joindre une conférence via lien
+  const validateConferenceLink = (link) => {
+    if (!link || typeof link !== 'string') return 'Lien manquant';
+    try {
+      const url = new URL(link);
+      if (!/^https?:$/.test(url.protocol)) return 'Lien invalide (http/https requis)';
+      return null;
+    } catch {
+      return 'Format de lien invalide';
+    }
+  };
+
+  const handleOpenJoinConference = () => {
+    setConferenceLink('');
+    setConferenceError(null);
+    setShowJoinConferenceModal(true);
+  };
+
+  const handleCloseJoinConference = () => {
+    setShowJoinConferenceModal(false);
+    setConferenceLink('');
+    setConferenceError(null);
+  };
+
+  const handleJoinConference = async () => {
+    const err = validateConferenceLink(conferenceLink);
+    if (err) {
+      setConferenceError(err);
+      return;
+    }
+    try {
+      // Init signaling if needed and notify intent to join
+      if (patientProfile) {
+        if (!signalingService.isConnected()) {
+          signalingService.initialize();
+          signalingService.connectSocket(
+            patientProfile.id_patient || patientProfile.id,
+            'patient',
+            localStorage.getItem('jwt') || localStorage.getItem('token')
+          );
+        }
+        signalingService.emit && signalingService.emit('patient_join_conference', {
+          conferenceLink: conferenceLink,
+          patientId: patientProfile.id_patient || patientProfile.id
+        });
+      }
+
+      // Ouvrir la conférence dans un nouvel onglet
+      window.open(conferenceLink, '_blank', 'noopener,noreferrer');
+
+      // Mémoriser le lien pour d'autres workflows (ex: accept call)
+      localStorage.setItem('lastConferenceLink', conferenceLink);
+
+      handleCloseJoinConference();
+    } catch (e) {
+      setConferenceError(e.message || 'Impossible de rejoindre la conférence');
     }
   };
 
@@ -3542,6 +3604,17 @@ un DMPProvider.</p>
             <div className="flex items-center space-x-4">
               {/* Gestionnaire de notifications de rendez-vous */}
               <NotificationManager />
+
+              {/* Rejoindre une conférence */}
+              {patientProfile && (
+                <button
+                  onClick={handleOpenJoinConference}
+                  className="flex items-center px-3 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
+                >
+                  <FaVideo className="mr-2" />
+                  Rejoindre conférence
+                </button>
+              )}
               
               <button
                 onClick={() => setShowAutoMesureModal(true)}
@@ -4742,6 +4815,47 @@ hover:bg-green-700 transition-colors"
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Rejoindre une conférence */}
+      {showJoinConferenceModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onClick={handleCloseJoinConference}>
+          <div className="bg-white rounded-lg p-4 sm:p-6 w-full max-w-sm sm:max-w-md md:max-w-lg" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold">Rejoindre une conférence</h3>
+              <button onClick={handleCloseJoinConference} className="text-gray-400 hover:text-gray-600">×</button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Lien de conférence</label>
+                <input
+                  type="url"
+                  value={conferenceLink}
+                  onChange={(e) => { setConferenceLink(e.target.value); setConferenceError(null); }}
+                  placeholder="https://..."
+                  className={`w-full p-3 border rounded-md ${conferenceError ? 'border-red-300' : 'border-gray-300'} focus:ring-2 focus:ring-purple-500 focus:border-purple-500`}
+                />
+                {conferenceError && (
+                  <p className="text-xs text-red-600 mt-1">{conferenceError}</p>
+                )}
+              </div>
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={handleCloseJoinConference}
+                  className="px-4 py-2 text-gray-600 hover:text-gray-800 border border-gray-300 rounded-md hover:bg-gray-50"
+                >
+                  Annuler
+                </button>
+                <button
+                  onClick={handleJoinConference}
+                  className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
+                >
+                  Rejoindre
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
