@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import signalingService from '../../services/signalingService';
+import { signalingService } from '../index';
 
 const MessagingTest = () => {
   const [testResults, setTestResults] = useState([]);

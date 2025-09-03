@@ -30,7 +30,8 @@
   },
   "scripts": {
     "start": "craco start",
-    "start:network": "set HOST=0.0.0.0&& set PORT=3001&& craco start",
+    "start:network": "set HOST=0.0.0.0&& set PORT=3001&& set HTTPS=true&& craco start",
+    "start:https": "set HTTPS=true&& set SSL_CRT_FILE=./certs/server.crt&& set SSL_KEY_FILE=./certs/server.key&& craco start",
     "build": "craco build",
     "test": "craco test",
     "eject": "react-scripts eject"

@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const API_URL = "http://192.168.4.81:3000/api";
+const API_URL = "http://localhost:3000/api";
 
 const api = axios.create({
     baseURL: API_URL,
@@ -261,11 +261,26 @@ const createDossierMedical = async (dossierMedical) => {
     }
 };
 
-// 15-) Récupération d'un dossier medical spécifique (médecin)
+// 15-) Récupération d'un dossier medical spécifique (médecin/patient)
 const getDossierMedical = async (Id) => {
     try {
-        const response = await api.get(`/dossierMedical/${Id}`);
-        return response.data;
+        // Vérifier si c'est un patient connecté
+        const patientData = localStorage.getItem('patient');
+        const jwt = localStorage.getItem('jwt');
+        
+        if (patientData && jwt) {
+            // Patient connecté : utiliser la route patient
+            const patient = JSON.parse(patientData);
+            const patientId = patient.id_patient || patient.id;
+            console.log(`🔍 [getDossierMedical] Patient connecté (ID: ${patientId}), utilisation de la route patient`);
+            const response = await api.get(`/dossierMedical/patient/${patientId}/complet`);
+            return response.data;
+        } else {
+            // Médecin connecté : utiliser la route médecin
+            console.log(`🔍 [getDossierMedical] Médecin connecté, utilisation de la route médecin`);
+            const response = await api.get(`/dossierMedical/${Id}`);
+            return response.data;
+        }
     } catch (error) {
         console.error('Erreur lors de la récupération du dossier medical:', error);
         throw error;

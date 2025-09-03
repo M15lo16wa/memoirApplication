@@ -8,7 +8,7 @@ import WebRTCWidget from "../messaging/components/WebRTCWidget";
 
 // Import des composants de messagerie
 import { MessagingButton, MessagingWidget, ChatMessage } from "../messaging";
-import signalingService from "../services/signalingService";
+import { signalingService } from "../messaging";
 import { getPatientsByMedecin } from "../services/api/patientApi";
 import { getRendezVousByMedecin } from "../services/api/rendezVous";
 
@@ -243,13 +243,11 @@ function Medecin() {
                 signalingService.connectSocket(userId, role, jwtToken);
             }
             
-            // Créer une session WebRTC pour l'appel vidéo avec code de conférence
-            console.log('📡 Création de la session WebRTC avec code de conférence...');
-            const result = await signalingService.createWebRTCSessionWithConferenceLink(
-                `temp_conv_${patientId}_${userId}`, // ID de conversation temporaire
-                'audio_video',
-                null, // SDP offer sera généré par le composant vidéo
-                true // Générer un lien de conférence
+            // Créer une session WebRTC pour l'appel vidéo (conforme au guide)
+            console.log('📡 Création de la session WebRTC...');
+            const result = await signalingService.createWebRTCSession(
+                patientId,
+                'consultation'
             );
             
             console.log('📡 Résultat de création de session:', result);
@@ -297,12 +295,10 @@ function Medecin() {
                 signalingService.connectSocket(userId, role, jwtToken);
             }
             
-            // Créer une session WebRTC pour l'appel audio avec code de conférence
-            const result = await signalingService.createWebRTCSessionWithConferenceLink(
-                `temp_conv_${patientId}_${userId}`, // ID de conversation temporaire
-                'audio_only',
-                null, // SDP offer sera généré par le composant audio
-                true // Générer un lien de conférence
+            // Créer une session WebRTC pour l'appel audio (conforme au guide)
+            const result = await signalingService.createWebRTCSession(
+                patientId,
+                'consultation'
             );
             
             if (result.success) {

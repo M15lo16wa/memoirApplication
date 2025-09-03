@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const API_URL = "http://192.168.4.81:3000/api";
+const API_URL = "http://localhost:3000/api";
 
 // Configuration de l'API d'administration
 const adminApi = axios.create({

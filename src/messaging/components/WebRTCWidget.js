@@ -1,7 +1,7 @@
 // src/messaging/components/WebRTCWidget.js
 import React, { useState, useEffect, useRef } from 'react';
 import { FaVideo, FaMicrophone, FaMicrophoneSlash, FaVideoSlash } from 'react-icons/fa';
-import signalingService from '../../services/signalingService';
+import { signalingService } from '../index';
 import './WebRTCWidget.css';
 
 const WebRTCWidget = ({ 
@@ -22,13 +22,31 @@ const WebRTCWidget = ({
     const [isRemoteWaiting, setIsRemoteWaiting] = useState(true);
     const iceQueueRef = useRef([]);
 
+    // Fonction pour corriger les URLs de conférence
+    const correctConferenceURL = (url) => {
+        if (!url) return url;
+        // Remplacer le port 3443 par 3001 pour pointer vers React
+        let correctedUrl = url.replace(':3443', ':3001');
+        // S'assurer que l'URL utilise HTTPS pour WebRTC
+        correctedUrl = correctedUrl.replace('http://', 'https://');
+        return correctedUrl;
+    };
+
     const localVideoRef = useRef();
     const remoteVideoRef = useRef();
     const peerConnectionRef = useRef();
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => {
+        console.log('🎥 WebRTCWidget - Initialisation avec:', {
+            conversationId,
+            isInitiator,
+            initialConferenceLink,
+            currentUrl: window.location.href
+        });
+
         if (initialConferenceLink) {
+            console.log('🔗 Code de conférence reçu:', initialConferenceLink);
             setConferenceLink(initialConferenceLink);
         }
         setupWebRTCEventListeners();
@@ -38,12 +56,21 @@ const WebRTCWidget = ({
         // Auto-join flow when opened via direct conference link
         try {
             const href = window?.location?.href || '';
+            console.log('🔍 WebRTCWidget - Vérification auto-join pour URL:', href);
+            
             if (href.includes('/conference')) {
+                console.log('✅ URL de conférence détectée, extraction des paramètres...');
                 // Extract code and optional session/conversation id from URL
                 const url = new URL(href);
                 const code = url.searchParams.get('code');
                 const pathParts = url.pathname.split('/').filter(Boolean);
                 const maybeId = pathParts[pathParts.length - 1];
+                
+                console.log('📋 Paramètres extraits:', {
+                    code,
+                    maybeId,
+                    pathParts
+                });
                 // Initialize signaling if needed
                 if (!signalingService.isConnected()) {
                     signalingService.initialize();
@@ -163,12 +190,12 @@ const WebRTCWidget = ({
             if (!participantsCount || participantsCount <= 1) setIsRemoteWaiting(true);
         });
     };
-
     const startCall = async () => {
         try {
-            // 1) Créer la session côté serveur AVANT d'émettre l'offre pour garantir un sessionId
+            // 1) Créer la session côté serveur central AVANT d'émettre l'offre
             let createdSessionId = null;
             let serverConversationId = conversationId || null;
+
             try {
                 const session = await signalingService.createWebRTCSessionWithConferenceLink(
                     conversationId,
@@ -176,31 +203,37 @@ const WebRTCWidget = ({
                     null,
                     true
                 );
-                if (session && (session.session?.id || session.id_session)) {
-                    createdSessionId = session.session?.id || session.id_session;
+
+                if (session && session.success) {
+                    createdSessionId = session.session?.id || session.session?.sessionId;
                     setSessionId(createdSessionId);
-                }
-                if (session && (session.session?.conversation_id || session.data?.conversation_id)) {
-                    serverConversationId = session.session?.conversation_id || session.data?.conversation_id;
-                }
-                if (session && (session.conferenceLink || session.data?.conference_link || session.data?.conference_code)) {
-                    const link = session.conferenceLink || session.data?.conference_link || session.data?.conference_code;
-                    setConferenceLink(link);
-                    console.log('🔐 Lien de conférence reçu (REST):', link);
+
+                    if (session.session?.conversation_id) {
+                        serverConversationId = session.session.conversation_id;
+                    }
+
+                    if (session.conferenceLink) {
+                        const correctedLink = correctConferenceURL(session.conferenceLink);
+                        setConferenceLink(correctedLink);
+                        console.log('�� Lien de conférence reçu (REST):', {
+                            original: session.conferenceLink,
+                            corrected: correctedLink
+                        });
+                    }
                 }
             } catch (e) {
-                console.warn('Création de session REST échouée ou non nécessaire:', e?.message);
+                console.warn('Création de session REST échouée:', e?.message);
             }
 
-            // 0) Rejoindre la salle avec l'identifiant exact attendu par le serveur
+            // 2) Rejoindre la salle avec l'identifiant exact attendu par le serveur
             if (serverConversationId && typeof signalingService.joinConversation === 'function') {
                 try {
                     console.log('🧩 Médecin: joinConversation with conversationId =', serverConversationId);
-                    signalingService.joinConversation(serverConversationId); // numérique
-                } catch (_) {}
+                    signalingService.joinConversation(serverConversationId);
+                } catch (_) { }
             }
 
-            // 2) Obtenir le flux média local
+            // 3) Obtenir le flux média local
             const stream = await navigator.mediaDevices.getUserMedia({
                 video: isVideoEnabled,
                 audio: isAudioEnabled
@@ -210,15 +243,15 @@ const WebRTCWidget = ({
                 localVideoRef.current.srcObject = stream;
             }
 
-            // 3) Créer la connexion peer
+            // 4) Créer la connexion peer
             createPeerConnection(stream);
 
-            // 4) Générer et envoyer l'offre SDP avec un sessionId valide
+            // 5) Générer et envoyer l'offre SDP avec un sessionId valide
             if (peerConnectionRef.current) {
                 const offer = await peerConnectionRef.current.createOffer();
                 await peerConnectionRef.current.setLocalDescription(offer);
                 signalingService.emit('webrtc_offer', {
-                    sessionId: createdSessionId || sessionId, // préférer l'id créé
+                    sessionId: createdSessionId || sessionId,
                     conversationId: serverConversationId,
                     sdpOffer: offer.sdp,
                     sessionType: 'audio_video'

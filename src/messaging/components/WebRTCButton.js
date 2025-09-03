@@ -42,17 +42,18 @@ const WebRTCButton = ({
 
     const startCall = async () => {
         try {
-                    const session = await signalingService.createWebRTCSessionWithConferenceLink(
-            conversationId,
-            sessionType,
-            null, // SDP offer
-            true // Générer un code de conférence
-        );
-        console.log('Session WebRTC créée avec code de conférence:', session);
-            
+            const session = await signalingService.createWebRTCSessionWithConferenceLink(
+                conversationId,
+                sessionType,
+                null, // SDP offer
+                true // Générer un code de conférence
+            );
+
+            console.log('Session WebRTC créée avec code de conférence:', session);
+
             // Afficher le code de conférence si disponible
             if (session.success && session.conferenceLink) {
-                console.log('🔐 Code de conférence:', session.conferenceLink);
+                console.log('�� Code de conférence:', session.conferenceLink);
                 // Ici vous pouvez ajouter une notification ou un affichage du code
             }
         } catch (error) {

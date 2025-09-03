@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { FaComments } from 'react-icons/fa';
-import signalingService from '../../services/signalingService';
+import { signalingService } from '../index';
 
 // Bouton de messagerie avec connexion au service
 export const MessagingButton = ({ userId, role, token, conversationId, onClick, unreadCount = 0 }) => {
@@ -118,4 +118,4 @@ export const MessagingButton = ({ userId, role, token, conversationId, onClick, 
     );
 };
 
-export default MessagingButton; 
+export default MessagingButton;

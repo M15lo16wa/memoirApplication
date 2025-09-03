@@ -67,10 +67,16 @@ const DMPDashboard = () => {
             return;
         }
         
-        console.log('🔐 DMPDashboard - Utilisateur authentifié, chargement des données...');
-        loadStatistiques();
-        loadNotificationsStats();
-    }, [loadStatistiques]);
+        // Éviter les appels répétitifs - seulement si on n'a pas de données
+        const currentStats = getStatistiquesResume();
+        if (!currentStats || Object.keys(currentStats).length === 0) {
+            console.log('🔐 DMPDashboard - Utilisateur authentifié, chargement des données...');
+            loadStatistiques();
+            loadNotificationsStats();
+        } else {
+            console.log('⏭️ DMPDashboard - Données déjà disponibles, pas de rechargement');
+        }
+    }, [loadStatistiques, getStatistiquesResume]);
 
     const loadNotificationsStats = async () => {
         try {

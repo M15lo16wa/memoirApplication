@@ -54,6 +54,8 @@ const dmpReducer = (state, action) => {
             return { ...state, bibliotheque: action.payload || [], loading: false };
         case 'SET_STATISTIQUES':
             return { ...state, statistiques: action.payload, loading: false };
+        case 'SET_LAST_DMP_REQUEST':
+            return { ...state, lastDMPRequest: action.payload };
         case 'ADD_AUTO_MESURE':
             // Validation que state.autoMesures est bien un tableau
             const currentAutoMesures = Array.isArray(state.autoMesures) ? state.autoMesures : [];
@@ -250,12 +252,27 @@ export const DMPProvider = ({ children }) => {
                 return;
             }
             
+            // Éviter les requêtes trop fréquentes (minimum 15 secondes entre les requêtes)
+            const now = Date.now();
+            if (now - (state.lastDMPRequest || 0) < 15000) {
+                console.log('⏭️ DMPContext - Requête DMP ignorée (trop récente)');
+                return;
+            }
+            
             console.log('🔐 DMPContext - Chargement du DMP pour le patient:', state.patientId);
             dispatch({ type: 'SET_LOADING', payload: true });
+            dispatch({ type: 'SET_LAST_DMP_REQUEST', payload: now });
+            
             try {
-                const response = await dmpApi.getDMP(state.patientId); // Utilise l'ID du patient connecté
+                const response = await dmpApi.getDMP(state.patientId);
                 dispatch({ type: 'SET_DMP_DATA', payload: response.data });
+                console.log('✅ DMPContext - DMP chargé avec succès');
             } catch (error) {
+                console.error('❌ DMPContext - Erreur lors du chargement du DMP:', error);
+                if (error.response?.status === 429) {
+                    console.warn('⚠️ DMPContext - Rate limit atteint, utilisation des données en cache');
+                    return;
+                }
                 dispatch({ type: 'SET_ERROR', payload: error.message });
             }
         },

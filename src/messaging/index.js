@@ -5,6 +5,7 @@
 export { default as MessagingButton } from './components/MessagingButton';
 export { default as MessagingWidget } from './components/MessagingWidget';
 export { default as ChatMessage } from './components/chatMessage';
+export { default as MessagingIntegrationExample } from './components/MessagingIntegrationExample';
 
 // Service de signalisation
 export { default as signalingService } from '../services/signalingService';

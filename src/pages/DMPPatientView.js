@@ -1,15 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
-  getDMP, 
-  getDMPUrgence,
-  getHistoriqueMedical, 
-  getHistoriqueMedicalUrgence,
   getAutorisations, 
   getDocumentsPersonnelsDMP, 
   getAutoMesuresDMP, 
   revokerAutorisation 
 } from '../services/api/dmpApi';
+import { getDossierPatient } from '../services/api/medicalApi';
 import { downloadDocument } from '../services/api/medicalApi';
 import PDFPreviewModal from '../components/common/PDFPreviewModal';
 
@@ -17,7 +14,6 @@ function DMPPatientView() {
   const { patientId } = useParams();
   const navigate = useNavigate();
   const [dmpData, setDmpData] = useState(null);
-  const [historique, setHistorique] = useState([]);
   const [autorisations, setAutorisations] = useState([]);
   const [documents, setDocuments] = useState([]);
   const [autoMesures, setAutoMesures] = useState([]);
@@ -344,35 +340,31 @@ function DMPPatientView() {
       console.log('🚀 Chargement des données DMP pour le patient:', patientId);
       console.log('🔍 Mode urgence détecté:', isUrgenceMode ? '🚨 OUI' : '✅ NON');
       
-      // Choisir les fonctions appropriées selon le mode
-      const dmpFunction = isUrgenceMode ? getDMPUrgence : getDMP;
-      const historiqueFunction = isUrgenceMode ? getHistoriqueMedicalUrgence : getHistoriqueMedical;
-      
-      console.log('🔧 Fonctions sélectionnées:', {
-        dmp: isUrgenceMode ? 'getDMPUrgence' : 'getDMP',
-        historique: isUrgenceMode ? 'getHistoriqueMedicalUrgence' : 'getHistoriqueMedical'
-      });
+      // Utiliser getDossierPatient pour récupérer le contenu du dossier médical
+      console.log('🔧 Fonction sélectionnée: getDossierPatient');
+      console.log(`🔗 URL qui sera appelée: GET /api/dossierMedical/patient/${patientId}/complet`);
       
       // Charger les données en parallèle
-      const [dmpResponse, historiqueResponse, autorisationsResponse] = await Promise.all([
-        dmpFunction(patientId),
-        historiqueFunction(patientId),
+      const [dossierResponse, autorisationsResponse] = await Promise.all([
+        getDossierPatient(patientId),
         // En mode urgence, on peut passer les autorisations ou les ignorer
         isUrgenceMode ? Promise.resolve({ data: [] }) : getAutorisations(patientId)
       ]);
       
-      setDmpData(dmpResponse?.data || dmpResponse);
-      setHistorique(historiqueResponse?.data || historiqueResponse || []);
-      setAutorisations(autorisationsResponse?.data || autorisationsResponse || []);
+      // getDossierPatient retourne les données directement
+      setDmpData(dossierResponse);
+      setAutorisations(autorisationsResponse || []);
       setCurrentStatus('authorized');
       
       console.log('✅ Données DMP chargées avec succès');
       console.log('🔍 DEBUG - Types des données reçues:');
-      console.log('  - dmpResponse:', typeof dmpResponse, dmpResponse);
-      console.log('  - historiqueResponse:', typeof historiqueResponse, historiqueResponse);
+      console.log('  - dossierResponse:', typeof dossierResponse, dossierResponse);
+      console.log('  - dossierResponse structure:', dossierResponse ? Object.keys(dossierResponse) : 'null');
+      console.log('  - dmpData final:', dmpData);
+      console.log('  - Contenu du dossier médical:', dmpData?.resume_medical, dmpData?.antecedents_medicaux, dmpData?.allergies);
+      console.log(`  - URL effectivement appelée: GET /api/dossierMedical/patient/${patientId}/complet`);
       console.log('  - autorisationsResponse:', typeof autorisationsResponse, autorisationsResponse);
-      console.log('  - historique final:', Array.isArray(historiqueResponse?.data || historiqueResponse || []) ? '✅ Array' : '❌ Non-Array');
-      console.log('  - autorisations final:', Array.isArray(autorisationsResponse?.data || autorisationsResponse || []) ? '✅ Array' : '❌ Non-Array');
+      console.log('  - autorisations final:', Array.isArray(autorisationsResponse || []) ? '✅ Array' : '❌ Non-Array');
       
       // Charger les documents et auto-mesures après les données principales
       await loadDocumentsAndMesures(patientId);

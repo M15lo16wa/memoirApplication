@@ -1,6 +1,6 @@
 // src/messaging/components/chatMessage.js
 import React, { useState, useEffect, useCallback } from "react";
-import signalingService from '../../services/signalingService';
+import { signalingService } from '../index';
 import { FaComments, FaSpinner, FaPlus, FaUser, FaUserMd, FaVideo } from "react-icons/fa";
 import WebRTCWidget from './WebRTCWidget';
 
@@ -351,7 +351,7 @@ export default function ChatMessage({ userId: propUserId, role: propRole, token:
 
     try {
       console.log('🎥 Démarrage d\'un appel vidéo pour la conversation:', selectedConversation);
-      
+
       // ✅ Utiliser la méthode du service pour créer une session WebRTC avec code de conférence
       const result = await signalingService.createWebRTCSessionWithConferenceLink(
         selectedConversation,
@@ -364,7 +364,7 @@ export default function ChatMessage({ userId: propUserId, role: propRole, token:
         console.log('✅ Session WebRTC créée:', result.session);
         if (result.conferenceLink) {
           setConferenceLink(result.conferenceLink);
-          console.log('🔐 Lien de conférence (REST):', result.conferenceLink);
+          console.log('�� Lien de conférence (REST):', result.conferenceLink);
         }
         // Émettre l'événement pour démarrer l'appel
         signalingService.emit('start_video_call', {

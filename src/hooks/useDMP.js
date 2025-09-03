@@ -22,11 +22,23 @@ export const useDMP = () => {
             return;
         }
         
-        if (state.patientId && !state.dmpData && !state.loading) {
+        // Éviter les appels répétitifs - seulement si on n'a pas de données ET qu'on n'est pas en train de charger
+        // ET qu'il n'y a pas eu de requête DMP très récemment (dans les 15 dernières secondes)
+        const now = Date.now();
+        const lastRequestTime = state.lastDMPRequest || 0;
+        const timeSinceLastRequest = now - lastRequestTime;
+        
+        if (state.patientId && !state.dmpData && !state.loading && timeSinceLastRequest > 15000) {
             console.log('🔐 useDMP - Utilisateur authentifié, chargement du DMP...');
             actions.loadDMP();
+        } else if (state.patientId && (state.dmpData || state.loading || timeSinceLastRequest <= 15000)) {
+            console.log('⏭️ useDMP - Chargement ignoré:', {
+                hasData: !!state.dmpData,
+                isLoading: state.loading,
+                timeSinceLastRequest: Math.round(timeSinceLastRequest / 1000) + 's'
+            });
         }
-    }, [state.patientId, state.dmpData, state.loading, actions]);
+    }, [state.patientId, state.dmpData, state.loading, state.lastDMPRequest, actions]);
 
 
     // === Fonctions Utilitaires (Helpers) - Toutes restaurées et corrigées ===

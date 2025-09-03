@@ -17,6 +17,10 @@ import { logoutAll, getStoredPatient } from "../services/api/authApi";
 import { useDMP } from "../hooks/useDMP";
 import { usePDFGenerator } from "../hooks/usePDFGenerator";
 import { use2FA } from "../hooks/use2FA";
+import { useNotifications } from "../hooks/useNotifications";
+
+// Cache et utilitaires
+import { withCache } from "../utils/requestCache";
 
 // Composants DMP
 import DMPDashboard from "../components/dmp/DMPDashboard";
@@ -26,7 +30,7 @@ import AutorisationsEnAttente from "../components/dmp/AutorisationsEnAttente";
 import DMPHistory from "../components/dmp/DMPHistory";
 import NotificationManager from "../components/ui/NotificationManager";
 import { MessagingButton, MessagingWidget, ChatMessage } from "../messaging";
-import signalingService from "../services/signalingService";
+import { signalingService } from "../messaging";
 // ...existing code...
 
 // APIs
@@ -154,17 +158,27 @@ const HistoriqueMedical = ({ patientProfile, onOpenMessaging }) => {
 
       setPatientId(currentPatientId);
 
-      // Charger toutes les prescriptions du patient
-      const result = await patientApi.getAllPrescriptionsByPatient(currentPatientId);
+      // Charger toutes les prescriptions du patient avec cache
+      const result = await withCache(
+        () => patientApi.getAllPrescriptionsByPatient(currentPatientId),
+        `/prescription/patient/${currentPatientId}`,
+        { patientId: currentPatientId },
+        { useCache: true, forceRefresh: false }
+      );
 
       if (result.success) {
         setPrescriptions(result.prescriptions || []);
         setStats(result.stats);
         console.log(' Historique médical chargé:', result.prescriptions.length, 'prescriptions');
         
-        // Charger aussi les consultations du patient
+        // Charger aussi les consultations du patient avec cache
         try {
-          const consultationsResult = await dmpApi.getConsultationsHistoriqueMedical(currentPatientId);
+          const consultationsResult = await withCache(
+            () => dmpApi.getConsultationsHistoriqueMedical(currentPatientId),
+            `/consultations/patient/${currentPatientId}`,
+            { patientId: currentPatientId },
+            { useCache: true, forceRefresh: false }
+          );
           if (consultationsResult.status === 'success') {
             setConsultations(consultationsResult.data || []);
             console.log(' Consultations chargées:', consultationsResult.data.length, 'consultations');
@@ -448,7 +462,14 @@ prescription.redacteur.id_professionnel || prescription.redacteur.id_medecin)) {
       for (const testId of possibleIds) {
         try {
           console.log(`🔍 Test avec ID: ${testId} (type: ${typeof testId})`);
-          dossierData = await getDossierPatient(testId);
+          
+          // Utiliser le cache pour éviter les requêtes répétitives
+          dossierData = await withCache(
+            () => getDossierPatient(testId),
+            `/dossierMedical/patient/${testId}/complet`,
+            { patientId: testId },
+            { useCache: true, forceRefresh: false }
+          );
           
           // Vérifier si on a des données valides
           if (dossierData && dossierData.data && dossierData.data.dossier) {
@@ -470,6 +491,10 @@ prescription.redacteur.id_professionnel || prescription.redacteur.id_medecin)) {
           }
         } catch (error) {
           console.log(`❌ Erreur avec ID ${testId}:`, error.message);
+          // En cas d'erreur 429, on continue avec le prochain ID
+          if (error.response?.status === 429) {
+            console.log(`⏸️ Rate limit atteint pour ID ${testId}, passage au suivant`);
+          }
           dossierData = null;
         }
       }
@@ -763,7 +788,12 @@ prescription.redacteur.id_professionnel || prescription.redacteur.id_medecin)) {
           console.log('✅ Nouveau dossier médical créé:', newDossier);
           
           // Recharger le dossier après création
-          const updatedDossierData = await getDossierPatient(patientId);
+          const updatedDossierData = await withCache(
+            () => getDossierPatient(patientId),
+            `/dossierMedical/patient/${patientId}/complet`,
+            { patientId },
+            { useCache: true, forceRefresh: true } // Force refresh car on vient de créer le dossier
+          );
           if (updatedDossierData && updatedDossierData.success && updatedDossierData.data) {
             const normalizedDossier = {
               ...updatedDossierData.data,
@@ -834,28 +864,73 @@ prescription.redacteur.id_professionnel || prescription.redacteur.id_medecin)) {
       
       switch (filter) {
         case 'all':
-          result = await patientApi.getAllPrescriptionsByPatient(patientId);
-          consultationsResult = await dmpApi.getConsultationsHistoriqueMedical(patientId);
+          result = await withCache(
+            () => patientApi.getAllPrescriptionsByPatient(patientId),
+            `/prescription/patient/${patientId}/all`,
+            { patientId, filter },
+            { useCache: true, forceRefresh: false }
+          );
+          consultationsResult = await withCache(
+            () => dmpApi.getConsultationsHistoriqueMedical(patientId),
+            `/consultations/patient/${patientId}`,
+            { patientId, filter },
+            { useCache: true, forceRefresh: false }
+          );
           break;
         case 'active':
-          result = await patientApi.getActivePrescriptionsByPatient(patientId);
-          consultationsResult = await dmpApi.getConsultationsHistoriqueMedical(patientId);
+          result = await withCache(
+            () => patientApi.getActivePrescriptionsByPatient(patientId),
+            `/prescription/patient/${patientId}/active`,
+            { patientId, filter },
+            { useCache: true, forceRefresh: false }
+          );
+          consultationsResult = await withCache(
+            () => dmpApi.getConsultationsHistoriqueMedical(patientId),
+            `/consultations/patient/${patientId}`,
+            { patientId, filter },
+            { useCache: true, forceRefresh: false }
+          );
           break;
         case 'ordonnances':
-          result = await patientApi.getOrdonnancesByPatient(patientId);
+          result = await withCache(
+            () => patientApi.getOrdonnancesByPatient(patientId),
+            `/prescription/patient/${patientId}/ordonnances`,
+            { patientId, filter },
+            { useCache: true, forceRefresh: false }
+          );
           consultationsResult = { data: [] }; // Pas de consultations pour les ordonnances
           break;
         case 'examens':
-          result = await patientApi.getExamensByPatient(patientId);
+          result = await withCache(
+            () => patientApi.getExamensByPatient(patientId),
+            `/prescription/patient/${patientId}/examens`,
+            { patientId, filter },
+            { useCache: true, forceRefresh: false }
+          );
           consultationsResult = { data: [] }; // Pas de consultations pour les examens
           break;
         case 'consultations':
           result = { success: true, prescriptions: [], stats: null };
-          consultationsResult = await dmpApi.getConsultationsHistoriqueMedical(patientId);
+          consultationsResult = await withCache(
+            () => dmpApi.getConsultationsHistoriqueMedical(patientId),
+            `/consultations/patient/${patientId}`,
+            { patientId, filter },
+            { useCache: true, forceRefresh: false }
+          );
           break;
         default:
-          result = await patientApi.getAllPrescriptionsByPatient(patientId);
-          consultationsResult = await dmpApi.getConsultationsHistoriqueMedical(patientId);
+          result = await withCache(
+            () => patientApi.getAllPrescriptionsByPatient(patientId),
+            `/prescription/patient/${patientId}/default`,
+            { patientId, filter },
+            { useCache: true, forceRefresh: false }
+          );
+          consultationsResult = await withCache(
+            () => dmpApi.getConsultationsHistoriqueMedical(patientId),
+            `/consultations/patient/${patientId}`,
+            { patientId, filter },
+            { useCache: true, forceRefresh: false }
+          );
       }
 
       if (result.success) {
@@ -2500,6 +2575,12 @@ const DMP = () => {
   const navigate = useNavigate();
   const dmpContext = useDMP();
   
+  // Vrification de scurit pour le contexte DMP
+  const dmpState = dmpContext?.state || {};
+  const dmpActions = dmpContext?.actions || {};
+  const createAutoMesure = dmpActions?.createAutoMesure;
+  const uploadDocument = dmpActions?.uploadDocument;
+  
   // Logs de dbogage pour le contexte DMP
   console.log(' DMP.js - Contexte DMP rcupr:', {
     dmpContext: !!dmpContext,
@@ -2508,15 +2589,9 @@ const DMP = () => {
     patientId: dmpContext?.state?.patientId,
     loading: dmpContext?.state?.loading,
     error: dmpContext?.state?.error,
-    createAutoMesure: !!dmpContext?.createAutoMesure,
-    uploadDocument: !!dmpContext?.uploadDocument
+    createAutoMesure: !!dmpActions?.createAutoMesure,
+    uploadDocument: !!dmpActions?.uploadDocument
   });
-  
-  // Vrification de scurit pour le contexte DMP
-  const createAutoMesure = dmpContext?.createAutoMesure;
-  const uploadDocument = dmpContext?.uploadDocument;
-  const dmpState = dmpContext || {};
-  const dmpActions = dmpContext || {};
 
 
   // Vrification de scurit avant d'utiliser le contexte
@@ -3517,34 +3592,28 @@ n.id_notification, type: n.type_notification })));
 
 
   // Vrifier les nouvelles notifications priodiquement
-  useEffect(() => {
-    const checkNewNotifications = async () => {
-      try {
-        // Utiliser l'endpoint appropri pour les mdecins
-        const newNotifications = await dmpApi.getMedecinAccessRequests();
-        const list = Array.isArray(newNotifications) ? newNotifications : [];
-
-        // Trouver les nouvelles notifications non lues
-        const unreadNotifications = list.filter(n => n.statut_envoi === 'en_attente');
-
-        if (unreadNotifications.length > 0) {
-          // Afficher la premire notification non lue
-          const latestNotification = unreadNotifications[0];
-          showNotificationToast(latestNotification);
-        }
-      } catch (error) {
-        console.error('Erreur lors de la vrification des notifications:', error);
+  // Utiliser le hook useNotifications pour gérer les notifications avec rate limiting
+  const patientId = dmpContext?.state?.patientId;
+  const { notifications, loading: notificationsLoading, error: notificationsError } = useNotifications(patientId, {
+    interval: 60000, // 1 minute au lieu de 30 secondes
+    maxRetries: 2,
+    onError: (error) => {
+      if (error?.response?.status === 429) {
+        console.warn('⚠️ Rate limit atteint pour les notifications, utilisation du cache');
       }
-    };
+    }
+  });
 
-    // Vrifier toutes les 30 secondes
-    const interval = setInterval(checkNewNotifications, 30000);
-
-    // Vrification initiale
-    checkNewNotifications();
-
-    return () => clearInterval(interval);
-  }, []);
+  // Effet pour traiter les nouvelles notifications
+  useEffect(() => {
+    if (notifications && notifications.length > 0) {
+      const unreadNotifications = notifications.filter(n => n.statut_envoi === 'en_attente');
+      if (unreadNotifications.length > 0) {
+        const latestNotification = unreadNotifications[0];
+        showNotificationToast(latestNotification);
+      }
+    }
+  }, [notifications]);
 
   // Fonction pour obtenir l'icne selon le type de notification
   const getNotificationIcon = (type) => {

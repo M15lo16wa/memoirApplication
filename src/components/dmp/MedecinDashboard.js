@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { FaUserInjured, FaCalendarAlt, FaComments, FaEnvelope, FaUserMd, FaHospital, FaClock, FaCalendarDay, FaList, FaChartBar } from 'react-icons/fa';
 import * as rendezVousApi from '../../services/api/rendezVous';
-import * as signalingService from '../../services/signalingService';
+import { signalingService } from '../../messaging';
 
 const MedecinDashboard = () => {
     const [activeTab, setActiveTab] = useState('dashboard');

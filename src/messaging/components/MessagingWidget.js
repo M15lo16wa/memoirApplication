@@ -1,7 +1,7 @@
 // src/messaging/components/MessagingWidget.js
 import React, { useState, useEffect, useCallback } from 'react';
 import { FaComments, FaSpinner, FaPaperPlane } from 'react-icons/fa';
-import signalingService from '../../services/signalingService';
+import { signalingService } from '../index';
 
 const MessagingWidget = ({ userId, role, token, conversationId, toUserId, onClose }) => {
   const [messages, setMessages] = useState([]);

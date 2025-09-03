@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const API_URL = "http://192.168.4.81:3000/api";
+const API_URL = "http://localhost:3000/api";
 
 // Fonction utilitaire pour récupérer le patient connecté
 const getStoredPatient = () => {
@@ -378,6 +378,11 @@ export const getMedecinAccessRequests = async (patientId) => {
         
         return data;
     } catch (error) {
+        if (error.response?.status === 429) {
+            console.warn('Rate limit atteint pour getMedecinAccessRequests, utilisation du cache local');
+            // Retourner un tableau vide pour éviter les erreurs
+            return { authorizationAccess: [], total: 0 };
+        }
         console.error('Erreur lors de la récupération des accès:', error);
         // En cas d'erreur, retourner un tableau vide
         return { authorizationAccess: [], total: 0 };
@@ -1186,8 +1191,11 @@ export const getLastAutoMesureByTypeDMP = async (patientId, type) => {
 // --- DMP principal ---
 export const getDMP = async (patientId = null) => {
     const url = patientId ? `/dossierMedical/patient/${patientId}/complet` : '/dossierMedical';
+    console.log('🔗 [getDMP] URL appelée:', url, 'pour patientId:', patientId);
     const response = await dmpApi.get(url);
-    return response.data.data;
+    console.log('🔍 [getDMP] Réponse reçue:', response.data);
+    // La route patient retourne les données directement dans response.data
+    return response.data;
 };
 
 // --- Mode urgence - Accès sans autorisation ---
@@ -1212,7 +1220,8 @@ export const getDMPUrgence = async (patientId = null) => {
         const response = await urgenceApi.get(url);
         console.log(`✅ Mode urgence - Dossier récupéré avec succès:`, response.data);
         
-        return response.data.data;
+        // La route patient retourne les données directement dans response.data
+        return response.data;
     } catch (error) {
         console.error(`❌ Mode urgence - Erreur lors de l'accès au dossier:`, error);
         throw error;
@@ -1254,9 +1263,11 @@ export const updateDMP = async (patientId, dmpData) => {
 // Note: L'historique fait partie du dossier médical
 export const getHistoriqueMedical = async (patientId = null) => {
     const url = patientId ? `/dossierMedical/patient/${patientId}/complet` : '/dossierMedical';
+    console.log('🔗 [getHistoriqueMedical] URL appelée:', url, 'pour patientId:', patientId);
     const response = await dmpApi.get(url);
-    // Extraire l'historique du dossier médical
-    const dossier = response.data.data;
+    console.log('🔍 [getHistoriqueMedical] Réponse reçue:', response.data);
+    // La route patient retourne les données directement dans response.data
+    const dossier = response.data;
     return { data: dossier?.historique || dossier?.historiqueMedical || [] };
 };
 
