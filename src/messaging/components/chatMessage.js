@@ -1,8 +1,7 @@
 // src/messaging/components/chatMessage.js
 import React, { useState, useEffect, useCallback } from "react";
-import { signalingService } from '../index';
-import { FaComments, FaSpinner, FaPlus, FaUser, FaUserMd, FaVideo } from "react-icons/fa";
-import WebRTCWidget from './WebRTCWidget';
+import { FaComments, FaSpinner, FaPlus, FaUser, FaUserMd } from "react-icons/fa";
+import messagingApi from "../../services/api/messagingApi";
 
 export default function ChatMessage({ userId: propUserId, role: propRole, token: propToken, conversationId: propConversationId, medecinId: propMedecinId, patientId: propPatientId }) {
   const [isLoading, setIsLoading] = useState(false);
@@ -12,12 +11,9 @@ export default function ChatMessage({ userId: propUserId, role: propRole, token:
   const [inputMessage, setInputMessage] = useState("");
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState(null);
-  const [showCallWidget, setShowCallWidget] = useState(false);
-  const [callType, setCallType] = useState(null); // 'video' | 'audio'
-  const [conferenceLink, setConferenceLink] = useState(null);
   
   // Utiliser les props ou fallback sur localStorage
-  const [userId, setUserId] = useState(() => {
+  const [userId] = useState(() => {
     if (propUserId) return propUserId;
     
     const patientData = localStorage.getItem('patient');
@@ -25,19 +21,23 @@ export default function ChatMessage({ userId: propUserId, role: propRole, token:
       try {
         const patient = JSON.parse(patientData);
         return patient.id_patient || patient.id || null;
-      } catch (e) {}
+      } catch (e) {
+        // Ignorer l'erreur
+      }
     }
     const medecinData = localStorage.getItem('medecin');
     if (medecinData) {
       try {
         const medecin = JSON.parse(medecinData);
         return medecin.id_professionnel || medecin.id || null;
-      } catch (e) {}
+      } catch (e) {
+        // Ignorer l'erreur
+      }
     }
     return null;
   });
   
-  const [userRole, setUserRole] = useState(() => {
+  const [userRole] = useState(() => {
     if (propRole) return propRole;
     if (localStorage.getItem('patient')) return 'patient';
     if (localStorage.getItem('medecin')) return 'medecin';
@@ -48,181 +48,97 @@ export default function ChatMessage({ userId: propUserId, role: propRole, token:
   useEffect(() => {
     if (propConversationId && propConversationId !== selectedConversation) {
       setSelectedConversation(propConversationId);
-      // Charger les messages de la nouvelle conversation
-      if (propConversationId) {
-        loadConversationMessages(propConversationId);
-      }
     }
-  }, [propConversationId]);
+  }, [propConversationId, selectedConversation]);
 
-  // Initialiser le service de signalisation
+  // Charger les conversations
+  const loadUserConversations = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      if (userId && userRole) {
+        const result = await messagingApi.getUserConversations(userId, userRole);
+        if (result.success) {
+          setConversations(result.conversations || []);
+        } else {
+          setError(result.message || "Impossible de charger les conversations");
+        }
+      }
+    } catch (err) {
+      console.error("Erreur lors du chargement des conversations:", err);
+      setError("Impossible de charger les conversations");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [userId, userRole]);
+
+  // Initialisation simplifiée
   useEffect(() => {
     if (userId && userRole) {
       console.log('🔌 Initialisation du service de messagerie:', { userId, userRole });
+      setIsConnected(true);
+      setError(null);
+      // Charger les conversations au montage
+      loadUserConversations();
+    }
+  }, [userId, userRole, loadUserConversations]);
+
+  // Charger les messages d'une conversation
+  const loadConversationMessages = useCallback(async (conversationId) => {
+    try {
+      setIsLoading(true);
+      const result = await messagingApi.getConversationMessages(conversationId);
+      console.log('📨 Messages chargés depuis le serveur:', result);
       
-      // ✅ Initialiser le service avec la nouvelle méthode
-      signalingService.initialize();
-      
-      // ✅ Se connecter au WebSocket avec la nouvelle méthode
-      const socket = signalingService.connectSocket(userId, userRole, propToken);
-      
-      if (socket) {
-        // ✅ Utiliser les méthodes du service pour configurer les écouteurs
-        signalingService.on('connect', () => {
-          console.log('✅ Connecté au service de messagerie');
-          setIsConnected(true);
-          setError(null);
+      if (result.success) {
+        const rawMessages = result.messages || [];
+        
+        // Normaliser les messages pour l'affichage
+        const formattedMessages = rawMessages.map((msg, index) => {
+          console.log('🔍 Message brut:', msg);
           
-          // Charger les conversations une fois connecté
-          loadUserConversations();
-        });
-
-        signalingService.on('disconnect', (reason) => {
-          console.log('❌ Déconnecté du service de messagerie:', reason);
-          setIsConnected(false);
-          setError("Connexion perdue");
-        });
-
-        signalingService.on('connect_error', (error) => {
-          console.error('❌ Erreur de connexion messagerie:', error);
-          setIsConnected(false);
-          setError("Erreur de connexion au serveur");
-        });
-
-        // Capture du lien de conférence via socket
-        signalingService.on('webrtc:session_created', (data) => {
-          const link = data?.conferenceLink || data?.conference_link || data?.conference_code || data?.session?.conference_link || data?.session?.conference_code || null;
-          if (link) {
-            setConferenceLink(link);
-            console.log('🔐 Lien de conférence (socket):', link);
+          // CORRECTION: Le serveur retourne sender_id et sender_type
+          let detectedSender;
+          
+          // Utiliser les données du serveur en priorité
+          if (msg.sender_type === 'patient') {
+            detectedSender = 'patient';
+          } else if (msg.sender_type === 'professionnel' || msg.sender_type === 'medecin') {
+            detectedSender = 'medecin';
+          } else {
+            // Fallback par alternance si les données serveur sont manquantes
+            detectedSender = index % 2 === 0 ? 'patient' : 'medecin';
           }
-        });
-
-        // ✅ Écouter les nouveaux messages avec la nouvelle méthode
-        signalingService.on('new_message', (data) => {
-          console.log('📨 Nouveau message reçu:', data);
-          if (data.conversationId === selectedConversation) {
-            setMessages(prev => [...prev, {
-              id: data.messageId || Date.now(),
-              sender: data.senderId === userId ? userRole : (userRole === 'patient' ? 'medecin' : 'patient'),
-              content: data.message,
-              timestamp: data.timestamp || new Date().toISOString(),
-              type: data.type || 'text'
-            }]);
-          }
-        });
-
-        // ✅ Vérifier l'état de connexion immédiatement
-        if (signalingService.isConnected()) {
-          console.log('✅ Socket déjà connecté');
-          setIsConnected(true);
-          loadUserConversations();
-        }
-      } else {
-        console.error('❌ Impossible de créer la connexion WebSocket');
-        setError("Impossible de se connecter au service de messagerie");
-      }
-    }
-    
-    // Cleanup function
-    return () => {
-      // ✅ Utiliser la méthode de nettoyage du service
-      signalingService.cleanup();
-    };
-  }, [userId, userRole, propToken]);
-
-  const loadUserConversations = async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      
-      console.log('🔍 Chargement des conversations pour l\'utilisateur:', { userId, userRole });
-      
-      // ✅ Utiliser la méthode du service
-      const result = await signalingService.getUserConversations();
-      console.log('�� Réponse du serveur pour les conversations:', result);
-      
-      if (result.success) {
-        // Éviter les doublons en utilisant un Map avec l'ID comme clé
-        const uniqueConversations = Array.from(
-          new Map((result.conversations || []).map(conv => [conv.id, conv])).values()
-        );
-        
-        console.log('✅ Conversations uniques trouvées:', uniqueConversations);
-        setConversations(uniqueConversations);
-        
-        // Si aucune conversation n'est sélectionnée et qu'il y en a, sélectionner la première
-        if (!selectedConversation && uniqueConversations.length > 0) {
-          const firstConversation = uniqueConversations[0];
-          setSelectedConversation(firstConversation.id);
-          await loadConversationMessages(firstConversation.id);
-        }
-        
-        console.log('✅ Conversations chargées:', uniqueConversations.length);
-      } else {
-        console.error('❌ Erreur lors du chargement des conversations:', result.error);
-        setError(`Erreur lors du chargement des conversations: ${result.error}`);
-      }
-    } catch (error) {
-      console.error('❌ Erreur lors du chargement des conversations:', error);
-      setError(`Erreur lors du chargement des conversations: ${error.message}`);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const loadConversationMessages = async (conversationId) => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      
-      console.log('🔍 Chargement des messages pour la conversation:', conversationId);
-      
-      // ✅ Utiliser la méthode du service
-      const result = await signalingService.getConversationMessages(conversationId, 50, 0);
-      console.log('�� Réponse du serveur pour les messages:', result);
-      
-      if (result.success) {
-        // Éviter les doublons en utilisant un Map avec l'ID comme clé
-        const uniqueMessages = Array.from(
-          new Map((result.messages || []).map(msg => [msg.id, msg])).values()
-        );
-        
-        console.log('📝 Messages uniques trouvés:', uniqueMessages);
-        
-        // Formater les messages pour l'affichage
-        const formattedMessages = uniqueMessages.map(msg => {
-          const isOwnMessage = msg.expediteur_id === userId || msg.sender_id === userId;
-          const sender = isOwnMessage ? userRole : (userRole === 'patient' ? 'medecin' : 'patient');
           
           const formattedMsg = {
-            id: msg.id || msg.message_id,
-            sender: sender,
-            content: msg.contenu || msg.content || msg.message || 'Message sans contenu',
-            timestamp: msg.timestamp || msg.created_at || msg.date_creation || new Date().toISOString(),
-            type: msg.type_message || msg.type || 'texte'
+            id: msg.id || msg.id_message || `msg_${Date.now()}_${Math.random()}`,
+            content: msg.content || msg.contenu || '',
+            sender: detectedSender,
+            originalSender: msg.sender, // Garder l'original pour debug
+            sender_id: msg.sender_id, // Garder pour debug
+            sender_type: msg.sender_type, // Garder pour debug
+            timestamp: msg.timestamp || msg.date_envoi || new Date().toISOString(),
+            type: msg.type || msg.type_message || 'text'
           };
           
-          console.log('�� Message formaté:', formattedMsg);
+          console.log('📝 Message formaté:', formattedMsg);
           return formattedMsg;
         });
         
+        console.log('✅ Messages formatés:', formattedMessages);
         setMessages(formattedMessages);
-        console.log('✅ Messages chargés et formatés:', formattedMessages.length);
       } else {
-        console.error('❌ Erreur lors du chargement des messages:', result.error);
-        setError(`Erreur lors du chargement des messages: ${result.error}`);
+        setError(result.message || "Impossible de charger les messages");
       }
-    } catch (error) {
-      console.error('❌ Erreur lors du chargement des messages:', error);
-      setError(`Erreur lors du chargement des messages: ${error.message}`);
+    } catch (err) {
+      console.error("Erreur lors du chargement des messages:", err);
+      setError("Impossible de charger les messages");
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
+  // Créer une nouvelle conversation
   const createNewConversation = async (targetUserId) => {
-    // Seuls les médecins peuvent créer de nouvelles conversations
     if (userRole !== 'medecin') {
       console.log('❌ Seuls les médecins peuvent créer de nouvelles conversations');
       setError("Seuls les médecins peuvent créer de nouvelles conversations");
@@ -233,264 +149,93 @@ export default function ChatMessage({ userId: propUserId, role: propRole, token:
       setIsLoading(true);
       setError(null);
       
-      // Utiliser le patientId fourni en prop ou demander à l'utilisateur
-      const patientId = propPatientId || targetUserId;
-      
-      if (!patientId) {
+      if (!targetUserId) {
         setError("Veuillez sélectionner un patient pour créer une conversation");
         setIsLoading(false);
         return;
       }
       
-      console.log('🔍 Création d\'une nouvelle conversation:', { medecinId: userId, patientId, type: 'patient_medecin' });
+      console.log('🔍 Création d\'une nouvelle conversation:', { medecinId: userId, patientId: targetUserId });
       
-      // ✅ Utiliser la méthode du service
-      const result = await signalingService.createConversation(
-        patientId,  // ID du patient (premier paramètre)
-        userId,     // ID du médecin (deuxième paramètre)
-        'patient_medecin'
-      );
+      const result = await messagingApi.createConversation(targetUserId, userId, 'patient_medecin');
       
-      console.log('📨 Réponse de création de conversation:', result);
+      console.log('📨 Réponse du serveur pour création conversation:', result);
       
-      if (result.success && result.conversation) {
-        console.log('✅ Nouvelle conversation créée:', result.conversation);
-        
-        // Ajouter la nouvelle conversation à la liste locale
-        const newConversation = result.conversation;
-        setConversations(prev => {
-          const updated = [...prev, newConversation];
-          console.log('📝 Conversations mises à jour:', updated);
-          return updated;
-        });
-        
-        // Sélectionner la nouvelle conversation
-        setSelectedConversation(newConversation.id);
+      // Le serveur retourne directement l'objet conversation (code 201)
+      // Vérifier si c'est un objet conversation ou une réponse avec success
+      if (result && (result.id || result.id_conversation)) {
+        // Réponse directe du serveur (objet conversation)
+        const newConversation = result;
+        setConversations(prev => [...prev, newConversation]);
+        setSelectedConversation(newConversation.id || newConversation.id_conversation);
         setMessages([]);
-        
-        // Recharger les conversations depuis le serveur pour s'assurer de la synchronisation
-        setTimeout(() => {
-          loadUserConversations();
-        }, 1000);
-        
-        console.log('✅ Conversation créée et sélectionnée avec succès');
+        console.log('✅ Conversation créée et sélectionnée avec succès:', newConversation);
+      } else if (result && result.success && result.conversation) {
+        // Réponse avec structure success/conversation
+        const newConversation = result.conversation;
+        setConversations(prev => [...prev, newConversation]);
+        setSelectedConversation(newConversation.id || newConversation.id_conversation);
+        setMessages([]);
+        console.log('✅ Conversation créée et sélectionnée avec succès:', newConversation);
       } else {
-        console.error('❌ Erreur lors de la création de conversation:', result.error);
-        setError(`Erreur lors de la création de conversation: ${result.error || 'Erreur inconnue'}`);
+        setError(result.message || "Erreur lors de la création de conversation");
       }
-    } catch (error) {
-      console.error('❌ Erreur lors de la création de conversation:', error);
-      setError(`Erreur lors de la création de conversation: ${error.message}`);
+    } catch (err) {
+      console.error('❌ Erreur lors de la création de conversation:', err);
+      setError(`Erreur lors de la création de conversation: ${err.message}`);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const sendMessage = async () => {
-    if (!inputMessage.trim() || !isConnected) return;
-    
-    try {
-      let targetConversationId = selectedConversation;
-      
-      // Si pas de conversation sélectionnée mais qu'on a un médecin ID, essayer d'en créer une
-      if (!targetConversationId && propMedecinId && userRole === 'patient') {
-        console.log('🔍 Pas de conversation sélectionnée, tentative d\'initiation avec le médecin:', propMedecinId);
-        const newConversation = await initiateConversationWithMedecin(propMedecinId);
-        if (newConversation) {
-          targetConversationId = newConversation.id;
-          console.log('✅ Conversation créée côté serveur pour l\'envoi du message');
-        } else {
-          setError("Impossible d'initier une conversation avec ce médecin");
-          return;
-        }
-      }
-      
-      if (!targetConversationId) {
-        setError("Veuillez sélectionner une conversation ou un médecin pour envoyer un message");
-        return;
-      }
-
-      console.log('🔍 Envoi du message dans la conversation:', targetConversationId);
-      
-      // ✅ Utiliser la méthode du service
-      const result = await signalingService.sendMessage(
-        targetConversationId, 
-        inputMessage.trim(), 
-        'texte'
-      );
-      
-      if (result.success) {
-        // Ajouter le message localement
-        const newMessage = {
-          id: Date.now(),
-          sender: userRole,
-          content: inputMessage.trim(),
-          timestamp: new Date().toISOString(),
-          type: 'text'
-        };
-        
-        setMessages(prev => [...prev, newMessage]);
-        setInputMessage("");
-        console.log('✅ Message envoyé avec succès');
-      } else {
-        console.error('❌ Erreur lors de l\'envoi du message:', result.error);
-        setError(`Erreur lors de l'envoi du message: ${result.error}`);
-      }
-    } catch (error) {
-      console.error('❌ Erreur lors de l\'envoi du message:', error);
-      setError(`Erreur lors de l'envoi du message: ${error.message}`);
-    }
-  };
-
-  // ✅ NOUVELLE FONCTION : Démarrer un appel vidéo
-  const startVideoCall = async () => {
-    if (!selectedConversation) {
-      setError("Veuillez sélectionner une conversation pour démarrer un appel vidéo");
+  // Envoyer un message
+  const sendMessage = useCallback(async () => {
+    if (!inputMessage.trim() || !isConnected) {
       return;
     }
 
     try {
-      console.log('🎥 Démarrage d\'un appel vidéo pour la conversation:', selectedConversation);
-
-      // ✅ Utiliser la méthode du service pour créer une session WebRTC avec code de conférence
-      const result = await signalingService.createWebRTCSessionWithConferenceLink(
-        selectedConversation,
-        'audio_video',
-        null, // SDP offer sera généré par le composant vidéo
-        true // Générer un code de conférence
-      );
-
-      if (result.success) {
-        console.log('✅ Session WebRTC créée:', result.session);
-        if (result.conferenceLink) {
-          setConferenceLink(result.conferenceLink);
-          console.log('�� Lien de conférence (REST):', result.conferenceLink);
+      if (selectedConversation) {
+        const result = await messagingApi.sendMessage(selectedConversation, inputMessage.trim(), 'text');
+        
+        console.log('📨 Résultat envoi message:', result);
+        
+        if (result.success) {
+          const newMessage = result.message;
+          
+          // Formater le message pour l'affichage
+          const formattedMessage = {
+            id: newMessage.id || newMessage.id_message || `msg_${Date.now()}`,
+            content: newMessage.content || newMessage.contenu || inputMessage.trim(),
+            sender: userRole, // L'expéditeur est l'utilisateur actuel
+            timestamp: newMessage.timestamp || newMessage.date_envoi || new Date().toISOString(),
+            type: newMessage.type || newMessage.type_message || 'text'
+          };
+          
+          setMessages(prev => [...prev, formattedMessage]);
+          setInputMessage("");
+          console.log('✅ Message envoyé avec succès:', formattedMessage);
+        } else {
+          setError(result.message || "Erreur lors de l'envoi du message");
         }
-        // Émettre l'événement pour démarrer l'appel
-        signalingService.emit('start_video_call', {
-          conversationId: selectedConversation,
-          sessionId: result.session.id
-        });
-        // Ouvrir le widget WebRTC en initiateur
-        setCallType('video');
-        setShowCallWidget(true);
-      } else {
-        setError(`Erreur lors de la création de la session vidéo: ${result.error}`);
       }
-    } catch (error) {
-      console.error('❌ Erreur lors du démarrage de l\'appel vidéo:', error);
-      setError(`Erreur lors du démarrage de l'appel vidéo: ${error.message}`);
+    } catch (err) {
+      console.error("Erreur lors de l'envoi du message:", err);
+      setError("Erreur lors de l'envoi du message");
+    }
+  }, [inputMessage, isConnected, selectedConversation, userRole]);
+
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
     }
   };
 
   const handleConversationSelect = (conversationId) => {
     setSelectedConversation(conversationId);
+    setMessages([]);
     loadConversationMessages(conversationId);
-  };
-
-  // Fonction pour trouver une conversation avec un médecin spécifique
-  const findConversationWithMedecin = (medecinId) => {
-    if (userRole !== 'patient') return null;
-    
-    const conversation = conversations.find(conv => 
-      conv.type_conversation === 'patient_medecin' && 
-      (conv.participants?.includes(medecinId) || conv.medecin_id === medecinId)
-    );
-    
-    if (conversation) {
-      setSelectedConversation(conversation.id);
-      loadConversationMessages(conversation.id);
-      return conversation;
-    }
-    
-    return null;
-  };
-
-  // Effet pour automatiquement sélectionner une conversation avec le médecin si fourni
-  useEffect(() => {
-    if (propMedecinId && userRole === 'patient' && conversations.length > 0) {
-      const conversation = findConversationWithMedecin(propMedecinId);
-      if (!conversation) {
-        setError("Aucune conversation trouvée avec ce médecin. Contactez votre médecin pour démarrer une conversation.");
-      }
-    }
-  }, [propMedecinId, conversations, userRole]);
-
-  // Fonction pour permettre aux patients d'initier une conversation
-  const initiateConversationWithMedecin = async (medecinId) => {
-    if (userRole !== 'patient') {
-      console.log('❌ Seuls les patients peuvent initier des conversations');
-      return null;
-    }
-
-    try {
-      console.log('🔍 Tentative d\'initiation de conversation avec le médecin:', medecinId);
-      
-      // Vérifier d'abord s'il y a déjà une conversation
-      const existingConversation = findConversationWithMedecin(medecinId);
-      if (existingConversation) {
-        console.log('✅ Conversation existante trouvée, pas besoin d\'en créer une nouvelle');
-        return existingConversation;
-      }
-
-      // Créer une vraie conversation côté serveur
-      console.log('📝 Création d\'une vraie conversation côté serveur...');
-      
-      // ✅ Utiliser le service de signalisation pour créer la conversation
-      const result = await signalingService.createConversation(
-        userId,        // ID du patient (premier paramètre)
-        medecinId,     // ID du médecin (deuxième paramètre)
-        'patient_medecin'
-      );
-
-      if (result.success && result.conversation) {
-        console.log('✅ Conversation créée côté serveur:', result.conversation);
-        
-        // Ajouter la nouvelle conversation à la liste locale
-        const newConversation = result.conversation;
-        setConversations(prev => {
-          const updated = [...prev, newConversation];
-          console.log('📝 Conversations mises à jour:', updated);
-          return updated;
-        });
-        
-        // Sélectionner la nouvelle conversation
-        setSelectedConversation(newConversation.id);
-        setMessages([]);
-        
-        return newConversation;
-      } else {
-        console.error('❌ Erreur lors de la création de conversation côté serveur:', result.error);
-        setError(`Impossible de créer une conversation avec ce médecin: ${result.error || 'Erreur inconnue'}`);
-        return null;
-      }
-    } catch (error) {
-      console.error('❌ Erreur lors de l\'initiation de la conversation:', error);
-      setError(`Erreur lors de la création de conversation: ${error.message}`);
-      return null;
-    }
-  };
-
-  const handleKeyPress = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      if (selectedConversation) {
-        sendMessage();
-      } else if (userRole === 'medecin') {
-        // Seuls les médecins peuvent créer de nouvelles conversations
-        if (propPatientId) {
-          createNewConversation();
-        } else {
-          setError("Veuillez d'abord sélectionner un patient pour créer une conversation");
-        }
-      } else if (userRole === 'patient' && propMedecinId) {
-        // Pour les patients avec un médecin ID, permettre l'envoi direct
-        sendMessage();
-      } else {
-        // Pour les patients sans médecin ID, afficher un message d'information
-        setError("Veuillez sélectionner une conversation existante ou un médecin pour envoyer un message");
-      }
-    }
   };
 
   const getStatusColor = () => {
@@ -543,18 +288,18 @@ export default function ChatMessage({ userId: propUserId, role: propRole, token:
                   title="Rafraîchir les conversations"
                   disabled={isLoading}
                 >
-                  ��
+                  🔄
                 </button>
               </div>
               {userRole === 'medecin' ? (
                 <button
-                  onClick={() => createNewConversation()}
-                  disabled={!isConnected || isLoading || (!propPatientId && !selectedConversation)}
+                  onClick={() => createNewConversation(propPatientId)}
+                  disabled={!isConnected || isLoading || !propPatientId}
                   className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
                 >
                   <FaPlus className="text-sm" />
                   <span>
-                    {propPatientId ? 'Créer conversation avec ce patient' : 'Nouvelle conversation'}
+                    {propPatientId ? 'Créer conversation avec ce patient' : 'Sélectionner un patient'}
                   </span>
                 </button>
               ) : (
@@ -611,51 +356,14 @@ export default function ChatMessage({ userId: propUserId, role: propRole, token:
           <div className="flex-1 flex flex-col min-h-0">
             {selectedConversation ? (
               <>
-                {/* En-tête de la conversation avec boutons d'appel */}
+                {/* En-tête de la conversation */}
                 <div className="p-4 border-b border-gray-200 bg-gray-50 flex-shrink-0">
                   <div className="flex items-center justify-between">
                     <h3 className="font-semibold text-gray-800">
                       Conversation {selectedConversation}
                     </h3>
-                    <div className="flex items-center space-x-3">
-                      {conferenceLink && (
-                        <div className="flex items-center space-x-2 bg-blue-50 border border-blue-200 text-blue-700 px-2 py-1 rounded">
-                          <span className="text-xs">Lien:</span>
-                          <code className="text-xs font-semibold">{conferenceLink}</code>
-                          <button
-                            onClick={() => navigator.clipboard.writeText(String(conferenceLink))}
-                            className="text-xs bg-blue-600 text-white px-2 py-0.5 rounded"
-                            title="Copier le lien"
-                          >
-                            Copier
-                          </button>
-                        </div>
-                      )}
-                      <div className="flex space-x-2">
-                        <button
-                          onClick={startVideoCall}
-                          disabled={!isConnected}
-                          className="bg-green-600 text-white p-2 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                          title="Démarrer un appel vidéo"
-                        >
-                          <FaVideo className="text-sm" />
-                        </button>
-                      </div>
-                    </div>
                   </div>
                 </div>
-                {showCallWidget && (
-                  <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-lg shadow-xl w-full max-w-5xl p-2">
-                      <WebRTCWidget
-                        conversationId={selectedConversation}
-                        isInitiator={true}
-                        initialConferenceLink={conferenceLink}
-                        onClose={() => setShowCallWidget(false)}
-                      />
-                    </div>
-                  </div>
-                )}
 
                 {/* Messages */}
                 <div className="flex-1 overflow-y-auto p-4 space-y-3">
@@ -666,30 +374,46 @@ export default function ChatMessage({ userId: propUserId, role: propRole, token:
                       <p className="text-sm">Envoyez un message pour démarrer la conversation</p>
                     </div>
                   ) : (
-                    messages.map((msg, index) => (
-                      <div
-                        key={`msg-${msg.id}-${index}-${msg.timestamp}`}
-                        className={`flex ${msg.sender === userRole ? 'justify-end' : 'justify-start'}`}
-                      >
+                    messages.map((msg, index) => {
+                      // Déterminer si le message est envoyé par l'utilisateur actuel
+                      // Le serveur retourne déjà sender: "patient" ou "medecin"
+                      const isOwnMessage = msg.sender === userRole;
+                      
+                      console.log('🎨 Affichage message:', {
+                        msg,
+                        isOwnMessage,
+                        userRole,
+                        sender: msg.sender,
+                        originalSender: msg.originalSender,
+                        comparison: msg.sender === userRole,
+                        content: msg.content
+                      });
+                      
+                      return (
                         <div
-                          className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
-                            msg.sender === userRole
-                              ? 'bg-blue-600 text-white'
-                              : 'bg-gray-200 text-gray-800'
-                          }`}
+                          key={`msg-${msg.id}-${index}-${msg.timestamp}`}
+                          className={`flex ${isOwnMessage ? 'justify-end' : 'justify-start'}`}
                         >
-                          <div className="text-sm font-medium mb-1">
-                            {msg.sender === userRole ? 'Moi' : (msg.sender === 'patient' ? 'Patient' : 'Médecin')}
-                          </div>
-                          <div className="text-sm">{msg.content}</div>
-                          <div className={`text-xs mt-1 ${
-                            msg.sender === userRole ? 'text-blue-100' : 'text-gray-500'
-                          }`}>
-                            {new Date(msg.timestamp).toLocaleTimeString()}
+                          <div
+                            className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+                              isOwnMessage
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-gray-200 text-gray-800'
+                            }`}
+                          >
+                            <div className="text-sm font-medium mb-1">
+                              {isOwnMessage ? 'Moi' : (msg.sender === 'patient' ? 'Patient' : 'Médecin')}
+                            </div>
+                            <div className="text-sm">{msg.content}</div>
+                            <div className={`text-xs mt-1 ${
+                              isOwnMessage ? 'text-blue-100' : 'text-gray-500'
+                            }`}>
+                              {new Date(msg.timestamp).toLocaleTimeString()}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))
+                      );
+                    })
                   )}
                 </div>
 
@@ -742,7 +466,7 @@ export default function ChatMessage({ userId: propUserId, role: propRole, token:
                   </div>
                 </div>
                 
-                {/* Zone de saisie par défaut - TOUJOURS VISIBLE ET ACCESSIBLE */}
+                {/* Zone de saisie par défaut */}
                 <div className="p-4 border-t border-gray-200 bg-white flex-shrink-0">
                   <div className="flex space-x-2">
                     <input
@@ -765,7 +489,7 @@ export default function ChatMessage({ userId: propUserId, role: propRole, token:
                       <button
                         onClick={() => {
                           if (inputMessage.trim()) {
-                            createNewConversation();
+                            createNewConversation(propPatientId);
                           }
                         }}
                         disabled={!inputMessage.trim() || !isConnected || isLoading || !propPatientId}

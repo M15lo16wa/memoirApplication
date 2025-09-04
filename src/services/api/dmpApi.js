@@ -1117,9 +1117,9 @@ return result;
 // --- Nouvelles Fonctionnalités Disponibles ---
 
 // Créer une nouvelle auto-mesure
-export const createAutoMesureDMP = async (autoMesureData) => {
-    const url = '/patient/auto-mesures';
-    console.log('🔍 createAutoMesureDMP - Création auto-mesure:', autoMesureData);
+export const createAutoMesureDMP = async (patientId, autoMesureData) => {
+    const url = `/patient/auto-mesures/${patientId}`;
+    console.log('🔍 createAutoMesureDMP - Création auto-mesure pour patient:', patientId, autoMesureData);
     
     const response = await dmpApi.post(url, autoMesureData);
     console.log('🔍 createAutoMesureDMP - Réponse:', response);

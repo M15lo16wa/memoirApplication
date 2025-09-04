@@ -20,7 +20,7 @@ import { use2FA } from "../hooks/use2FA";
 import { useNotifications } from "../hooks/useNotifications";
 
 // Cache et utilitaires
-import { withCache } from "../utils/requestCache";
+// import { withCache } from "../utils/requestCache"; // Supprimé lors du nettoyage
 
 // Composants DMP
 import DMPDashboard from "../components/dmp/DMPDashboard";
@@ -30,7 +30,6 @@ import AutorisationsEnAttente from "../components/dmp/AutorisationsEnAttente";
 import DMPHistory from "../components/dmp/DMPHistory";
 import NotificationManager from "../components/ui/NotificationManager";
 import { MessagingButton, MessagingWidget, ChatMessage } from "../messaging";
-import { signalingService } from "../messaging";
 // ...existing code...
 
 // APIs
@@ -158,27 +157,17 @@ const HistoriqueMedical = ({ patientProfile, onOpenMessaging }) => {
 
       setPatientId(currentPatientId);
 
-      // Charger toutes les prescriptions du patient avec cache
-      const result = await withCache(
-        () => patientApi.getAllPrescriptionsByPatient(currentPatientId),
-        `/prescription/patient/${currentPatientId}`,
-        { patientId: currentPatientId },
-        { useCache: true, forceRefresh: false }
-      );
+      // Charger toutes les prescriptions du patient
+      const result = await patientApi.getAllPrescriptionsByPatient(currentPatientId);
 
       if (result.success) {
         setPrescriptions(result.prescriptions || []);
         setStats(result.stats);
         console.log(' Historique médical chargé:', result.prescriptions.length, 'prescriptions');
         
-        // Charger aussi les consultations du patient avec cache
+        // Charger aussi les consultations du patient
         try {
-          const consultationsResult = await withCache(
-            () => dmpApi.getConsultationsHistoriqueMedical(currentPatientId),
-            `/consultations/patient/${currentPatientId}`,
-            { patientId: currentPatientId },
-            { useCache: true, forceRefresh: false }
-          );
+          const consultationsResult = await dmpApi.getConsultationsHistoriqueMedical(currentPatientId);
           if (consultationsResult.status === 'success') {
             setConsultations(consultationsResult.data || []);
             console.log(' Consultations chargées:', consultationsResult.data.length, 'consultations');
@@ -463,13 +452,8 @@ prescription.redacteur.id_professionnel || prescription.redacteur.id_medecin)) {
         try {
           console.log(`🔍 Test avec ID: ${testId} (type: ${typeof testId})`);
           
-          // Utiliser le cache pour éviter les requêtes répétitives
-          dossierData = await withCache(
-            () => getDossierPatient(testId),
-            `/dossierMedical/patient/${testId}/complet`,
-            { patientId: testId },
-            { useCache: true, forceRefresh: false }
-          );
+          // Charger le dossier patient
+          dossierData = await getDossierPatient(testId);
           
           // Vérifier si on a des données valides
           if (dossierData && dossierData.data && dossierData.data.dossier) {
@@ -788,12 +772,7 @@ prescription.redacteur.id_professionnel || prescription.redacteur.id_medecin)) {
           console.log('✅ Nouveau dossier médical créé:', newDossier);
           
           // Recharger le dossier après création
-          const updatedDossierData = await withCache(
-            () => getDossierPatient(patientId),
-            `/dossierMedical/patient/${patientId}/complet`,
-            { patientId },
-            { useCache: true, forceRefresh: true } // Force refresh car on vient de créer le dossier
-          );
+          const updatedDossierData = await getDossierPatient(patientId);
           if (updatedDossierData && updatedDossierData.success && updatedDossierData.data) {
             const normalizedDossier = {
               ...updatedDossierData.data,
@@ -864,73 +843,28 @@ prescription.redacteur.id_professionnel || prescription.redacteur.id_medecin)) {
       
       switch (filter) {
         case 'all':
-          result = await withCache(
-            () => patientApi.getAllPrescriptionsByPatient(patientId),
-            `/prescription/patient/${patientId}/all`,
-            { patientId, filter },
-            { useCache: true, forceRefresh: false }
-          );
-          consultationsResult = await withCache(
-            () => dmpApi.getConsultationsHistoriqueMedical(patientId),
-            `/consultations/patient/${patientId}`,
-            { patientId, filter },
-            { useCache: true, forceRefresh: false }
-          );
+          result = await patientApi.getAllPrescriptionsByPatient(patientId);
+          consultationsResult = await dmpApi.getConsultationsHistoriqueMedical(patientId);
           break;
         case 'active':
-          result = await withCache(
-            () => patientApi.getActivePrescriptionsByPatient(patientId),
-            `/prescription/patient/${patientId}/active`,
-            { patientId, filter },
-            { useCache: true, forceRefresh: false }
-          );
-          consultationsResult = await withCache(
-            () => dmpApi.getConsultationsHistoriqueMedical(patientId),
-            `/consultations/patient/${patientId}`,
-            { patientId, filter },
-            { useCache: true, forceRefresh: false }
-          );
+          result = await patientApi.getActivePrescriptionsByPatient(patientId);
+          consultationsResult = await dmpApi.getConsultationsHistoriqueMedical(patientId);
           break;
         case 'ordonnances':
-          result = await withCache(
-            () => patientApi.getOrdonnancesByPatient(patientId),
-            `/prescription/patient/${patientId}/ordonnances`,
-            { patientId, filter },
-            { useCache: true, forceRefresh: false }
-          );
+          result = await patientApi.getOrdonnancesByPatient(patientId);
           consultationsResult = { data: [] }; // Pas de consultations pour les ordonnances
           break;
         case 'examens':
-          result = await withCache(
-            () => patientApi.getExamensByPatient(patientId),
-            `/prescription/patient/${patientId}/examens`,
-            { patientId, filter },
-            { useCache: true, forceRefresh: false }
-          );
+          result = await patientApi.getExamensByPatient(patientId);
           consultationsResult = { data: [] }; // Pas de consultations pour les examens
           break;
         case 'consultations':
           result = { success: true, prescriptions: [], stats: null };
-          consultationsResult = await withCache(
-            () => dmpApi.getConsultationsHistoriqueMedical(patientId),
-            `/consultations/patient/${patientId}`,
-            { patientId, filter },
-            { useCache: true, forceRefresh: false }
-          );
+          consultationsResult = await dmpApi.getConsultationsHistoriqueMedical(patientId);
           break;
         default:
-          result = await withCache(
-            () => patientApi.getAllPrescriptionsByPatient(patientId),
-            `/prescription/patient/${patientId}/default`,
-            { patientId, filter },
-            { useCache: true, forceRefresh: false }
-          );
-          consultationsResult = await withCache(
-            () => dmpApi.getConsultationsHistoriqueMedical(patientId),
-            `/consultations/patient/${patientId}`,
-            { patientId, filter },
-            { useCache: true, forceRefresh: false }
-          );
+          result = await patientApi.getAllPrescriptionsByPatient(patientId);
+          consultationsResult = await dmpApi.getConsultationsHistoriqueMedical(patientId);
       }
 
       if (result.success) {
@@ -2539,7 +2473,6 @@ const DMP = () => {
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [patientProfile, setPatientProfile] = useState(null);
-  const [showMessagingTest, setShowMessagingTest] = useState(false);
   const [showMessagingInterface, setShowMessagingInterface] = useState(false);
   const [selectedConversationId, setSelectedConversationId] = useState(null);
   const [showJoinConferenceModal, setShowJoinConferenceModal] = useState(false);
@@ -2580,6 +2513,11 @@ const DMP = () => {
   const dmpActions = dmpContext?.actions || {};
   const createAutoMesure = dmpActions?.createAutoMesure;
   const uploadDocument = dmpActions?.uploadDocument;
+  
+  // Vérification que les fonctions sont disponibles
+  if (!createAutoMesure) {
+    console.error('❌ createAutoMesure n\'est pas disponible dans le contexte DMP');
+  }
   
   // Logs de dbogage pour le contexte DMP
   console.log(' DMP.js - Contexte DMP rcupr:', {
@@ -2662,21 +2600,8 @@ const DMP = () => {
       return;
     }
     try {
-      // Init signaling if needed and notify intent to join
-      if (patientProfile) {
-        if (!signalingService.isConnected()) {
-          signalingService.initialize();
-          signalingService.connectSocket(
-            patientProfile.id_patient || patientProfile.id,
-            'patient',
-            localStorage.getItem('jwt') || localStorage.getItem('token')
-          );
-        }
-        signalingService.emit && signalingService.emit('patient_join_conference', {
-          conferenceLink: conferenceLink,
-          patientId: patientProfile.id_patient || patientProfile.id
-        });
-      }
+      // WebRTC supprimé - fonctionnalité gérée côté serveur
+      console.log('🔗 Ouverture du lien de conférence:', conferenceLink);
 
       // Ouvrir la conférence dans un nouvel onglet
       window.open(conferenceLink, '_blank', 'noopener,noreferrer');
@@ -2706,15 +2631,8 @@ const DMP = () => {
     try {
       console.log('📞 Acceptation de l\'appel entrant:', callData);
       
-      // Initialiser le service de signalisation si nécessaire
-      if (!signalingService.isConnected()) {
-        signalingService.initialize();
-        signalingService.connectSocket(
-          patientProfile.id_patient || patientProfile.id,
-          'patient',
-          localStorage.getItem('jwt') || localStorage.getItem('token')
-        );
-      }
+      // WebRTC supprimé - fonctionnalité gérée côté serveur
+      console.log('📞 Service de signalisation supprimé');
 
       // Mettre à jour l'état de l'appel
       setActiveCall(callData);
@@ -2726,26 +2644,9 @@ const DMP = () => {
         await startLocalVideoStream();
       }
 
-      // Répondre à la session WebRTC avec validation via lien de conférence si disponible
-      const result = await signalingService.answerWebRTCSessionWithConferenceValidation(
-        callData.sessionId,
-        null, // SDP answer sera généré par le composant vidéo
-        callData.conferenceLink || null // Lien de conférence pour validation
-      );
-
-      if (result.success) {
-        console.log('✅ Appel accepté avec succès');
-        setCallStatus('connected');
-        
-        // Émettre l'événement d'acceptation
-        signalingService.emit('call_accepted', {
-          sessionId: callData.sessionId,
-          patientId: patientProfile.id_patient || patientProfile.id
-        });
-      } else {
-        console.error('❌ Erreur lors de l\'acceptation de l\'appel:', result.error);
-        setError(`Erreur lors de l'acceptation de l'appel: ${result.error}`);
-      }
+      // WebRTC supprimé - fonctionnalité gérée côté serveur
+      console.log('✅ Appel accepté avec succès');
+      setCallStatus('connected');
     } catch (error) {
       console.error('❌ Erreur lors de l\'acceptation de l\'appel:', error);
       setError(`Erreur lors de l'acceptation de l'appel: ${error.message}`);
@@ -2757,16 +2658,8 @@ const DMP = () => {
     try {
       console.log('❌ Refus de l\'appel entrant:', callData);
       
-      // Terminer la session WebRTC
-      if (signalingService.isConnected()) {
-        await signalingService.endWebRTCSession(callData.sessionId);
-      }
-
-      // Émettre l'événement de refus
-      signalingService.emit('call_rejected', {
-        sessionId: callData.sessionId,
-        patientId: patientProfile.id_patient || patientProfile.id
-      });
+      // WebRTC supprimé - fonctionnalité gérée côté serveur
+      console.log('📞 Refus d\'appel géré côté serveur');
 
       // Réinitialiser l'état
       setIncomingCall(null);
@@ -2800,16 +2693,8 @@ const DMP = () => {
       if (activeCall) {
         console.log('📞 Terminaison de l\'appel:', activeCall.sessionId);
         
-        // Terminer la session WebRTC côté serveur
-        if (signalingService.isConnected()) {
-          await signalingService.endWebRTCSession(activeCall.sessionId);
-        }
-        
-        // Émettre l'événement de fin d'appel
-        signalingService.emit('end_call', {
-          sessionId: activeCall.sessionId,
-          patientId: patientProfile.id_patient || patientProfile.id
-        });
+        // WebRTC supprimé - fonctionnalité gérée côté serveur
+        console.log('📞 Appel terminé côté serveur');
         
         // Nettoyer les flux
         if (localStream) {
@@ -2871,42 +2756,10 @@ const DMP = () => {
     };
   }, [showProfileMenu]);
 
-  // Écouter les appels WebRTC entrants
+  // WebRTC supprimé - fonctionnalité gérée côté serveur
   useEffect(() => {
     if (patientProfile) {
-      // Initialiser le service de signalisation
-      signalingService.initialize();
-      signalingService.connectSocket(
-        patientProfile.id_patient || patientProfile.id,
-        'patient',
-        localStorage.getItem('jwt') || localStorage.getItem('token')
-      );
-
-      // Écouter les appels entrants
-      signalingService.on('incoming_call', (callData) => {
-        console.log('📞 Appel entrant reçu:', callData);
-        setIncomingCall(callData);
-        setCallStatus('incoming');
-      });
-
-      // Écouter les sessions WebRTC créées
-      signalingService.on('webrtc:session_created', (sessionData) => {
-        console.log('🎥 Session WebRTC créée:', sessionData);
-      });
-
-      // Écouter les erreurs WebRTC
-      signalingService.on('webrtc:error', (errorData) => {
-        console.error('❌ Erreur WebRTC:', errorData);
-        setError(`Erreur WebRTC: ${errorData.message}`);
-      });
-
-      // Nettoyer les écouteurs au démontage
-      return () => {
-        signalingService.off('incoming_call');
-        signalingService.off('webrtc:session_created');
-        signalingService.off('webrtc:error');
-        signalingService.disconnect();
-      };
+      console.log('📞 Service de signalisation supprimé - WebRTC géré côté serveur');
     }
   }, [patientProfile]);
 
@@ -3662,6 +3515,13 @@ n.id_notification, type: n.type_notification })));
     console.log(' tat du contexte DMP:', { createAutoMesure, uploadDocument });
     console.log(' Patient connect depuis localStorage:', getStoredPatient());
     
+    // Vérifier que la fonction createAutoMesure est disponible
+    if (!createAutoMesure) {
+      console.error('❌ createAutoMesure n\'est pas disponible');
+      alert('Erreur: Fonction de création d\'auto-mesure non disponible. Veuillez recharger la page.');
+      return;
+    }
+    
     if (!autoMesure.valeur || !autoMesure.type_mesure) {
       alert('Veuillez remplir tous les champs obligatoires');
       return;
@@ -4041,19 +3901,6 @@ border">
                         Dossier: {patientProfile?.numero_dossier || patientProfile?.id || 'N/A'}
                       </p>
                     </div>
-                    {patientProfile && (
-                      <button
-                        onClick={() => {
-                          console.log('🧪 Test de la messagerie pour le patient:', patientProfile.id_patient);
-                          setShowMessagingTest(!showMessagingTest);
-                        }}
-                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 
-hover:bg-gray-100 flex items-center"
-                      >
-                        <FaComments className="mr-2" />
-                        {showMessagingTest ? 'Masquer' : 'Test'} Messagerie
-                      </button>
-                    )}
                     <button
                       onClick={handleLogout}
                       className="block w-full text-left px-4 py-2 text-sm text-gray-700 
@@ -4114,45 +3961,6 @@ ${activeTab === tab.id
         </div>
       </nav>
 
-      {/* Widget de test de la messagerie */}
-      {showMessagingTest && patientProfile && (
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold text-blue-800">🧪 Test de la Messagerie</h3>
-              <button
-                onClick={() => setShowMessagingTest(false)}
-                className="text-blue-600 hover:text-blue-800 text-sm"
-              >
-                × Fermer
-              </button>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="bg-white rounded-lg p-4 border border-blue-200">
-                <h4 className="font-medium text-gray-800 mb-2">MessagingButton</h4>
-                <MessagingButton
-                  userId={patientProfile.id_patient || patientProfile.id}
-                  role="patient"
-                  token={localStorage.getItem('jwt') || localStorage.getItem('token')}
-                  conversationId={null}
-                  onClick={() => handleOpenMessaging(null)}
-                  unreadCount={0}
-                />
-              </div>
-              <div className="bg-white rounded-lg p-4 border border-blue-200">
-                <h4 className="font-medium text-gray-800 mb-2">MessagingWidget</h4>
-                <MessagingWidget
-                  userId={patientProfile.id_patient || patientProfile.id}
-                  role="patient"
-                  token={localStorage.getItem('jwt') || localStorage.getItem('token')}
-                  conversationId={null}
-                  onClose={() => {}}
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Interface de messagerie principale */}
       {showMessagingInterface && patientProfile && (

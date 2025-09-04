@@ -2,7 +2,7 @@ import React, { createContext, useContext, useReducer, useEffect, useMemo } from
 import { getCurrentUser, getStoredPatient } from '../services/api/authApi';
 import * as dmpApi from '../services/api/dmpApi';
 import * as medicalApi from '../services/api/medicalApi';
-import { isAuthenticated, logAuthStatus } from '../utils/authUtils';
+import { isAuthenticated } from '../services/api/authApi';
 
 
 const DMPContext = createContext();
@@ -154,7 +154,7 @@ export const DMPProvider = ({ children }) => {
         if (state.patientId) {
             // ✅ VÉRIFICATION D'AUTHENTIFICATION : Ne charger les données que si l'utilisateur est connecté
             if (!isAuthenticated()) {
-                logAuthStatus('DMPContext');
+                console.log('🔒 DMPContext - Utilisateur non authentifié');
                 console.log('🔒 DMPContext - Utilisateur non authentifié, pas de chargement automatique des données');
                 return;
             }
@@ -242,7 +242,7 @@ export const DMPProvider = ({ children }) => {
         loadDMP: async () => {
             // ✅ VÉRIFICATION D'AUTHENTIFICATION : Ne charger le DMP que si l'utilisateur est connecté
             if (!isAuthenticated()) {
-                logAuthStatus('DMPContext.loadDMP');
+                console.log('🔒 DMPContext.loadDMP - Utilisateur non authentifié');
                 console.log('🔒 DMPContext - Utilisateur non authentifié, pas de chargement du DMP');
                 return;
             }
@@ -699,7 +699,7 @@ export const DMPProvider = ({ children }) => {
             console.warn('⚠️ DMPContext - Impossible de forcer la réinitialisation du Patient ID');
             return null;
         }
-    }), [state.patientId]);
+    }), [state.patientId, state.lastDMPRequest]);
 
     return (
         <DMPContext.Provider value={{ state, actions }}>

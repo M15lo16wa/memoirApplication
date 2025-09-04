@@ -1,67 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { FaComments } from 'react-icons/fa';
-import { signalingService } from '../index';
 
-// Bouton de messagerie avec connexion au service
+// Bouton de messagerie simplifié
 export const MessagingButton = ({ userId, role, token, conversationId, onClick, unreadCount = 0 }) => {
     const [isConnected, setIsConnected] = useState(false);
     const [connectionStatus, setConnectionStatus] = useState('disconnected');
 
     useEffect(() => {
-        if (userId && role && token) {
-            console.log('🔌 Initialisation de la connexion messagerie:', { userId, role, hasToken: !!token });
-            
-            // Initialiser le service de signalisation
-            signalingService.initialize();
-            
-            const socket = signalingService.connectSocket(userId, role, token);
-
-            if (socket) {
-                socket.on('connect', () => {
-                    console.log('✅ Connecté au service de messagerie');
-                    setIsConnected(true);
-                    setConnectionStatus('connected');
-
-                    // Rejoindre la conversation si un ID est fourni
-                    if (conversationId) {
-                        signalingService.joinConversation(conversationId);
-                    }
-                });
-
-                socket.on('disconnect', (reason) => {
-                    console.log('❌ Déconnecté du service de messagerie:', reason);
-                    setIsConnected(false);
-                    setConnectionStatus('disconnected');
-                });
-
-                socket.on('connect_error', (error) => {
-                    console.error('❌ Erreur de connexion messagerie:', error);
-                    setIsConnected(false);
-                    setConnectionStatus('error');
-                });
-
-                // Vérifier l'état de connexion immédiatement
-                if (socket.connected) {
-                    console.log('✅ Socket déjà connecté');
-                    setIsConnected(true);
-                    setConnectionStatus('connected');
-                }
-            } else {
-                console.error('❌ Impossible de créer la connexion WebSocket');
-                setConnectionStatus('error');
-            }
-
-            return () => {
-                if (conversationId) {
-                    signalingService.leaveConversation(conversationId);
-                }
-                signalingService.closeConnection();
-            };
-        } else {
-            console.log('⚠️ Paramètres manquants pour la messagerie:', { userId, role, hasToken: !!token });
-            setConnectionStatus('missing_params');
-        }
-    }, [userId, role, token, conversationId]);
+        // WebRTC supprimé - fonctionnalité gérée côté serveur
+        console.log('📞 Service de signalisation supprimé - WebRTC géré côté serveur');
+        setIsConnected(true);
+        setConnectionStatus('connected');
+    }, [userId, role, token]);
 
     const handleClick = () => {
         if (onClick) {
@@ -69,51 +19,26 @@ export const MessagingButton = ({ userId, role, token, conversationId, onClick, 
         }
     };
 
-    // Déterminer le style et le texte selon l'état de connexion
-    const getButtonStyle = () => {
-        switch (connectionStatus) {
-            case 'connected':
-                return 'bg-pink-500 hover:bg-pink-600';
-            case 'connecting':
-                return 'bg-yellow-500 hover:bg-yellow-600';
-            case 'error':
-                return 'bg-red-500 hover:bg-red-600';
-            case 'missing_params':
-                return 'bg-gray-400 cursor-not-allowed';
-            default:
-                return 'bg-gray-400 cursor-not-allowed';
-        }
-    };
-
-    const getStatusText = () => {
-        switch (connectionStatus) {
-            case 'connected':
-                return null; // Pas de texte supplémentaire quand connecté
-            case 'connecting':
-                return <span className="ml-2 text-xs">(connexion...)</span>;
-            case 'error':
-                return <span className="ml-2 text-xs">(erreur)</span>;
-            case 'missing_params':
-                return <span className="ml-2 text-xs">(paramètres manquants)</span>;
-            default:
-                return <span className="ml-2 text-xs">(hors ligne)</span>;
-        }
-    };
-
     return (
         <button
-            className={`flex items-center gap-2 px-6 py-3 rounded-lg text-white font-bold transition relative ${getButtonStyle()}`}
             onClick={handleClick}
+            className={`relative p-3 rounded-lg transition-all duration-200 ${
+                isConnected 
+                    ? 'bg-blue-600 hover:bg-blue-700 text-white' 
+                    : 'bg-gray-400 text-gray-200 cursor-not-allowed'
+            }`}
             disabled={!isConnected}
+            title={isConnected ? 'Messagerie disponible' : 'Messagerie indisponible'}
         >
-            <FaComments />
-            Messagerie
+            <FaComments className="text-xl" />
             {unreadCount > 0 && (
-                <span className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full text-xs w-5 h-5 flex items-center justify-center">
+                <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-6 w-6 flex items-center justify-center">
                     {unreadCount > 99 ? '99+' : unreadCount}
                 </span>
             )}
-            {getStatusText()}
+            <div className={`absolute bottom-1 right-1 w-2 h-2 rounded-full ${
+                connectionStatus === 'connected' ? 'bg-green-400' : 'bg-red-400'
+            }`}></div>
         </button>
     );
 };

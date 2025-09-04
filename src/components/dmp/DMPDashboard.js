@@ -4,7 +4,7 @@ import { use2FA } from '../../hooks/use2FA';
 import { FaHeartbeat, FaFileMedical, FaCalendarAlt, FaChartLine, FaUserMd, FaThermometerHalf, FaTint, FaWeight } from 'react-icons/fa';
 import NotificationsStats from '../ui/NotificationsStats';
 import * as dmpApi from '../../services/api/dmpApi';
-import { isAuthenticated, logAuthStatus } from '../../utils/authUtils';
+import { isAuthenticated } from '../../services/api/authApi';
 
 // Protection 2FA pour l'accès aux dossiers patients
 import Validate2FA from '../2fa/Validate2FA';
@@ -62,7 +62,7 @@ const DMPDashboard = () => {
     useEffect(() => {
         // ✅ VÉRIFICATION D'AUTHENTIFICATION : Ne charger les données que si l'utilisateur est connecté
         if (!isAuthenticated()) {
-            logAuthStatus('DMPDashboard');
+            console.log('🔒 DMPDashboard - Utilisateur non authentifié');
             console.log('🔒 DMPDashboard - Utilisateur non authentifié, pas de chargement des données');
             return;
         }

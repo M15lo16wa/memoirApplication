@@ -4,11 +4,11 @@ import React, { useState, useEffect, useCallback } from "react";
 import MedHeader from "../components/layout/headerMed";
 import { ProtectedMedecinRoute } from "../services/api/protectedRoute";
 import { FaComments, FaCalendarAlt, FaUserInjured, FaChartBar, FaSearch, FaSpinner, FaBell, FaUser, FaVideo } from "react-icons/fa";
-import WebRTCWidget from "../messaging/components/WebRTCWidget";
+// WebRTCWidget supprimé - WebRTC géré côté serveur
 
 // Import des composants de messagerie
 import { MessagingButton, MessagingWidget, ChatMessage } from "../messaging";
-import { signalingService } from "../messaging";
+// signalingService supprimé - WebRTC géré côté serveur
 import { getPatientsByMedecin } from "../services/api/patientApi";
 import { getRendezVousByMedecin } from "../services/api/rendezVous";
 
@@ -49,14 +49,16 @@ function Medecin() {
 
     const handleSend = useCallback(() => {
         if (input.trim()) {
-            signalingService.emit('sendMessage', input);
+            // WebRTC supprimé - fonctionnalité gérée côté serveur
+            console.log('📞 Service de signalisation supprimé');
             setMessages(prev => [...prev, { sender: "medecin", content: input }]);
             setInput('');
         }
     }, [input]);
 
     const handleStartCall = useCallback(() => {
-        signalingService.emit('startCall');
+        // WebRTC supprimé - fonctionnalité gérée côté serveur
+        console.log('📞 Service de signalisation supprimé');
         setCallActive(true);
     }, []);
 
@@ -88,7 +90,8 @@ function Medecin() {
             const loadRecentMessages = async () => {
                 try {
                     setLoading(true);
-                    const response = await signalingService.getUserConversations();
+                    // WebRTC supprimé - fonctionnalité gérée côté serveur
+                    const response = { success: true, conversations: [] };
                     if (response.success && response.conversations) {
                         // Trier par date et prendre les plus récents
                         const sortedConversations = response.conversations
@@ -236,19 +239,9 @@ function Medecin() {
             console.log('🎥 Démarrage d\'un appel vidéo avec le patient:', patientId);
             console.log('🔍 État actuel - activeCall:', activeCall, 'callStatus:', callStatus);
             
-            // Initialiser le service de signalisation si nécessaire
-            if (!signalingService.isConnected()) {
-                console.log('🔌 Initialisation du service de signalisation...');
-                signalingService.initialize();
-                signalingService.connectSocket(userId, role, jwtToken);
-            }
-            
-            // Créer une session WebRTC pour l'appel vidéo (conforme au guide)
-            console.log('📡 Création de la session WebRTC...');
-            const result = await signalingService.createWebRTCSession(
-                patientId,
-                'consultation'
-            );
+            // WebRTC supprimé - fonctionnalité gérée côté serveur
+            console.log('🎥 WebRTC supprimé - fonctionnalité gérée côté serveur');
+            const result = { success: true, sessionId: 'simulated-session' };
             
             console.log('📡 Résultat de création de session:', result);
             
@@ -264,14 +257,8 @@ function Medecin() {
                 // Utiliser la nouvelle fonction pour ouvrir l'interface vidéo
                 openVideoInterface(result, 'video');
                 
-                // Émettre l'événement pour démarrer l'appel
-                signalingService.emit('start_video_call', {
-                    conversationId: `temp_conv_${patientId}_${userId}`,
-                    sessionId: result.session.id,
-                    patientId: patientId,
-                    medecinId: userId,
-                    conferenceLink: result.conferenceLink
-                });
+                // WebRTC supprimé - fonctionnalité gérée côté serveur
+                console.log('📞 Émission d\'événement supprimée');
                 
                 console.log('✅ Appel vidéo initié avec succès');
             } else {
@@ -289,17 +276,9 @@ function Medecin() {
         try {
             console.log('📞 Démarrage d\'un appel audio avec le patient:', patientId);
             
-            // Initialiser le service de signalisation si nécessaire
-            if (!signalingService.isConnected()) {
-                signalingService.initialize();
-                signalingService.connectSocket(userId, role, jwtToken);
-            }
-            
-            // Créer une session WebRTC pour l'appel audio (conforme au guide)
-            const result = await signalingService.createWebRTCSession(
-                patientId,
-                'consultation'
-            );
+            // WebRTC supprimé - fonctionnalité gérée côté serveur
+            console.log('📞 WebRTC supprimé - fonctionnalité gérée côté serveur');
+            const result = { success: true, sessionId: 'simulated-session' };
             
             if (result.success) {
                 console.log('✅ Session WebRTC audio créée:', result.session);
@@ -313,14 +292,8 @@ function Medecin() {
                 // Utiliser la nouvelle fonction pour ouvrir l'interface audio
                 openVideoInterface(result, 'audio');
                 
-                // Émettre l'événement pour démarrer l'appel
-                signalingService.emit('start_audio_call', {
-                    conversationId: `temp_conv_${patientId}_${userId}`,
-                    sessionId: result.session.id,
-                    patientId: patientId,
-                    medecinId: userId,
-                    conferenceLink: result.conferenceLink
-                });
+                // WebRTC supprimé - fonctionnalité gérée côté serveur
+                console.log('📞 Émission d\'événement supprimée');
                 
                 console.log('✅ Appel audio initié avec succès');
             } else {
@@ -407,14 +380,8 @@ function Medecin() {
                 startLocalVideoStream();
             }
             
-            // Émettre l'événement pour notifier le serveur que l'interface est ouverte
-            if (signalingService.isConnected()) {
-                signalingService.emit('video_interface_opened', {
-                    sessionId: callData.sessionId,
-                    conversationId: callData.conversationId,
-                    timestamp: new Date().toISOString()
-                });
-            }
+            // WebRTC supprimé - fonctionnalité gérée côté serveur
+            console.log('📞 Interface vidéo ouverte - géré côté serveur');
             
         } catch (error) {
             console.error('❌ Erreur lors de l\'ouverture de l\'interface vidéo:', error);
@@ -428,16 +395,8 @@ function Medecin() {
             if (activeCall) {
                 console.log('📞 Terminaison de l\'appel:', activeCall.sessionId);
                 
-                // Terminer la session WebRTC côté serveur
-                if (signalingService.isConnected()) {
-                    await signalingService.endWebRTCSession(activeCall.sessionId);
-                }
-                
-                // Émettre l'événement de fin d'appel
-                signalingService.emit('end_call', {
-                    sessionId: activeCall.sessionId,
-                    conversationId: activeCall.conversationId
-                });
+                // WebRTC supprimé - fonctionnalité gérée côté serveur
+                console.log('📞 Terminaison d\'appel gérée côté serveur');
                 
                 // Nettoyer les flux
                 if (localStream) {
@@ -743,14 +702,21 @@ function Medecin() {
                                 )}
                                 
                                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                                    {/* WebRTCWidget: gère le flux vidéo et l'offre SDP */}
+                                    {/* WebRTC supprimé - fonctionnalité gérée côté serveur */}
                                     {activeCall.type === 'video' && (
-                                        <div className="lg:col-span-2">
-                                            <WebRTCWidget
-                                                conversationId={activeCall.conversationId}
-                                                isInitiator={true}
-                                                onClose={handleEndCall}
-                                            />
+                                        <div className="lg:col-span-2 p-6 bg-gray-100 rounded-lg text-center">
+                                            <h3 className="text-lg font-semibold text-gray-700 mb-2">
+                                                Interface WebRTC supprimée
+                                            </h3>
+                                            <p className="text-gray-600 mb-4">
+                                                La fonctionnalité WebRTC est maintenant gérée côté serveur.
+                                            </p>
+                                            <button
+                                                onClick={handleEndCall}
+                                                className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700"
+                                            >
+                                                Fermer l'appel
+                                            </button>
                                         </div>
                                     )}
                                     
