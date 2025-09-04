@@ -45,39 +45,54 @@ const AutorisationsEnAttente = () => {
 
       // Normalisation robuste des formats de réponse possibles
       const extractList = (payload) => {
+        console.log('🔍 AutorisationsEnAttente: Extraction depuis payload:', payload);
+        
         if (Array.isArray(payload)) {
+          console.log('✅ AutorisationsEnAttente: Payload est directement un tableau');
           return payload;
         }
         if (Array.isArray(payload?.authorizationAccess)) {
+          console.log('✅ AutorisationsEnAttente: Trouvé authorizationAccess');
           return payload.authorizationAccess;
         }
         if (Array.isArray(payload?.autorisations)) {
+          console.log('✅ AutorisationsEnAttente: Trouvé autorisations');
           return payload.autorisations;
         }
         if (Array.isArray(payload?.authorizations)) {
+          console.log('✅ AutorisationsEnAttente: Trouvé authorizations');
           return payload.authorizations;
         }
         if (Array.isArray(payload?.pendingRequests)) {
+          console.log('✅ AutorisationsEnAttente: Trouvé pendingRequests');
           return payload.pendingRequests;
         }
         if (Array.isArray(payload?.data?.authorizationAccess)) {
+          console.log('✅ AutorisationsEnAttente: Trouvé data.authorizationAccess');
           return payload.data.authorizationAccess;
         }
         if (Array.isArray(payload?.data?.autorisations)) {
+          console.log('✅ AutorisationsEnAttente: Trouvé data.autorisations');
           return payload.data.autorisations;
         }
         if (Array.isArray(payload?.data?.authorizations)) {
+          console.log('✅ AutorisationsEnAttente: Trouvé data.authorizations');
           return payload.data.authorizations;
         }
         if (Array.isArray(payload?.data?.pendingRequests)) {
+          console.log('✅ AutorisationsEnAttente: Trouvé data.pendingRequests');
           return payload.data.pendingRequests;
         }
         if (Array.isArray(payload?.data)) {
+          console.log('✅ AutorisationsEnAttente: Trouvé data comme tableau');
           return payload.data;
         }
         if (Array.isArray(payload?.data?.data)) {
+          console.log('✅ AutorisationsEnAttente: Trouvé data.data');
           return payload.data.data;
         }
+        
+        console.warn('⚠️ AutorisationsEnAttente: Aucun tableau trouvé dans payload:', payload);
         return [];
       };
 

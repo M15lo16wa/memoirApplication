@@ -4,7 +4,8 @@ import {
   getAutorisations, 
   getDocumentsPersonnelsDMP, 
   getAutoMesuresDMP, 
-  revokerAutorisation 
+  revokerAutorisation,
+  getPatientInfo
 } from '../services/api/dmpApi';
 import { getDossierPatient } from '../services/api/medicalApi';
 import { downloadDocument } from '../services/api/medicalApi';
@@ -345,14 +346,88 @@ function DMPPatientView() {
       console.log(`🔗 URL qui sera appelée: GET /api/dossierMedical/patient/${patientId}/complet`);
       
       // Charger les données en parallèle
-      const [dossierResponse, autorisationsResponse] = await Promise.all([
+      const [dossierResponse, patientInfoResponse, autorisationsResponse] = await Promise.all([
         getDossierPatient(patientId),
+        getPatientInfo(patientId), // Récupérer les informations du patient
         // En mode urgence, on peut passer les autorisations ou les ignorer
         isUrgenceMode ? Promise.resolve({ data: [] }) : getAutorisations(patientId)
       ]);
       
       // getDossierPatient retourne les données directement
-      setDmpData(dossierResponse);
+      console.log('🔍 DEBUG - Données dossier reçues:', dossierResponse);
+      console.log('🔍 DEBUG - Structure dossierResponse:', dossierResponse ? Object.keys(dossierResponse) : 'null');
+      console.log('🔍 DEBUG - Contenu dossierResponse.data:', dossierResponse?.data);
+      console.log('🔍 DEBUG - Structure dossierResponse.data:', dossierResponse?.data ? Object.keys(dossierResponse.data) : 'null');
+      console.log('🔍 DEBUG - Contenu dossierResponse.data.data:', dossierResponse?.data?.data);
+      console.log('🔍 DEBUG - Structure dossierResponse.data.data:', dossierResponse?.data?.data ? Object.keys(dossierResponse.data.data) : 'null');
+      console.log('🔍 DEBUG - Dossier brut:', dossierResponse?.data?.data?.dossier);
+      console.log('🔍 DEBUG - Structure dossier brut:', dossierResponse?.data?.data?.dossier ? Object.keys(dossierResponse.data.data.dossier) : 'null');
+      console.log('🔍 DEBUG - Données patient reçues:', patientInfoResponse);
+      
+      // Créer un objet unifié avec les données du patient et du dossier
+      // Le backend renvoie { status, data: { status, message, data: { dossier, prescriptions_actives, consultations_recentes, ... } } }
+      const apiOuter = dossierResponse || {};
+      const apiDataLevel1 = apiOuter?.data || {};
+      const apiDataLevel2 = apiDataLevel1?.data || {};
+      const dossierBrut = apiDataLevel2?.dossier || apiDataLevel1?.dossier || apiOuter?.dossier || {};
+      
+      // Extraire toutes les données disponibles
+      const prescriptionsActives = apiDataLevel2?.prescriptions_actives || [];
+      const consultationsRecentes = apiDataLevel2?.consultations_recentes || [];
+      const examensRecents = apiDataLevel2?.examens_recents || [];
+      const resume = apiDataLevel2?.resume || {};
+      
+      const dossierData = {
+        ...apiDataLevel2,
+        ...dossierBrut
+      };
+      
+      // Construire un résumé médical à partir des données disponibles
+      let resumeMedical = dossierBrut?.resume_medical || dossierData?.resume_medical || apiDataLevel2?.resume_medical;
+      if (!resumeMedical && (prescriptionsActives.length > 0 || consultationsRecentes.length > 0)) {
+        resumeMedical = `Dossier médical actif avec ${prescriptionsActives.length} prescription(s) active(s) et ${consultationsRecentes.length} consultation(s) récente(s).`;
+      }
+      
+      // Construire les antécédents à partir des consultations récentes
+      let antecedentsMedicaux = dossierBrut?.antecedents_medicaux || dossierData?.antecedents_medicaux;
+      if (!antecedentsMedicaux && consultationsRecentes.length > 0) {
+        antecedentsMedicaux = consultationsRecentes.map(consultation => 
+          `Consultation du ${new Date(consultation.date_consultation || consultation.date).toLocaleDateString('fr-FR')}: ${consultation.motif || consultation.raison || 'Consultation médicale'}`
+        ).join('\n');
+      }
+      
+      // Construire les traitements à partir des prescriptions actives
+      let traitement = dossierBrut?.traitement || dossierData?.traitement || dossierData?.traitements;
+      if (!traitement && prescriptionsActives.length > 0) {
+        traitement = prescriptionsActives.map(prescription => 
+          `${prescription.medicament || prescription.nom_medicament || 'Médicament'}: ${prescription.posologie || prescription.dosage || 'Posologie non spécifiée'}`
+        ).join('\n');
+      }
+      
+      const unifiedData = {
+        ...dossierData,
+        patient: patientInfoResponse, // Utiliser les données du patient récupérées séparément
+        // Assurer la compatibilité avec l'affichage
+        nom: patientInfoResponse?.nom || dossierData?.nom,
+        prenom: patientInfoResponse?.prenom || dossierData?.prenom,
+        date_naissance: patientInfoResponse?.date_naissance || dossierData?.date_naissance,
+        sexe: patientInfoResponse?.sexe || dossierData?.sexe,
+        // Extraire les informations médicales du dossier (champ dans "dossier" si présent)
+        resume_medical: resumeMedical || 'Aucun résumé médical disponible',
+        antecedents_medicaux: antecedentsMedicaux || 'Aucun antécédent médical connu',
+        allergies: dossierBrut?.allergies || dossierData?.allergies || 'Aucune allergie connue',
+        traitement: traitement || 'Aucun traitement en cours',
+        traitements_chroniques: dossierBrut?.traitements_chroniques || dossierData?.traitements_chroniques || 'Aucun traitement chronique',
+        statut: dossierBrut?.statut || dossierData?.statut || 'actif',
+        date_creation: dossierBrut?.date_creation || dossierData?.date_creation || dossierBrut?.dateCreation || dossierData?.dateCreation,
+        // Données supplémentaires
+        prescriptions_actives: prescriptionsActives,
+        consultations_recentes: consultationsRecentes,
+        examens_recents: examensRecents,
+        resume_stats: resume
+      };
+      
+      setDmpData(unifiedData);
       setAutorisations(autorisationsResponse || []);
       setCurrentStatus('authorized');
       
@@ -360,8 +435,10 @@ function DMPPatientView() {
       console.log('🔍 DEBUG - Types des données reçues:');
       console.log('  - dossierResponse:', typeof dossierResponse, dossierResponse);
       console.log('  - dossierResponse structure:', dossierResponse ? Object.keys(dossierResponse) : 'null');
-      console.log('  - dmpData final:', dmpData);
-      console.log('  - Contenu du dossier médical:', dmpData?.resume_medical, dmpData?.antecedents_medicaux, dmpData?.allergies);
+      console.log('  - patientInfoResponse:', typeof patientInfoResponse, patientInfoResponse);
+      console.log('  - patientInfoResponse structure:', patientInfoResponse ? Object.keys(patientInfoResponse) : 'null');
+      console.log('  - unifiedData final:', unifiedData);
+      console.log('  - Contenu du dossier médical:', unifiedData?.resume_medical, unifiedData?.antecedents_medicaux, unifiedData?.allergies);
       console.log(`  - URL effectivement appelée: GET /api/dossierMedical/patient/${patientId}/complet`);
       console.log('  - autorisationsResponse:', typeof autorisationsResponse, autorisationsResponse);
       console.log('  - autorisations final:', Array.isArray(autorisationsResponse || []) ? '✅ Array' : '❌ Non-Array');
@@ -502,29 +579,33 @@ function DMPPatientView() {
                     <div>
                       <label className="block text-sm font-medium text-blue-700">Nom</label>
                       <p className="text-sm text-blue-900 font-medium">
-                        {dmpData.patient?.nom || dmpData.nom || 'Non renseigné'}
+                        {dmpData.patient?.nom || dmpData.nom || dmpData.data?.patient?.nom || dmpData.data?.nom || 'Non renseigné'}
                       </p>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-blue-700">Prénom</label>
                       <p className="text-sm text-blue-900 font-medium">
-                        {dmpData.patient?.prenom || dmpData.prenom || 'Non renseigné'}
+                        {dmpData.patient?.prenom || dmpData.prenom || dmpData.data?.patient?.prenom || dmpData.data?.prenom || 'Non renseigné'}
                       </p>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-blue-700">Date de naissance</label>
                       <p className="text-sm text-blue-900">
-                        {dmpData.patient?.date_naissance || dmpData.date_naissance ? 
-                          new Date(dmpData.patient?.date_naissance || dmpData.date_naissance).toLocaleDateString('fr-FR') : 
-                          'Non renseigné'}
+                        {(() => {
+                          const dateNaissance = dmpData.patient?.date_naissance || dmpData.date_naissance || dmpData.data?.patient?.date_naissance || dmpData.data?.date_naissance;
+                          return dateNaissance ? new Date(dateNaissance).toLocaleDateString('fr-FR') : 'Non renseigné';
+                        })()}
                       </p>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-blue-700">Sexe</label>
                       <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                        {dmpData.patient?.sexe === 'M' ? 'Homme' : 
-                         dmpData.patient?.sexe === 'F' ? 'Femme' : 
-                         dmpData.patient?.sexe || dmpData.sexe || 'Non renseigné'}
+                        {(() => {
+                          const sexe = dmpData.patient?.sexe || dmpData.sexe || dmpData.data?.patient?.sexe || dmpData.data?.sexe;
+                          if (sexe === 'M') return 'Homme';
+                          if (sexe === 'F') return 'Femme';
+                          return sexe || 'Non renseigné';
+                        })()}
                       </span>
                     </div>
                   </div>
@@ -534,41 +615,51 @@ function DMPPatientView() {
                 <div className="bg-green-50 rounded-lg p-4">
                   <h3 className="font-semibold text-green-900 mb-3">Informations Médicales</h3>
                   <div className="space-y-3">
-                    {dmpData.resume_medical && (
+                    {(dmpData.resume_medical || dmpData.dossier?.resume) && (
                       <div>
                         <label className="block text-sm font-medium text-green-700">Résumé Médical</label>
-                        <p className="text-sm text-green-900 mt-1 whitespace-pre-wrap">{dmpData.resume_medical}</p>
+                        <p className="text-sm text-green-900 mt-1 whitespace-pre-wrap">
+                          {dmpData.resume_medical || dmpData.dossier?.resume || 'Aucun résumé médical disponible'}
+                        </p>
                       </div>
                     )}
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {dmpData.antecedents_medicaux && (
+                      {(dmpData.antecedents_medicaux || dmpData.dossier?.antecedent_medicaux) && (
                         <div>
                           <label className="block text-sm font-medium text-green-700">Antécédents Médicaux</label>
-                          <p className="text-sm text-green-900 mt-1 whitespace-pre-wrap">{dmpData.antecedents_medicaux}</p>
+                          <p className="text-sm text-green-900 mt-1 whitespace-pre-wrap">
+                            {dmpData.antecedents_medicaux || dmpData.dossier?.antecedent_medicaux || 'Aucun antécédent médical connu'}
+                          </p>
                         </div>
                       )}
                       
-                      {dmpData.allergies && (
+                      {(dmpData.allergies || dmpData.dossier?.allergies) && (
                         <div>
                           <label className="block text-sm font-medium text-green-700">Allergies</label>
-                          <p className="text-sm text-green-900 mt-1 whitespace-pre-wrap">{dmpData.allergies}</p>
+                          <p className="text-sm text-green-900 mt-1 whitespace-pre-wrap">
+                            {dmpData.allergies || dmpData.dossier?.allergies || 'Aucune allergie connue'}
+                          </p>
                         </div>
                       )}
                     </div>
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {dmpData.traitement && (
+                      {(dmpData.traitement || dmpData.dossier?.traitements_chroniques) && (
                         <div>
                           <label className="block text-sm font-medium text-green-700">Traitements</label>
-                          <p className="text-sm text-green-900 mt-1 whitespace-pre-wrap">{dmpData.traitement}</p>
+                          <p className="text-sm text-green-900 mt-1 whitespace-pre-wrap">
+                            {dmpData.traitement || dmpData.dossier?.traitements_chroniques || 'Aucun traitement en cours'}
+                          </p>
                         </div>
                       )}
                       
-                      {dmpData.traitements_chroniques && (
+                      {(dmpData.traitements_chroniques || dmpData.dossier?.traitements_chroniques) && (
                         <div>
                           <label className="block text-sm font-medium text-green-700">Traitements Chroniques</label>
-                          <p className="text-sm text-green-900 mt-1 whitespace-pre-wrap">{dmpData.traitements_chroniques}</p>
+                          <p className="text-sm text-green-900 mt-1 whitespace-pre-wrap">
+                            {dmpData.traitements_chroniques || dmpData.dossier?.traitements_chroniques || 'Aucun traitement chronique'}
+                          </p>
                         </div>
                       )}
                     </div>
@@ -576,40 +667,117 @@ function DMPPatientView() {
                 </div>
 
                 {/* Signes vitaux */}
-                {(dmpData.heart_rate || dmpData.blood_pressure || dmpData.temperature || dmpData.respiratory_rate || dmpData.oxygen_saturation) && (
+                {(dmpData.heart_rate || dmpData.blood_pressure || dmpData.temperature || dmpData.respiratory_rate || dmpData.oxygen_saturation || 
+                  dmpData.dossier?.heart_rate || dmpData.dossier?.blood_pressure || dmpData.dossier?.temperature || dmpData.dossier?.respiratory_rate || dmpData.dossier?.oxygen_saturation) && (
                   <div className="bg-purple-50 rounded-lg p-4">
                     <h3 className="font-semibold text-purple-900 mb-3">Signes Vitaux</h3>
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                      {dmpData.heart_rate && (
+                      {(dmpData.heart_rate || dmpData.dossier?.heart_rate) && (
                         <div className="bg-white p-3 rounded-lg">
                           <label className="block text-xs font-medium text-purple-700">Fréquence cardiaque</label>
-                          <p className="text-sm font-semibold text-purple-900">{dmpData.heart_rate} bpm</p>
+                          <p className="text-sm font-semibold text-purple-900">{dmpData.heart_rate || dmpData.dossier?.heart_rate} bpm</p>
                         </div>
                       )}
-                      {dmpData.blood_pressure && (
+                      {(dmpData.blood_pressure || dmpData.dossier?.blood_pressure) && (
                         <div className="bg-white p-3 rounded-lg">
                           <label className="block text-xs font-medium text-purple-700">Pression artérielle</label>
-                          <p className="text-sm font-semibold text-purple-900">{dmpData.blood_pressure} mmHg</p>
+                          <p className="text-sm font-semibold text-purple-900">{dmpData.blood_pressure || dmpData.dossier?.blood_pressure} mmHg</p>
                         </div>
                       )}
-                      {dmpData.temperature && (
+                      {(dmpData.temperature || dmpData.dossier?.temperature) && (
                         <div className="bg-white p-3 rounded-lg">
                           <label className="block text-xs font-medium text-purple-700">Température</label>
-                          <p className="text-sm font-semibold text-purple-900">{dmpData.temperature}°C</p>
+                          <p className="text-sm font-semibold text-purple-900">{dmpData.temperature || dmpData.dossier?.temperature}°C</p>
                         </div>
                       )}
-                      {dmpData.respiratory_rate && (
+                      {(dmpData.respiratory_rate || dmpData.dossier?.respiratory_rate) && (
                         <div className="bg-white p-3 rounded-lg">
                           <label className="block text-xs font-medium text-purple-700">Fréquence respiratoire</label>
-                          <p className="text-sm font-semibold text-purple-900">{dmpData.respiratory_rate} /min</p>
+                          <p className="text-sm font-semibold text-purple-900">{dmpData.respiratory_rate || dmpData.dossier?.respiratory_rate} /min</p>
                         </div>
                       )}
-                      {dmpData.oxygen_saturation && (
+                      {(dmpData.oxygen_saturation || dmpData.dossier?.oxygen_saturation) && (
                         <div className="bg-white p-3 rounded-lg">
                           <label className="block text-xs font-medium text-purple-700">Saturation O₂</label>
-                          <p className="text-sm font-semibold text-purple-900">{dmpData.oxygen_saturation}%</p>
+                          <p className="text-sm font-semibold text-purple-900">{dmpData.oxygen_saturation || dmpData.dossier?.oxygen_saturation}%</p>
                         </div>
                       )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Prescriptions actives */}
+                {(dmpData.prescriptions_actives || dmpData.dossier?.prescriptions_actives) && (dmpData.prescriptions_actives || dmpData.dossier?.prescriptions_actives).length > 0 && (
+                  <div className="bg-orange-50 rounded-lg p-4">
+                    <h3 className="font-semibold text-orange-900 mb-3">Prescriptions Actives</h3>
+                    <div className="space-y-2">
+                      {(dmpData.prescriptions_actives || dmpData.dossier?.prescriptions_actives || []).map((prescription, index) => (
+                        <div key={index} className="bg-white p-3 rounded border">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <p className="font-medium text-gray-900">
+                                {(() => {
+                                  const medicament = prescription.medicament || prescription.nom_medicament;
+                                  if (typeof medicament === 'object' && medicament !== null) {
+                                    return medicament.nom || medicament.name || 'Médicament';
+                                  }
+                                  return medicament || 'Médicament';
+                                })()}
+                              </p>
+                              <p className="text-sm text-gray-600">
+                                {(() => {
+                                  const posologie = prescription.posologie || prescription.dosage;
+                                  if (typeof posologie === 'object' && posologie !== null) {
+                                    return posologie.description || posologie.detail || 'Posologie non spécifiée';
+                                  }
+                                  return posologie || 'Posologie non spécifiée';
+                                })()}
+                              </p>
+                            </div>
+                            <span className="text-xs bg-orange-100 text-orange-800 px-2 py-1 rounded">
+                              {prescription.date_prescription ? 
+                                new Date(prescription.date_prescription).toLocaleDateString('fr-FR') : 
+                                'Date inconnue'
+                              }
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Consultations récentes */}
+                {(dmpData.consultations_recentes || dmpData.dossier?.consultations_recentes) && (dmpData.consultations_recentes || dmpData.dossier?.consultations_recentes).length > 0 && (
+                  <div className="bg-indigo-50 rounded-lg p-4">
+                    <h3 className="font-semibold text-indigo-900 mb-3">Consultations Récentes</h3>
+                    <div className="space-y-2">
+                      {(dmpData.consultations_recentes || dmpData.dossier?.consultations_recentes || []).map((consultation, index) => (
+                        <div key={index} className="bg-white p-3 rounded border">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <p className="font-medium text-gray-900">
+                                {consultation.motif || consultation.raison || 'Consultation médicale'}
+                              </p>
+                              <p className="text-sm text-gray-600">
+                                {(() => {
+                                  const medecin = consultation.medecin || consultation.professionnel;
+                                  if (typeof medecin === 'object' && medecin !== null) {
+                                    return `${medecin.prenom || ''} ${medecin.nom || ''}`.trim() || 'Médecin non spécifié';
+                                  }
+                                  return medecin || 'Médecin non spécifié';
+                                })()}
+                              </p>
+                            </div>
+                            <span className="text-xs bg-indigo-100 text-indigo-800 px-2 py-1 rounded">
+                              {consultation.date_consultation || consultation.date ? 
+                                new Date(consultation.date_consultation || consultation.date).toLocaleDateString('fr-FR') : 
+                                'Date inconnue'
+                              }
+                            </span>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 )}
@@ -656,24 +824,37 @@ function DMPPatientView() {
                   <div className="flex items-center justify-between">
                     <div>
                       <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
-                        dmpData.statut === 'actif' 
-                          ? 'bg-green-100 text-green-800' 
-                          : dmpData.statut === 'ferme'
-                            ? 'bg-red-100 text-red-800'
-                            : 'bg-yellow-100 text-yellow-800'
+                        (() => {
+                          const statut = dmpData.statut || dmpData.data?.statut || dmpData.dossier?.statut || 'actif';
+                          if (statut === 'actif') return 'bg-green-100 text-green-800';
+                          if (statut === 'ferme') return 'bg-red-100 text-red-800';
+                          return 'bg-yellow-100 text-yellow-800';
+                        })()
                       }`}>
-                        {dmpData.statut === 'actif' ? 'Actif' : 
-                         dmpData.statut === 'ferme' ? 'Fermé' : 
-                         dmpData.statut || 'Inconnu'}
+                        {(() => {
+                          const statut = dmpData.statut || dmpData.data?.statut || dmpData.dossier?.statut || 'actif';
+                          if (statut === 'actif') return 'Actif';
+                          if (statut === 'ferme') return 'Fermé';
+                          return statut || 'Actif';
+                        })()}
                       </span>
                     </div>
                     <div className="text-sm text-yellow-700">
-                      {dmpData.dateCreation ? 
-                        `Créé le ${new Date(dmpData.dateCreation).toLocaleDateString('fr-FR')}` :
-                        dmpData.dateOuverture ? 
-                          `Ouvert le ${new Date(dmpData.dateOuverture).toLocaleDateString('fr-FR')}` :
-                          'Date inconnue'
-                      }
+                      {(() => {
+                        const dateCreation = dmpData.dateCreation || dmpData.data?.dateCreation || dmpData.dossier?.dateCreation;
+                        const dateOuverture = dmpData.dateOuverture || dmpData.data?.dateOuverture || dmpData.dossier?.dateOuverture;
+                        const dateCreationDossier = dmpData.date_creation || dmpData.data?.date_creation || dmpData.dossier?.date_creation;
+                        
+                        if (dateCreation) {
+                          return `Créé le ${new Date(dateCreation).toLocaleDateString('fr-FR')}`;
+                        } else if (dateOuverture) {
+                          return `Ouvert le ${new Date(dateOuverture).toLocaleDateString('fr-FR')}`;
+                        } else if (dateCreationDossier) {
+                          return `Créé le ${new Date(dateCreationDossier).toLocaleDateString('fr-FR')}`;
+                        } else {
+                          return 'Date inconnue';
+                        }
+                      })()}
                     </div>
                   </div>
                 </div>

@@ -2511,13 +2511,37 @@ const DMP = () => {
   // Vrification de scurit pour le contexte DMP
   const dmpState = dmpContext?.state || {};
   const dmpActions = dmpContext?.actions || {};
-  const createAutoMesure = dmpActions?.createAutoMesure;
-  const uploadDocument = dmpActions?.uploadDocument;
+  
+  // Extraire les fonctions avec une vérification plus robuste
+  const createAutoMesure = dmpContext?.createAutoMesure || dmpActions?.createAutoMesure;
+  const uploadDocument = dmpContext?.uploadDocument || dmpActions?.uploadDocument;
   
   // Vérification que les fonctions sont disponibles
   if (!createAutoMesure) {
     console.error('❌ createAutoMesure n\'est pas disponible dans le contexte DMP');
+    console.error('❌ Contexte DMP:', { 
+      hasContext: !!dmpContext, 
+      hasActions: !!dmpActions, 
+      hasCreateAutoMesure: !!dmpActions?.createAutoMesure,
+      hasDirectCreateAutoMesure: !!dmpContext?.createAutoMesure,
+      patientId: dmpContext?.patientId,
+      state: dmpContext?.state
+    });
   }
+  
+  // État pour suivre si les actions sont prêtes
+  const [actionsReady, setActionsReady] = useState(false);
+  
+  // Attendre que les actions soient disponibles
+  useEffect(() => {
+    if (createAutoMesure && uploadDocument) {
+      setActionsReady(true);
+      console.log('✅ Actions DMP prêtes:', { createAutoMesure: !!createAutoMesure, uploadDocument: !!uploadDocument });
+    } else {
+      setActionsReady(false);
+      console.log('⏳ Actions DMP en cours de chargement...');
+    }
+  }, [createAutoMesure, uploadDocument]);
   
   // Logs de dbogage pour le contexte DMP
   console.log(' DMP.js - Contexte DMP rcupr:', {
@@ -2817,13 +2841,23 @@ const DMP = () => {
           const droitsAccesData = await dmpApi.getDroitsAcces(patientId);
           console.log('Droits d\'accs reus de l\'API:', droitsAccesData);
           
+          // Extraire les données d'autorisation avec support pour différentes structures
+          let authorizationArray = [];
+          
           if (Array.isArray(droitsAccesData)) {
-            setDroitsAcces(droitsAccesData);
+            authorizationArray = droitsAccesData;
+          } else if (droitsAccesData && Array.isArray(droitsAccesData.authorizationAccess)) {
+            authorizationArray = droitsAccesData.authorizationAccess;
           } else if (droitsAccesData && Array.isArray(droitsAccesData.data)) {
-            setDroitsAcces(droitsAccesData.data);
+            authorizationArray = droitsAccesData.data;
+          } else if (droitsAccesData && droitsAccesData.data && Array.isArray(droitsAccesData.data.authorizationAccess)) {
+            authorizationArray = droitsAccesData.data.authorizationAccess;
           } else {
-            setDroitsAcces([]);
+            authorizationArray = [];
           }
+          
+          console.log('🔍 Droits d\'accès extraits:', authorizationArray);
+          setDroitsAcces(authorizationArray);
         }
       } catch (droitsError) {
         console.warn('Droits d\'accs non disponibles:', droitsError.message);
@@ -2868,12 +2902,16 @@ const DMP = () => {
 
       if (Array.isArray(payload)) {
         autorisationsList = payload;
+      } else if (Array.isArray(payload?.authorizationAccess)) {
+        autorisationsList = payload.authorizationAccess;
       } else if (Array.isArray(payload?.autorisations)) {
         autorisationsList = payload.autorisations;
       } else if (Array.isArray(payload?.authorizations)) {
         autorisationsList = payload.authorizations;
       } else if (Array.isArray(payload?.data)) {
         autorisationsList = payload.data;
+      } else if (Array.isArray(payload?.data?.authorizationAccess)) {
+        autorisationsList = payload.data.authorizationAccess;
       } else if (Array.isArray(payload?.data?.autorisations)) {
         autorisationsList = payload.data.autorisations;
       } else if (Array.isArray(payload?.data?.authorizations)) {
@@ -2897,10 +2935,40 @@ const DMP = () => {
   // Fonction pour filtrer les accs par patient ID
   const filterAccessByPatient = useCallback((accessData, patientId) => {
     if (!accessData || !patientId) return [];
-    const arr = accessData.authorizationAccess || accessData;
-    console.log("Accs bruts:", arr);
-    arr.forEach(acc => console.log("Cls accs:", Object.keys(acc), acc));
-    return arr.filter(access => Number(access.patient_id) === Number(patientId));
+    
+    // Extraire le tableau d'autorisations de différentes structures possibles
+    let arr = [];
+    if (Array.isArray(accessData)) {
+      arr = accessData;
+    } else if (Array.isArray(accessData.authorizationAccess)) {
+      arr = accessData.authorizationAccess;
+    } else if (Array.isArray(accessData.data)) {
+      arr = accessData.data;
+    } else if (accessData.data && Array.isArray(accessData.data.authorizationAccess)) {
+      arr = accessData.data.authorizationAccess;
+    }
+    
+    console.log("🔍 Accès bruts à filtrer:", arr);
+    console.log("🔍 Patient ID recherché:", patientId);
+    
+    if (!Array.isArray(arr)) {
+      console.warn("⚠️ Données d'accès ne sont pas un tableau:", arr);
+      return [];
+    }
+    
+    const filtered = arr.filter(access => {
+      const accessPatientId = access.patient_id || access.id_patient || access.patientId;
+      const match = Number(accessPatientId) === Number(patientId);
+      
+      if (!match) {
+        console.log("🔍 Accès exclu - Patient ID:", accessPatientId, "vs", patientId);
+      }
+      
+      return match;
+    });
+    
+    console.log("✅ Accès filtrés pour le patient:", filtered);
+    return filtered;
   }, []);
 
   // Fonction pour obtenir les notifications  afficher
@@ -3516,9 +3584,9 @@ n.id_notification, type: n.type_notification })));
     console.log(' Patient connect depuis localStorage:', getStoredPatient());
     
     // Vérifier que la fonction createAutoMesure est disponible
-    if (!createAutoMesure) {
-      console.error('❌ createAutoMesure n\'est pas disponible');
-      alert('Erreur: Fonction de création d\'auto-mesure non disponible. Veuillez recharger la page.');
+    if (!createAutoMesure || !actionsReady) {
+      console.error('❌ createAutoMesure n\'est pas disponible ou actions pas prêtes');
+      alert('Erreur: Fonction de création d\'auto-mesure non disponible. Veuillez attendre que l\'application se charge complètement.');
       return;
     }
     

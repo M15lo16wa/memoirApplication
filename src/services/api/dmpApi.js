@@ -800,12 +800,97 @@ export const getDMPAccessHistory = async (patientId, forceGenericEndpoint = fals
         forceGenericEndpoint: forceGenericEndpoint
     });
     
+    // Fonction utilitaire pour extraire les données d'historique de différentes structures
+    const extractHistoryData = (response) => {
+        console.log(`🔍 [getDMPAccessHistory] Extraction des données depuis:`, response);
+        console.log(`🔍 [getDMPAccessHistory] Type de response:`, typeof response);
+        console.log(`🔍 [getDMPAccessHistory] Clés de response:`, response ? Object.keys(response) : 'N/A');
+        
+        // Si response est directement un tableau
+        if (Array.isArray(response)) {
+            console.log(`✅ [getDMPAccessHistory] Response est directement un tableau de ${response.length} éléments`);
+            return response;
+        }
+        
+        // Si response est un objet, chercher un tableau dans ses propriétés
+        if (response && typeof response === 'object') {
+            // Propriétés possibles contenant l'historique
+            const possibleKeys = [
+                'data', 'history', 'accessHistory', 'historique', 
+                'results', 'items', 'authorizationAccess', 'accesses',
+                'accessHistory', 'access_historique', 'historique_access'
+            ];
+            
+            console.log(`🔍 [getDMPAccessHistory] Recherche dans les propriétés:`, possibleKeys);
+            
+            for (const key of possibleKeys) {
+                if (response[key] !== undefined) {
+                    console.log(`🔍 [getDMPAccessHistory] Propriété '${key}' trouvée:`, typeof response[key], Array.isArray(response[key]) ? `(tableau de ${response[key].length} éléments)` : '(non-tableau)');
+                    
+                    if (Array.isArray(response[key])) {
+                        console.log(`✅ [getDMPAccessHistory] Données trouvées dans la propriété: ${key} (${response[key].length} éléments)`);
+                        return response[key];
+                    }
+                    
+                    // Si c'est un objet, chercher un tableau à l'intérieur
+                    if (typeof response[key] === 'object' && response[key] !== null) {
+                        console.log(`🔍 [getDMPAccessHistory] Recherche dans l'objet '${key}':`, Object.keys(response[key]));
+                        const subArrays = Object.values(response[key]).filter(val => Array.isArray(val));
+                        if (subArrays.length > 0) {
+                            console.log(`✅ [getDMPAccessHistory] Tableau trouvé dans l'objet '${key}':`, subArrays[0].length, 'éléments');
+                            return subArrays[0];
+                        }
+                    }
+                }
+            }
+            
+            // Chercher dans toutes les valeurs de l'objet
+            console.log(`🔍 [getDMPAccessHistory] Recherche dans toutes les valeurs de l'objet...`);
+            const allValues = Object.values(response);
+            const arrays = allValues.filter(val => Array.isArray(val));
+            
+            if (arrays.length > 0) {
+                console.log(`✅ [getDMPAccessHistory] Tableau trouvé dans les valeurs de l'objet:`, arrays[0].length, 'éléments');
+                return arrays[0];
+            }
+            
+            // Dernière tentative : chercher récursivement dans les objets imbriqués
+            console.log(`🔍 [getDMPAccessHistory] Recherche récursive dans les objets imbriqués...`);
+            const findArrayRecursively = (obj, depth = 0) => {
+                if (depth > 3) return null; // Éviter la récursion infinie
+                
+                for (const [key, value] of Object.entries(obj)) {
+                    if (Array.isArray(value)) {
+                        console.log(`✅ [getDMPAccessHistory] Tableau trouvé récursivement dans '${key}' (profondeur ${depth}):`, value.length, 'éléments');
+                        return value;
+                    }
+                    if (typeof value === 'object' && value !== null) {
+                        const result = findArrayRecursively(value, depth + 1);
+                        if (result) return result;
+                    }
+                }
+                return null;
+            };
+            
+            const recursiveArray = findArrayRecursively(response);
+            if (recursiveArray) {
+                return recursiveArray;
+            }
+        }
+        
+        console.warn(`⚠️ [getDMPAccessHistory] Aucun tableau trouvé dans les données reçues`);
+        console.warn(`⚠️ [getDMPAccessHistory] Structure complète:`, JSON.stringify(response, null, 2));
+        return [];
+    };
+    
     // Si forceGenericEndpoint est true, utiliser directement l'endpoint générique
     if (forceGenericEndpoint) {
         console.log(`🔄 [getDMPAccessHistory] Forçage de l'endpoint générique pour patient ${patientId}`);
         try {
             const response = await dmpApi.get('/access/history');
-            let historyData = response.data.data;
+            console.log(`📊 [getDMPAccessHistory] Réponse brute endpoint générique:`, response.data);
+            
+            let historyData = extractHistoryData(response.data);
             
             if (Array.isArray(historyData)) {
                 // Filtrer strictement par patient_id
@@ -838,7 +923,9 @@ export const getDMPAccessHistory = async (patientId, forceGenericEndpoint = fals
         // Essayer d'abord l'endpoint spécifique au patient
         console.log(`🚀 [getDMPAccessHistory] Appel API: /access/history/patient/${patientId}`);
         const response = await dmpApi.get(`/access/history/patient/${patientId}`);
-        let historyData = response.data.data;
+        console.log(`📊 [getDMPAccessHistory] Réponse brute endpoint spécifique:`, response.data);
+        
+        let historyData = extractHistoryData(response.data);
         
         console.log(`📊 [getDMPAccessHistory] Données brutes reçues:`, {
             patientId: patientId,
@@ -903,7 +990,9 @@ export const getDMPAccessHistory = async (patientId, forceGenericEndpoint = fals
         try {
             console.log(`🔄 [getDMPAccessHistory] Fallback: récupération depuis l'endpoint générique...`);
             const fallbackResponse = await dmpApi.get('/access/history');
-            let fallbackData = fallbackResponse.data.data;
+            console.log(`📊 [getDMPAccessHistory] Réponse brute fallback:`, fallbackResponse.data);
+            
+            let fallbackData = extractHistoryData(fallbackResponse.data);
             
             console.log(`📊 [getDMPAccessHistory] Données fallback reçues:`, {
                 patientId: patientId,

@@ -70,7 +70,7 @@ function DMPHistory({ patientId = null }) {
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [lastPatientId, setLastPatientId] = useState(null);
+  const [lastLoadedPatientId, setLastLoadedPatientId] = useState(null);
   const [patientInfo, setPatientInfo] = useState(null);
   const [isPatientAuthorized, setIsPatientAuthorized] = useState(false);
   const [hasAccessRequests, setHasAccessRequests] = useState(false);
@@ -275,88 +275,54 @@ function DMPHistory({ patientId = null }) {
 
 
 
-  const loadHistory = useCallback(async (forceReload = false) => {
-    // Vérifier l'autorisation avant de charger l'historique
-    if (!isPatientAuthorized) {
-      console.warn('⚠️ Tentative de chargement de l\'historique sans autorisation');
+  const loadHistory = useCallback(async (patientIdToLoad, forceReload = false) => {
+    if (!patientIdToLoad || !isPatientAuthorized) {
+      console.log('⚠️ loadHistory: Conditions non remplies pour le chargement:', { patientIdToLoad, isPatientAuthorized });
+      setLoading(false); // Ensure loading is false if conditions are not met
       return;
     }
 
-    console.log('🔍 loadHistory appelé avec:', { effectivePatientId, forceReload, lastPatientId, historyLength: history.length, loading });
-    console.log('🔍 État d\'autorisation:', { isPatientAuthorized, checkPatientAuthorization });
-
-    // Vérifier que nous avons un patientId valide
-    if (!effectivePatientId) {
-      console.error('❌ effectivePatientId est undefined ou null dans loadHistory');
-      setError('Aucun patient sélectionné. Veuillez sélectionner un patient pour voir son historique DMP.');
-      setLoading(false);
+    // Prevent re-fetching if already loading or if data for this patient is already loaded and no forceReload
+    if (loading || (!forceReload && lastLoadedPatientId === patientIdToLoad && history.length > 0)) {
+      console.log('⚠️ loadHistory: Chargement ignoré:', { loading, forceReload, lastLoadedPatientId, patientIdToLoad, historyLength: history.length });
       return;
     }
 
-    // Éviter de recharger si c'est le même patient et pas de rechargement forcé
-    if (!forceReload && lastPatientId === effectivePatientId && history.length > 0) {
-      console.log('✅ Patient identique, pas de rechargement nécessaire');
-      return;
-    }
-
-    // Éviter les chargements multiples simultanés
-    if (loading) {
-      console.log('⚠️ Chargement déjà en cours, ignoré');
-      return;
-    }
-
+    console.log('🚀 loadHistory: Début du chargement pour le patient:', patientIdToLoad, { forceReload });
     setLoading(true);
     setError(null);
 
     try {
-      console.log('🚀 Chargement de l\'historique DMP pour le patient:', effectivePatientId);
-
-      // Charger l'historique et les informations du patient en parallèle
       const [historyData, patientData] = await Promise.all([
-        getDMPAccessHistory(effectivePatientId, true), // 🔑 FORCER l'endpoint générique avec filtrage strict
-        getPatientInfo(effectivePatientId)
+        getDMPAccessHistory(patientIdToLoad, true),
+        getPatientInfo(patientIdToLoad)
       ]);
 
-      console.log('📊 Données reçues de l\'API:', historyData);
-      console.log('👤 Informations patient récupérées:', patientData);
+      console.log('📊 loadHistory: Données brutes reçues de l\'API:', historyData);
+      console.log('👤 loadHistory: Informations patient récupérées:', patientData);
 
-      // Debug: Vérifier la structure des données d'historique
-      if (Array.isArray(historyData)) {
-        historyData.forEach((entry, index) => {
-          console.log(`🔍 Entry ${index}:`, {
-            statut: entry.statut,
-            action: entry.action,
-            type_ressource: entry.type_ressource,
-            details: entry.details,
-            id_ressource: entry.id_ressource,
-            adresse_ip: entry.adresse_ip,
-            user_agent: entry.user_agent
-          });
-        });
-      }
-
-      // Extraire et valider les données d'historique
       const extractedHistoryData = extractHistoryData(historyData);
-      console.log('📋 Données d\'historique extraites:', extractedHistoryData);
+      console.log('📋 loadHistory: Données d\'historique extraites:', extractedHistoryData);
 
       setHistory(extractedHistoryData);
       setPatientInfo(patientData);
-      setLastPatientId(effectivePatientId);
+      setLastLoadedPatientId(patientIdToLoad); // Update last loaded patient ID here
       
-      console.log('✅ Historique et infos patient mis à jour avec succès');
+      console.log('✅ loadHistory: Historique et infos patient mis à jour avec succès');
     } catch (error) {
-      console.error('❌ Erreur lors du chargement de l\'historique DMP:', error);
+      console.error('❌ loadHistory: Erreur lors du chargement de l\'historique DMP:', error);
       setError('Impossible de charger l\'historique des accès DMP');
-      setHistory([]); // S'assurer que history est un tableau vide en cas d'erreur
+      setHistory([]);
+      setLastLoadedPatientId(null); // Reset on error
     } finally {
       setLoading(false);
     }
-  }, [effectivePatientId, extractHistoryData, isPatientAuthorized, checkPatientAuthorization, history.length, lastPatientId, loading]); // Ajout des dépendances nécessaires pour la cohérence des données et la messagerie
+  }, [extractHistoryData, isPatientAuthorized, lastLoadedPatientId, history.length, loading]); // Dependencies for useCallback
 
   // Utilisation du wrapper 2FA centralisé pour protéger les accès aux dossiers patients
   const protectedLoadHistory = useCallback(
-    with2FAProtection(loadHistory, 'Chargement de l\'historique DMP'),
-    [loadHistory, with2FAProtection]
+    with2FAProtection((forceReload) => loadHistory(effectivePatientId, forceReload), 'Chargement de l\'historique DMP'),
+    [loadHistory, effectivePatientId, with2FAProtection]
   );
 
   const protectedCheckAccessRequests = useCallback(
@@ -372,57 +338,36 @@ function DMPHistory({ patientId = null }) {
     }
   }, [isPatientAuthorized, effectivePatientId, protectedCheckAccessRequests]);
 
-  // Effet pour gérer les changements de patientId
+  // Main loading effect - consolidated from the previous two useEffect hooks
   useEffect(() => {
-    console.log('🔍 useEffect - Changement de patient détecté:', { effectivePatientId, lastPatientId });
+    console.log('🔄 useEffect (main loader): Déclenchement pour le patient:', effectivePatientId, { isPatientAuthorized, lastLoadedPatientId, loading, historyLength: history.length });
 
-    // Éviter les appels inutiles si les valeurs ne sont pas encore définies
-    if (!effectivePatientId || !isPatientAuthorized) {
-      return;
+    // Only attempt to load if authorized, a valid patient ID is present, and it's either a new patient
+    // or no history has been loaded for this patient yet.
+    if (isPatientAuthorized && effectivePatientId && effectivePatientId !== lastLoadedPatientId && !loading) {
+      console.log('✅ useEffect (main loader): Changement de patient détecté ou premier chargement.');
+      loadHistory(effectivePatientId, true); // Force reload for new patient or initial load
+    } else if (isPatientAuthorized && effectivePatientId && lastLoadedPatientId === null && !loading) {
+      // This condition handles the very first load when lastLoadedPatientId is null
+      console.log('✅ useEffect (main loader): Chargement initial pour un patient autorisé.');
+      loadHistory(effectivePatientId, true);
     }
+    // If effectivePatientId === lastLoadedPatientId and history.length > 0, it means data is already loaded, so do nothing.
+    // If loading is true, it means a load is in progress, so do nothing.
 
-    // Vérifier si c'est vraiment un changement de patient
-    if (effectivePatientId !== lastPatientId) {
-      console.log('✅ Changement de patient détecté, rechargement de l\'historique');
+  }, [isPatientAuthorized, effectivePatientId, lastLoadedPatientId, loading, loadHistory]); // Dependencies for this useEffect
+
+  // Effet pour nettoyer les données lors du démontage
+  useEffect(() => {
+    return () => {
+      // Reset states on unmount
       setHistory([]);
       setError(null);
       setLoading(false);
+      setLastLoadedPatientId(null);
       setPatientInfo(null);
-      protectedLoadHistory(true);
-    }
-  }, [effectivePatientId, lastPatientId, protectedLoadHistory, isPatientAuthorized]);
-
-  // Effet initial pour charger l'historique au montage du composant
-  useEffect(() => {
-    console.log('🔍 useEffect - Montage initial du composant DMPHistory');
-
-    // Éviter les appels inutiles si les conditions ne sont pas remplies
-    if (!isPatientAuthorized || !effectivePatientId) {
-      console.log('⚠️ Conditions non remplies pour le chargement initial:', { isPatientAuthorized, effectivePatientId });
-      return;
-    }
-
-    // Vérifier si on a déjà des données pour ce patient
-    if (lastPatientId === effectivePatientId && history.length > 0) {
-      console.log('✅ Données déjà disponibles pour ce patient, pas de rechargement');
-      return;
-    }
-
-    console.log('✅ Composant monté avec patientId valide, chargement initial de l\'historique');
-    protectedLoadHistory(true);
-  }, [isPatientAuthorized, effectivePatientId, protectedLoadHistory, lastPatientId, history.length]);
-
-  // Effet pour nettoyer les données lors du démontage ou changement de patient
-  useEffect(() => {
-    return () => {
-      // Nettoyer les données lors du démontage
-      if (effectivePatientId !== lastPatientId) {
-        setHistory([]);
-        setError(null);
-        setLoading(false);
-      }
     };
-  }, [effectivePatientId, lastPatientId]);
+  }, []); // No dependencies, runs once on unmount
 
   // Fonction pour forcer le rechargement
   const handleRefresh = useCallback(() => {
@@ -698,7 +643,7 @@ function DMPHistory({ patientId = null }) {
           <p className="text-sm text-gray-600 mt-1">
             Suivez qui a consulté votre dossier et quand
           </p>
-          {lastPatientId === effectivePatientId && history.length > 0 && (
+          {lastLoadedPatientId === effectivePatientId && history.length > 0 && (
             <p className="text-sm text-gray-500 mt-1">
               Données en cache • {getPatientDisplayName()}
             </p>
