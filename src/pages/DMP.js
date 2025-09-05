@@ -30,7 +30,7 @@ import AutorisationsEnAttente from "../components/dmp/AutorisationsEnAttente";
 import DMPHistory from "../components/dmp/DMPHistory";
 import NotificationManager from "../components/ui/NotificationManager";
 import { MessagingButton, MessagingWidget, ChatMessage } from "../messaging";
-// ...existing code...
+
 
 // APIs
 import * as dmpApi from "../services/api/dmpApi";
@@ -2496,7 +2496,7 @@ const DMP = () => {
   const [currentNotification, setCurrentNotification] = useState(null);
   const [showNotification, setShowNotification] = useState(false);
 
-  // États pour les appels WebRTC
+  // États pour les appels
   const [activeCall, setActiveCall] = useState(null);
   const [callStatus, setCallStatus] = useState('idle'); // idle, incoming, connecting, connected, ended
   const [localStream, setLocalStream] = useState(null);
@@ -2624,7 +2624,7 @@ const DMP = () => {
       return;
     }
     try {
-      // WebRTC supprimé - fonctionnalité gérée côté serveur
+      // Fonctionnalité gérée côté serveur
       console.log('🔗 Ouverture du lien de conférence:', conferenceLink);
 
       // Ouvrir la conférence dans un nouvel onglet
@@ -2648,14 +2648,14 @@ const DMP = () => {
     localStorage.removeItem('currentMedecinId');
   };
 
-  // ===== FONCTIONS WEBRTC POUR LE CLIENT =====
+  // ===== FONCTIONS POUR LE CLIENT =====
 
   // Fonction pour accepter un appel entrant
   const handleAcceptCall = async (callData) => {
     try {
       console.log('📞 Acceptation de l\'appel entrant:', callData);
       
-      // WebRTC supprimé - fonctionnalité gérée côté serveur
+      // Fonctionnalité gérée côté serveur
       console.log('📞 Service de signalisation supprimé');
 
       // Mettre à jour l'état de l'appel
@@ -2668,7 +2668,7 @@ const DMP = () => {
         await startLocalVideoStream();
       }
 
-      // WebRTC supprimé - fonctionnalité gérée côté serveur
+      // Fonctionnalité gérée côté serveur
       console.log('✅ Appel accepté avec succès');
       setCallStatus('connected');
     } catch (error) {
@@ -2682,7 +2682,7 @@ const DMP = () => {
     try {
       console.log('❌ Refus de l\'appel entrant:', callData);
       
-      // WebRTC supprimé - fonctionnalité gérée côté serveur
+      // Fonctionnalité gérée côté serveur
       console.log('📞 Refus d\'appel géré côté serveur');
 
       // Réinitialiser l'état
@@ -2717,7 +2717,7 @@ const DMP = () => {
       if (activeCall) {
         console.log('📞 Terminaison de l\'appel:', activeCall.sessionId);
         
-        // WebRTC supprimé - fonctionnalité gérée côté serveur
+        // Fonctionnalité gérée côté serveur
         console.log('📞 Appel terminé côté serveur');
         
         // Nettoyer les flux
@@ -2780,10 +2780,10 @@ const DMP = () => {
     };
   }, [showProfileMenu]);
 
-  // WebRTC supprimé - fonctionnalité gérée côté serveur
+  // Fonctionnalité gérée côté serveur
   useEffect(() => {
     if (patientProfile) {
-      console.log('📞 Service de signalisation supprimé - WebRTC géré côté serveur');
+      console.log('📞 Service de signalisation supprimé - géré côté serveur');
     }
   }, [patientProfile]);
 
@@ -4060,7 +4060,7 @@ ${activeTab === tab.id
         </div>
       )}
 
-      {/* Interface d'appel entrant WebRTC */}
+      {/* Interface d'appel entrant */}
       {incomingCall && (
         <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-8 max-w-md w-full mx-4 text-center">
@@ -4098,7 +4098,7 @@ ${activeTab === tab.id
         </div>
       )}
 
-      {/* Interface d'appel WebRTC actif */}
+      {/* Interface d'appel actif */}
       {activeCall && (
         <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 max-w-4xl w-full mx-4">
@@ -4748,6 +4748,7 @@ ${activeTab === tab.id
         {activeTab === 'mon-espace-sante' && (
           <DMPMonEspaceSante />
         )}
+
 
         {/* Fiche d'Urgence */}
         {activeTab === 'urgence' && (

@@ -17,7 +17,8 @@ import Agenda from './pages/agenda';
 
 // messagerie
 import { ChatMessage } from './messaging';
-
+// webRTC
+import WebRTCPage from './pages/webrtc';
 
 
 // protection des routes
@@ -61,6 +62,8 @@ function App() {
       <Route path='/fiche-inscription' element={<FicheInscription/>}/>
       {/* Nouvelle route pour la messagerie */}
       <Route path="/chat-message" element={<ChatMessage />} />
+      {/* Nouvelle route pour la webRTC */}
+      <Route path="/webrtc" element={<WebRTCPage />} />
     </Routes>
   );
 }

@@ -7,8 +7,8 @@ export const useChat = (conversationId, userId) => {
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
-        // WebRTC supprimé - fonctionnalité gérée côté serveur
-        console.log('📞 Service de signalisation supprimé - WebRTC géré côté serveur');
+        // Fonctionnalité gérée côté serveur
+        console.log('📞 Service de signalisation supprimé - géré côté serveur');
         setIsConnected(true);
         setIsLoading(false);
     }, [conversationId]);
@@ -36,6 +36,12 @@ export const useChat = (conversationId, userId) => {
             }
         }
     }, [conversationId]);
+
+    const handleConferenceLink = (conferenceUrl) => {
+        const code = conferenceUrl.split('/').pop();
+        // Rediriger vers la page WebRTC
+        window.location.href = `/webrtc?join=${code}`;
+    };
 
     return { messages, sendMessage, isConnected, isLoading };
 };

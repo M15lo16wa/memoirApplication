@@ -9,8 +9,8 @@ const MessagingWidget = ({ userId, role, token, conversationId, toUserId, onClos
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // WebRTC supprimé - fonctionnalité gérée côté serveur
-    console.log('📞 Service de signalisation supprimé - WebRTC géré côté serveur');
+    // Fonctionnalité gérée côté serveur
+    console.log('📞 Service de signalisation supprimé - géré côté serveur');
     setIsConnected(true);
     setLoading(false);
   }, [userId, role, token]);

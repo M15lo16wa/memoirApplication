@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FaComments, FaBell } from "react-icons/fa";
+import { FaComments, FaBell, FaVideo } from "react-icons/fa";
 
 // gestion du profil medecin
 import { getMedecinProfile, logoutAll, fetchMedecinDetails } from "../../services/api/authApi";
@@ -280,6 +280,17 @@ function MedHeader({ doctor = { nom: "{user?.nom || 'Utilisateur'}", specialite:
                         {newMessagesCount > 9 ? '9+' : newMessagesCount}
                       </span>
                     )}
+                  </button>
+                </div>
+                
+                {/* Bouton WebRTC */}
+                <div className="relative">
+                  <button
+                    onClick={() => navigate('/webrtc')}
+                    className="p-2 text-gray-600 hover:text-green-600 hover:bg-green-50 rounded-full transition-colors duration-200"
+                    title="WebRTC - Appels vidéo/audio"
+                  >
+                    <FaVideo className="w-5 h-5" />
                   </button>
                 </div>
                 

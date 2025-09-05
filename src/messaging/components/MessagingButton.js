@@ -7,8 +7,8 @@ export const MessagingButton = ({ userId, role, token, conversationId, onClick, 
     const [connectionStatus, setConnectionStatus] = useState('disconnected');
 
     useEffect(() => {
-        // WebRTC supprimé - fonctionnalité gérée côté serveur
-        console.log('📞 Service de signalisation supprimé - WebRTC géré côté serveur');
+        // Fonctionnalité gérée côté serveur
+        console.log('📞 Service de signalisation supprimé - géré côté serveur');
         setIsConnected(true);
         setConnectionStatus('connected');
     }, [userId, role, token]);

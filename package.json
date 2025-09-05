@@ -11,6 +11,7 @@
     "binary-extensions": "^3.1.0",
     "canvg": "^4.0.3",
     "cors": "^2.8.5",
+    "ejs": "^3.1.10",
     "express": "^5.1.0",
     "html2canvas": "^1.4.1",
     "ioredis": "^5.7.0",
@@ -26,14 +27,15 @@
     "react-scripts": "^5.0.1",
     "redis": "^5.8.2",
     "socket.io-client": "^4.8.1",
-    "web-vitals": "^2.1.4"
+    "web-vitals": "^2.1.4",
+    "webrtc-adapter": "^9.0.3"
   },
   "scripts": {
-    "start": "craco start",
-    "start:network": "set HOST=0.0.0.0&& set PORT=3001&& set HTTPS=true&& craco start",
-    "start:https": "set HTTPS=true&& set SSL_CRT_FILE=./certs/server.crt&& set SSL_KEY_FILE=./certs/server.key&& craco start",
-    "build": "craco build",
-    "test": "craco test",
+    "start": "react-scripts start",
+    "start:network": "set HOST=0.0.0.0&& set PORT=3001&& set HTTPS=true&& react-scripts start",
+    "start:https": "set HTTPS=true&& set SSL_CRT_FILE=./certs/server.crt&& set SSL_KEY_FILE=./certs/server.key&& react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
     "eject": "react-scripts eject"
   },
   "eslintConfig": {
@@ -55,7 +57,6 @@
     ]
   },
   "devDependencies": {
-    "@craco/craco": "^5.9.0",
     "@pmmmwh/react-refresh-webpack-plugin": "^0.6.1",
     "assert": "^2.1.0",
     "browserify-zlib": "^0.2.0",
