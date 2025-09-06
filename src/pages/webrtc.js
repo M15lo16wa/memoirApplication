@@ -90,9 +90,6 @@ const WebRTCPage = () => {
     setCurrentView('list');
   };
 
-  const handleBackToList = () => {
-    setCurrentView('list');
-  };
 
   const handleError = (error) => {
     console.error('❌ [WebRTC] Erreur:', error);
@@ -178,26 +175,6 @@ const WebRTCPage = () => {
                 }`}>
                   {userType === 'medecin' ? 'Médecin' : 'Patient'}
                 </span>
-                <button
-                  onClick={async () => {
-                    try {
-                      const WebRTCService = (await import('../services/webrtc.service.js')).default;
-                      const webrtcService = new WebRTCService();
-                      await webrtcService.initialize(token, null, userType, user);
-                      const result = await webrtcService.testConnection();
-                      if (result.success) {
-                        alert('✅ Connexion WebRTC OK !');
-                      } else {
-                        alert(`❌ Erreur: ${result.error}`);
-                      }
-                    } catch (error) {
-                      alert(`❌ Erreur: ${error.message}`);
-                    }
-                  }}
-                  className="px-3 py-1 bg-gray-100 text-gray-700 rounded text-xs hover:bg-gray-200"
-                >
-                  Test API
-                </button>
               </div>
             </div>
           </div>
