@@ -2624,13 +2624,13 @@ const DMP = () => {
       return;
     }
     try {
-      // Fonctionnalité gérée côté serveur
-      console.log('🔗 Ouverture du lien de conférence:', conferenceLink);
+      console.log('🔗 Redirection vers la page de conférence:', conferenceLink);
 
-      // Ouvrir la conférence dans un nouvel onglet
-      window.open(conferenceLink, '_blank', 'noopener,noreferrer');
+      // Rediriger vers la page join-conference avec le lien en paramètre
+      const joinUrl = `/join-conference?link=${encodeURIComponent(conferenceLink)}`;
+      window.location.href = joinUrl;
 
-      // Mémoriser le lien pour d'autres workflows (ex: accept call)
+      // Mémoriser le lien pour d'autres workflows
       localStorage.setItem('lastConferenceLink', conferenceLink);
 
       handleCloseJoinConference();
@@ -3882,10 +3882,12 @@ un DMPProvider.</p>
               {patientProfile && (
                 <button
                   onClick={handleOpenJoinConference}
-                  className="flex items-center px-3 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
+                  className="flex items-center px-3 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors"
+                  title="Rejoindre une consultation vidéo avec votre médecin"
                 >
                   <FaVideo className="mr-2" />
-                  Rejoindre conférence
+                  <span>Consultation Vidéo</span>
+                  <span className="ml-1 text-xs bg-purple-500 px-1 rounded">WebRTC</span>
                 </button>
               )}
               

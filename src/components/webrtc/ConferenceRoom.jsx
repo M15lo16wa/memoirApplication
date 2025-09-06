@@ -5,6 +5,7 @@ import './webrtc.css';
 
 const ConferenceRoom = ({ conferenceCode, onEnd, userType, user, token }) => {
     const [error, setError] = useState(null);
+    const [permissionStatus, setPermissionStatus] = useState(null);
 
     const localVideoRef = useRef(null);
     const remoteVideoRef = useRef(null);
@@ -12,9 +13,6 @@ const ConferenceRoom = ({ conferenceCode, onEnd, userType, user, token }) => {
 
     // Utiliser le hook WebRTC avec les paramètres nécessaires
     const {
-        joinConference,
-        endConference,
-        config: webrtcConfig,
         toggleAudio,
         toggleVideo,
         leaveConference,
@@ -28,6 +26,39 @@ const ConferenceRoom = ({ conferenceCode, onEnd, userType, user, token }) => {
     } = useWebRTC(token, conferenceCode, userType, user);
 
     // Le hook useWebRTC gère l'initialisation automatiquement
+
+    // Vérifier les permissions au montage
+    useEffect(() => {
+        checkPermissions();
+    }, []);
+
+    // Fonction pour vérifier les permissions
+    const checkPermissions = async () => {
+        try {
+            const permissions = {};
+
+            if (navigator.permissions) {
+                try {
+                    const cameraPermission = await navigator.permissions.query({ name: 'camera' });
+                    permissions.camera = cameraPermission.state;
+                } catch (e) {
+                    console.log('⚠️ [ConferenceRoom] Permissions caméra non supportées');
+                }
+
+                try {
+                    const microphonePermission = await navigator.permissions.query({ name: 'microphone' });
+                    permissions.microphone = microphonePermission.state;
+                } catch (e) {
+                    console.log('⚠️ [ConferenceRoom] Permissions microphone non supportées');
+                }
+            }
+
+            setPermissionStatus(permissions);
+            console.log('🔐 [ConferenceRoom] État des permissions:', permissions);
+        } catch (error) {
+            console.warn('⚠️ [ConferenceRoom] Impossible de vérifier les permissions:', error);
+        }
+    };
 
     // Mettre à jour les références vidéo quand les streams changent
     useEffect(() => {
@@ -90,7 +121,22 @@ const ConferenceRoom = ({ conferenceCode, onEnd, userType, user, token }) => {
             <div className="conference-error">
                 <h3>Erreur de connexion</h3>
                 <p>{error}</p>
-                <button onClick={onEnd} className="btn btn-primary">Fermer</button>
+
+                {/* Affichage des permissions */}
+                {permissionStatus && (
+                    <div className="permission-status">
+                        <h4>État des permissions :</h4>
+                        <p>📹 Caméra: {permissionStatus.camera || 'Non vérifiable'}</p>
+                        <p>🎤 Microphone: {permissionStatus.microphone || 'Non vérifiable'}</p>
+                    </div>
+                )}
+
+                <div className="error-actions">
+                    <button onClick={checkPermissions} className="btn btn-secondary">
+                        Vérifier les permissions
+                    </button>
+                    <button onClick={onEnd} className="btn btn-primary">Fermer</button>
+                </div>
             </div>
         );
     }

@@ -19,6 +19,7 @@ import Agenda from './pages/agenda';
 import { ChatMessage } from './messaging';
 // webRTC
 import WebRTCPage from './pages/webrtc';
+import JoinConferencePage from './pages/join-conference';
 
 
 // protection des routes
@@ -64,6 +65,8 @@ function App() {
       <Route path="/chat-message" element={<ChatMessage />} />
       {/* Nouvelle route pour la webRTC */}
       <Route path="/webrtc" element={<WebRTCPage />} />
+      {/* Route pour rejoindre une conférence (patients) */}
+      <Route path="/join-conference" element={<JoinConferencePage />} />
     </Routes>
   );
 }

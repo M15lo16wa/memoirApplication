@@ -465,24 +465,94 @@ class WebRTCService {
    */
   async initializeMedia() {
     try {
-      const constraints = {
+      // Vérifier la disponibilité des APIs
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error('getUserMedia n\'est pas supporté par ce navigateur');
+      }
+
+      // Vérifier les permissions
+      const permissions = await this.checkPermissions();
+      console.log('🔐 [WebRTC Service] Permissions:', permissions);
+
+      // Constraintes de base avec fallback
+      let constraints = {
         video: {
-          width: this.webrtcConfig.videoConstraints.width,
-          height: this.webrtcConfig.videoConstraints.height,
-          frameRate: this.webrtcConfig.videoConstraints.frameRate
+          width: { ideal: 640, max: 1280 },
+          height: { ideal: 480, max: 720 },
+          frameRate: { ideal: 30, max: 60 }
         },
-        audio: this.webrtcConfig.audioConstraints
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        }
       };
 
+      // Si on a une config WebRTC, l'utiliser
+      if (this.webrtcConfig && this.webrtcConfig.videoConstraints) {
+        constraints = {
+          video: {
+            width: this.webrtcConfig.videoConstraints.width || { ideal: 640 },
+            height: this.webrtcConfig.videoConstraints.height || { ideal: 480 },
+            frameRate: this.webrtcConfig.videoConstraints.frameRate || { ideal: 30 }
+          },
+          audio: this.webrtcConfig.audioConstraints || true
+        };
+      }
+
+      console.log('📹 [WebRTC Service] Tentative d\'accès aux médias avec contraintes:', constraints);
+
       this.localStream = await navigator.mediaDevices.getUserMedia(constraints);
-      console.log('📹 [WebRTC Service] Flux média initialisé');
+      console.log('✅ [WebRTC Service] Flux média initialisé avec succès');
 
       // Créer la connexion peer-to-peer
       this.createPeerConnection();
 
     } catch (error) {
       console.error('❌ [WebRTC Service] Erreur flux média:', error);
-      throw error;
+      
+      // Messages d'erreur plus spécifiques
+      if (error.name === 'NotAllowedError') {
+        throw new Error('Accès à la caméra/microphone refusé. Veuillez autoriser l\'accès dans les paramètres du navigateur.');
+      } else if (error.name === 'NotFoundError') {
+        throw new Error('Aucune caméra ou microphone détecté. Vérifiez vos périphériques.');
+      } else if (error.name === 'NotReadableError') {
+        throw new Error('Caméra ou microphone déjà utilisé par une autre application.');
+      } else if (error.name === 'OverconstrainedError') {
+        throw new Error('Contraintes vidéo trop strictes. Tentative avec des paramètres plus simples...');
+      } else {
+        throw new Error(`Erreur d'accès aux médias: ${error.message}`);
+      }
+    }
+  }
+
+  /**
+   * Vérifier les permissions de caméra et microphone
+   */
+  async checkPermissions() {
+    try {
+      const permissions = {};
+      
+      if (navigator.permissions) {
+        try {
+          const cameraPermission = await navigator.permissions.query({ name: 'camera' });
+          permissions.camera = cameraPermission.state;
+        } catch (e) {
+          console.log('⚠️ [WebRTC Service] Permissions caméra non supportées');
+        }
+
+        try {
+          const microphonePermission = await navigator.permissions.query({ name: 'microphone' });
+          permissions.microphone = microphonePermission.state;
+        } catch (e) {
+          console.log('⚠️ [WebRTC Service] Permissions microphone non supportées');
+        }
+      }
+
+      return permissions;
+    } catch (error) {
+      console.warn('⚠️ [WebRTC Service] Impossible de vérifier les permissions:', error);
+      return {};
     }
   }
 
@@ -785,41 +855,6 @@ class WebRTCService {
     return this.isVideoOff;
   }
 
-  /**
-   * Basculer l'audio (mute/unmute)
-   */
-  toggleAudio() {
-    if (this.localStream) {
-      const audioTrack = this.localStream.getAudioTracks()[0];
-      if (audioTrack) {
-        audioTrack.enabled = !audioTrack.enabled;
-        this.isMuted = !audioTrack.enabled;
-        console.log('🎤 [WebRTC Service] Audio:', audioTrack.enabled ? 'Activé' : 'Désactivé');
-      }
-    }
-  }
-
-  /**
-   * Basculer la vidéo (on/off)
-   */
-  toggleVideo() {
-    if (this.localStream) {
-      const videoTrack = this.localStream.getVideoTracks()[0];
-      if (videoTrack) {
-        videoTrack.enabled = !videoTrack.enabled;
-        this.isVideoOff = !videoTrack.enabled;
-        console.log('📹 [WebRTC Service] Vidéo:', videoTrack.enabled ? 'Activée' : 'Désactivée');
-      }
-    }
-  }
-
-  /**
-   * Quitter la conférence
-   */
-  leaveConference() {
-    console.log('👋 [WebRTC Service] Quitter la conférence');
-    this.cleanup();
-  }
 }
 
 export default WebRTCService;

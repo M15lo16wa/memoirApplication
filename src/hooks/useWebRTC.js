@@ -57,18 +57,27 @@ const useWebRTC = (token, conferenceCode, userType, user) => {
         throw new Error('Échec de l\'initialisation WebRTC');
       }
 
-      // Initialiser le flux média local
+      // Initialiser le flux média local via le service
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: true,
-          audio: true
-        });
-        setLocalStream(stream);
-        service.localStream = stream; // Stocker dans le service
-        console.log('📹 [useWebRTC] Flux local initialisé');
+        await service.initializeMedia();
+        setLocalStream(service.localStream);
+        console.log('📹 [useWebRTC] Flux local initialisé via service');
       } catch (mediaError) {
         console.error('❌ [useWebRTC] Erreur accès caméra/microphone:', mediaError);
-        throw new Error('Accès à la caméra/microphone refusé');
+        // Essayer une approche de fallback avec des contraintes plus simples
+        try {
+          console.log('🔄 [useWebRTC] Tentative avec contraintes simplifiées...');
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: { width: 640, height: 480 },
+            audio: true
+          });
+          setLocalStream(stream);
+          service.localStream = stream;
+          console.log('✅ [useWebRTC] Flux local initialisé avec contraintes simplifiées');
+        } catch (fallbackError) {
+          console.error('❌ [useWebRTC] Erreur fallback:', fallbackError);
+          throw new Error('Accès à la caméra/microphone refusé. Vérifiez les permissions du navigateur.');
+        }
       }
 
       // Démarrer la conférence si c'est un médecin
@@ -106,7 +115,7 @@ const useWebRTC = (token, conferenceCode, userType, user) => {
     return () => {
       cleanup();
     };
-  }, [initializeWebRTC, cleanup]);
+  }, [initializeWebRTC, cleanup, token, conferenceCode, userType, user]);
 
   // Fonctions de contrôle
   const toggleAudio = useCallback(() => {
