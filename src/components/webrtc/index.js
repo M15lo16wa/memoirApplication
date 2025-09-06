@@ -6,5 +6,4 @@ export { default as ConferenceCard } from './ConferenceCard';
 export { default as ConferenceCreate } from './ConferenceCreate';
 export { default as JoinConference } from './JoinConference';
 export { default as VideoCall } from './VideoCall';
-export { default as AudioCall } from './AudioCall';
 export { default as WebRTCProvider } from './WebRTCProvider';

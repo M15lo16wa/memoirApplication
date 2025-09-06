@@ -434,25 +434,15 @@ function Medecin() {
                     {/* Section WebRTC */}
                     <div className="bg-white rounded-lg shadow-md p-6">
                         <h3 className="text-lg font-semibold text-gray-800 mb-4">Communication WebRTC</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="flex justify-center">
                             <button
                                 onClick={() => window.location.href = '/webrtc'}
-                                className="flex items-center justify-center p-4 bg-green-50 hover:bg-green-100 rounded-lg border border-green-200 transition-colors"
+                                className="flex items-center justify-center p-6 bg-green-50 hover:bg-green-100 rounded-lg border border-green-200 transition-colors w-full max-w-sm"
                             >
                                 <div className="text-center">
-                                    <div className="text-3xl mb-2">📹</div>
-                                    <p className="font-medium text-green-800">Conférences Vidéo</p>
+                                    <div className="text-4xl mb-3">📹</div>
+                                    <p className="font-medium text-green-800 text-lg">Conférences Vidéo</p>
                                     <p className="text-sm text-green-600">Appels vidéo avec patients</p>
-                                </div>
-                            </button>
-                            <button
-                                onClick={() => window.location.href = '/webrtc?type=audio'}
-                                className="flex items-center justify-center p-4 bg-blue-50 hover:bg-blue-100 rounded-lg border border-blue-200 transition-colors"
-                            >
-                                <div className="text-center">
-                                    <div className="text-3xl mb-2">🎤</div>
-                                    <p className="font-medium text-blue-800">Appels Audio</p>
-                                    <p className="text-sm text-blue-600">Communication vocale</p>
                                 </div>
                             </button>
                         </div>
