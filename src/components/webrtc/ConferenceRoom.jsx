@@ -3,41 +3,51 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import useWebRTC from '../../hooks/useWebRTC';
 import './webrtc.css';
 
-const ConferenceRoom = ({ conferenceCode, onEnd, userType }) => {
-    const [localStream, setLocalStream] = useState(null);
-    const [remoteStream, setRemoteStream] = useState(null);
-    const [isConnected, setIsConnected] = useState(false);
-    const [isMuted, setIsMuted] = useState(false);
-    const [isVideoOn, setIsVideoOn] = useState(true);
+const ConferenceRoom = ({ conferenceCode, onEnd, userType, user, token }) => {
     const [error, setError] = useState(null);
 
     const localVideoRef = useRef(null);
     const remoteVideoRef = useRef(null);
     const peerConnectionRef = useRef(null);
-    const { joinConference, endConference, config: webrtcConfig } = useWebRTC();
 
-    const initializeWebRTC = useCallback(async () => {
-        try {
-            const conferenceData = await joinConference(conferenceCode);
-            console.log('Conférence rejointe:', conferenceData);
+    // Utiliser le hook WebRTC avec les paramètres nécessaires
+    const {
+        joinConference,
+        endConference,
+        config: webrtcConfig,
+        toggleAudio,
+        toggleVideo,
+        leaveConference,
+        localStream,
+        remoteStream,
+        isConnected,
+        isMuted,
+        isVideoOff,
+        isLoading,
+        error: webrtcError
+    } = useWebRTC(token, conferenceCode, userType, user);
 
-            const stream = await navigator.mediaDevices.getUserMedia({
-                video: true,
-                audio: true
-            });
-            setLocalStream(stream);
+    // Le hook useWebRTC gère l'initialisation automatiquement
 
-            if (localVideoRef.current) {
-                localVideoRef.current.srcObject = stream;
-            }
-
-            await setupPeerConnection();
-
-        } catch (err) {
-            setError(err.message);
-            console.error('Erreur initialisation WebRTC:', err);
+    // Mettre à jour les références vidéo quand les streams changent
+    useEffect(() => {
+        if (localStream && localVideoRef.current) {
+            localVideoRef.current.srcObject = localStream;
         }
-    }, [conferenceCode, joinConference]);
+    }, [localStream]);
+
+    useEffect(() => {
+        if (remoteStream && remoteVideoRef.current) {
+            remoteVideoRef.current.srcObject = remoteStream;
+        }
+    }, [remoteStream]);
+
+    // Gérer les erreurs du hook
+    useEffect(() => {
+        if (webrtcError) {
+            setError(webrtcError);
+        }
+    }, [webrtcError]);
 
     const cleanup = useCallback(() => {
         if (localStream) {
@@ -48,72 +58,26 @@ const ConferenceRoom = ({ conferenceCode, onEnd, userType }) => {
         }
     }, [localStream]);
 
+    // Nettoyage au démontage
     useEffect(() => {
-        if (conferenceCode && webrtcConfig) {
-            initializeWebRTC();
-        }
         return () => {
             cleanup();
         };
-    }, [conferenceCode, webrtcConfig, initializeWebRTC, cleanup]);
+    }, [cleanup]);
 
-    const setupPeerConnection = useCallback(async () => {
-        try {
-            const peerConnection = new RTCPeerConnection(webrtcConfig);
-            peerConnectionRef.current = peerConnection;
+    // La configuration WebRTC est gérée par le hook
 
-            if (localStream) {
-                localStream.getTracks().forEach(track => {
-                    peerConnection.addTrack(track, localStream);
-                });
-            }
-
-            peerConnection.ontrack = (event) => {
-                const [remoteStream] = event.streams;
-                setRemoteStream(remoteStream);
-                if (remoteVideoRef.current) {
-                    remoteVideoRef.current.srcObject = remoteStream;
-                }
-                setIsConnected(true);
-            };
-
-            peerConnection.onicecandidate = (event) => {
-                if (event.candidate) {
-                    // Signaling via WebSocket (à implémenter)
-                }
-            };
-
-            const offer = await peerConnection.createOffer();
-            await peerConnection.setLocalDescription(offer);
-
-        } catch (err) {
-            setError('Erreur configuration WebRTC: ' + err.message);
-        }
-    }, [webrtcConfig, localStream]);
-
-    const toggleMute = () => {
-        if (localStream) {
-            const audioTrack = localStream.getAudioTracks()[0];
-            if (audioTrack) {
-                audioTrack.enabled = !audioTrack.enabled;
-                setIsMuted(!isMuted);
-            }
-        }
+    const handleToggleMute = () => {
+        toggleAudio();
     };
 
-    const toggleVideo = () => {
-        if (localStream) {
-            const videoTrack = localStream.getVideoTracks()[0];
-            if (videoTrack) {
-                videoTrack.enabled = !videoTrack.enabled;
-                setIsVideoOn(!isVideoOn);
-            }
-        }
+    const handleToggleVideo = () => {
+        toggleVideo();
     };
 
     const handleEndCall = async () => {
         try {
-            await endConference(conferenceCode);
+            leaveConference();
             cleanup();
             onEnd();
         } catch (err) {
@@ -143,7 +107,7 @@ const ConferenceRoom = ({ conferenceCode, onEnd, userType }) => {
                     />
                     {!isConnected && (
                         <div className="connection-status">
-                            <p>Connexion en cours...</p>
+                            <p>{isLoading ? 'Connexion en cours...' : 'En attente de connexion...'}</p>
                         </div>
                     )}
                 </div>
@@ -161,17 +125,17 @@ const ConferenceRoom = ({ conferenceCode, onEnd, userType }) => {
 
             <div className="conference-controls">
                 <button
-                    onClick={toggleMute}
+                    onClick={handleToggleMute}
                     className={`control-btn ${isMuted ? 'muted' : ''}`}
                 >
                     {isMuted ? '🔇' : '🎤'}
                 </button>
 
                 <button
-                    onClick={toggleVideo}
-                    className={`control-btn ${isVideoOn ? '' : 'video-off'}`}
+                    onClick={handleToggleVideo}
+                    className={`control-btn ${isVideoOff ? 'video-off' : ''}`}
                 >
-                    {isVideoOn ? '📹' : '📹'}
+                    {isVideoOff ? '📹' : '📹'}
                 </button>
 
                 <button

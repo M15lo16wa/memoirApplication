@@ -39,6 +39,9 @@ class WebRTCService {
       this.userType = userType;
       this.user = user;
 
+      // Initialiser la connexion WebSocket
+      this.initializeSocket(token);
+
       console.log('✅ [WebRTC Service] Service initialisé');
       return true;
 
@@ -137,6 +140,33 @@ class WebRTCService {
 
     } catch (error) {
       console.error('❌ [WebRTC Service] Erreur chargement patients autorisés:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Rejoindre une conférence par code
+   */
+  async joinConference(conferenceCode) {
+    try {
+      console.log('📞 [WebRTC Service] Rejoindre conférence:', conferenceCode);
+      const response = await fetch(`${this.serverUrl}/api/webrtc/conferences/${conferenceCode}`, {
+        headers: {
+          'Authorization': `Bearer ${this.token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Erreur ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      console.log('✅ [WebRTC Service] Conférence rejointe:', data.data);
+      return data.data;
+
+    } catch (error) {
+      console.error('❌ [WebRTC Service] Erreur rejoindre conférence:', error);
       throw error;
     }
   }
@@ -410,20 +440,24 @@ class WebRTCService {
    * S'authentifier auprès du serveur
    */
   authenticate(token) {
-    this.socket.emit('authenticate', {
-      token: token,
-      conferenceCode: this.conferenceCode
-    });
+    if (this.socket) {
+      this.socket.emit('authenticate', {
+        token: token,
+        conferenceCode: this.conferenceCode
+      });
+    }
   }
 
   /**
    * Rejoindre une salle de conférence
    */
   joinRoom() {
-    this.socket.emit('join-room', {
-      conferenceCode: this.conferenceCode,
-      userType: this.userType
-    });
+    if (this.socket) {
+      this.socket.emit('join-room', {
+        conferenceCode: this.conferenceCode,
+        userType: this.userType
+      });
+    }
   }
 
   /**
@@ -472,7 +506,7 @@ class WebRTCService {
 
     // Gérer les candidats ICE
     this.peerConnection.onicecandidate = (event) => {
-      if (event.candidate) {
+      if (event.candidate && this.socket) {
         this.socket.emit('ice-candidate', {
           conferenceCode: this.conferenceCode,
           candidate: event.candidate,
@@ -504,11 +538,13 @@ class WebRTCService {
       const answer = await this.peerConnection.createAnswer();
       await this.peerConnection.setLocalDescription(answer);
 
-      this.socket.emit('answer', {
-        conferenceCode: this.conferenceCode,
-        answer: answer,
-        targetParticipant: data.from
-      });
+      if (this.socket) {
+        this.socket.emit('answer', {
+          conferenceCode: this.conferenceCode,
+          answer: answer,
+          targetParticipant: data.from
+        });
+      }
 
       console.log('📤 [WebRTC Service] Réponse envoyée');
 
@@ -569,11 +605,13 @@ class WebRTCService {
       const offer = await this.peerConnection.createOffer();
       await this.peerConnection.setLocalDescription(offer);
 
-      this.socket.emit('offer', {
-        conferenceCode: this.conferenceCode,
-        offer: offer,
-        targetParticipant: 'all'
-      });
+      if (this.socket) {
+        this.socket.emit('offer', {
+          conferenceCode: this.conferenceCode,
+          offer: offer,
+          targetParticipant: 'all'
+        });
+      }
 
       console.log('🎥 [WebRTC Service] Conférence démarrée');
 
@@ -596,10 +634,12 @@ class WebRTCService {
       audioTrack.enabled = !audioTrack.enabled;
       this.isMuted = !audioTrack.enabled;
 
-      this.socket.emit('toggle-audio', {
-        conferenceCode: this.conferenceCode,
-        isMuted: this.isMuted
-      });
+      if (this.socket) {
+        this.socket.emit('toggle-audio', {
+          conferenceCode: this.conferenceCode,
+          isMuted: this.isMuted
+        });
+      }
 
       console.log(`🔇 [WebRTC Service] Audio ${this.isMuted ? 'coupé' : 'activé'}`);
     }
@@ -618,10 +658,12 @@ class WebRTCService {
       videoTrack.enabled = !videoTrack.enabled;
       this.isVideoOff = !videoTrack.enabled;
 
-      this.socket.emit('toggle-video', {
-        conferenceCode: this.conferenceCode,
-        isVideoOff: this.isVideoOff
-      });
+      if (this.socket) {
+        this.socket.emit('toggle-video', {
+          conferenceCode: this.conferenceCode,
+          isVideoOff: this.isVideoOff
+        });
+      }
 
       console.log(`📹 [WebRTC Service] Vidéo ${this.isVideoOff ? 'coupée' : 'activée'}`);
     }
@@ -741,6 +783,42 @@ class WebRTCService {
 
   getIsVideoOff() {
     return this.isVideoOff;
+  }
+
+  /**
+   * Basculer l'audio (mute/unmute)
+   */
+  toggleAudio() {
+    if (this.localStream) {
+      const audioTrack = this.localStream.getAudioTracks()[0];
+      if (audioTrack) {
+        audioTrack.enabled = !audioTrack.enabled;
+        this.isMuted = !audioTrack.enabled;
+        console.log('🎤 [WebRTC Service] Audio:', audioTrack.enabled ? 'Activé' : 'Désactivé');
+      }
+    }
+  }
+
+  /**
+   * Basculer la vidéo (on/off)
+   */
+  toggleVideo() {
+    if (this.localStream) {
+      const videoTrack = this.localStream.getVideoTracks()[0];
+      if (videoTrack) {
+        videoTrack.enabled = !videoTrack.enabled;
+        this.isVideoOff = !videoTrack.enabled;
+        console.log('📹 [WebRTC Service] Vidéo:', videoTrack.enabled ? 'Activée' : 'Désactivée');
+      }
+    }
+  }
+
+  /**
+   * Quitter la conférence
+   */
+  leaveConference() {
+    console.log('👋 [WebRTC Service] Quitter la conférence');
+    this.cleanup();
   }
 }
 

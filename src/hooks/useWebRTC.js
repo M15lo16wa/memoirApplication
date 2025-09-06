@@ -57,15 +57,23 @@ const useWebRTC = (token, conferenceCode, userType, user) => {
         throw new Error('Échec de l\'initialisation WebRTC');
       }
 
+      // Initialiser le flux média local
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: true
+        });
+        setLocalStream(stream);
+        service.localStream = stream; // Stocker dans le service
+        console.log('📹 [useWebRTC] Flux local initialisé');
+      } catch (mediaError) {
+        console.error('❌ [useWebRTC] Erreur accès caméra/microphone:', mediaError);
+        throw new Error('Accès à la caméra/microphone refusé');
+      }
+
       // Démarrer la conférence si c'est un médecin
       if (userType === 'medecin') {
         await service.startConference();
-      }
-
-      // Récupérer le flux local
-      const localStream = service.getLocalStream();
-      if (localStream) {
-        setLocalStream(localStream);
       }
 
       setIsLoading(false);
@@ -122,6 +130,29 @@ const useWebRTC = (token, conferenceCode, userType, user) => {
     cleanup();
   }, [cleanup]);
 
+  // Fonctions de conférence
+  const joinConference = useCallback(async (conferenceCode) => {
+    if (webrtcServiceRef.current) {
+      return await webrtcServiceRef.current.joinConference(conferenceCode);
+    }
+    throw new Error('Service WebRTC non initialisé');
+  }, []);
+
+  const endConference = useCallback(async (conferenceCode) => {
+    if (webrtcServiceRef.current) {
+      return await webrtcServiceRef.current.endConference(conferenceCode);
+    }
+    throw new Error('Service WebRTC non initialisé');
+  }, []);
+
+  // Configuration WebRTC par défaut
+  const config = {
+    iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' }
+    ]
+  };
+
   return {
     // États
     isConnected,
@@ -132,11 +163,14 @@ const useWebRTC = (token, conferenceCode, userType, user) => {
     error,
     localStream,
     remoteStream,
+    config,
     
     // Fonctions
     toggleAudio,
     toggleVideo,
     leaveConference,
+    joinConference,
+    endConference,
     initializeWebRTC,
     cleanup
   };

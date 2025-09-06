@@ -238,12 +238,11 @@ const WebRTCPage = () => {
 
           {currentView === 'room' && currentConference && (
             <ConferenceRoom
-              conferenceData={currentConference}
+              conferenceCode={currentConference.conferenceCode || currentConference.code}
               userType={userType}
               user={user}
               token={token}
-              onLeaveConference={handleLeaveConference}
-              onError={handleError}
+              onEnd={handleLeaveConference}
             />
           )}
         </div>
