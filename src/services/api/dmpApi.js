@@ -303,11 +303,37 @@ export const getSecureDossierForMedecin = async (patientId) => {
     try {
         console.log(`🔍 Récupération du dossier sécurisé pour le patient ${patientId}...`);
         
-        const response = await dmpApi.get(`/dossierMedical/patient/${patientId}/complet`);
-        console.log(`📊 Réponse brute de l'API:`, response.data);
+        // ✅ AMÉLIORATION : Essayer plusieurs endpoints pour le dossier complet
+        let response = null;
+        let dossierData = null;
         
-        // Extraire les données du dossier
-        const dossierData = response.data.data || response.data;
+        // Essayer d'abord l'endpoint principal
+        try {
+            response = await dmpApi.get(`/dossierMedical/patient/${patientId}/complet`);
+            console.log(`📊 Réponse brute de l'API (endpoint principal):`, response.data);
+        } catch (error) {
+            console.log('⚠️ Endpoint principal échoué, tentative avec endpoint alternatif...');
+            
+            // Essayer l'endpoint alternatif
+            try {
+                response = await dmpApi.get(`/dossierMedical/patient/${patientId}`);
+                console.log(`📊 Réponse brute de l'API (endpoint alternatif):`, response.data);
+            } catch (altError) {
+                console.log('⚠️ Endpoint alternatif échoué, tentative avec endpoint DMP...');
+                
+                // Essayer l'endpoint DMP
+                try {
+                    response = await dmpApi.get(`/dossierMedical/${patientId}`);
+                    console.log(`📊 Réponse brute de l'API (endpoint DMP):`, response.data);
+                } catch (dmpError) {
+                    console.error('❌ Tous les endpoints de dossier ont échoué:', dmpError);
+                    throw dmpError;
+                }
+            }
+        }
+        
+        // Extraire les données du dossier avec gestion robuste
+        dossierData = response.data.data || response.data;
         console.log(`📋 Données du dossier extraites:`, dossierData);
         
         // S'assurer que nous avons les informations du patient
@@ -338,6 +364,76 @@ export const getSecureDossierForMedecin = async (patientId) => {
             dossierData.autoMesures = dossierData.auto_mesures;
         } else {
             console.warn(`⚠️ Aucune auto-mesure trouvée dans le dossier`);
+        }
+        
+        // ✅ AMÉLIORATION : Récupérer les traitements actuels si manquants
+        if (!dossierData.traitements_actuels || dossierData.traitements_actuels.length === 0) {
+            console.log('🔍 Aucun traitement actuel trouvé, tentative de récupération...');
+            try {
+                const traitementsResponse = await dmpApi.get(`/prescription/patient/${patientId}/actives`);
+                if (traitementsResponse.data && traitementsResponse.data.data) {
+                    dossierData.traitements_actuels = traitementsResponse.data.data;
+                    console.log(`✅ ${dossierData.traitements_actuels.length} traitements actifs récupérés`);
+                }
+            } catch (traitementError) {
+                console.warn('⚠️ Impossible de récupérer les traitements actifs:', traitementError.message);
+            }
+        }
+        
+        // ✅ AMÉLIORATION : Récupérer les contacts d'urgence si manquants
+        if (!dossierData.contacts_urgence || dossierData.contacts_urgence.length === 0) {
+            console.log('🔍 Aucun contact d\'urgence trouvé, tentative de récupération...');
+            try {
+                const contactsResponse = await dmpApi.get(`/patient/${patientId}/contacts-urgence`);
+                if (contactsResponse.data && contactsResponse.data.data) {
+                    dossierData.contacts_urgence = contactsResponse.data.data;
+                    console.log(`✅ ${dossierData.contacts_urgence.length} contacts d'urgence récupérés`);
+                }
+            } catch (contactError) {
+                console.warn('⚠️ Impossible de récupérer les contacts d\'urgence:', contactError.message);
+            }
+        }
+        
+        // ✅ AMÉLIORATION : Récupérer les antécédents médicaux si manquants
+        if (!dossierData.antecedents_medicaux || dossierData.antecedents_medicaux === 'Aucun antécédent connu') {
+            console.log('🔍 Aucun antécédent médical trouvé, tentative de récupération...');
+            try {
+                const antecedentsResponse = await dmpApi.get(`/dossierMedical/patient/${patientId}/antecedents`);
+                if (antecedentsResponse.data && antecedentsResponse.data.data) {
+                    dossierData.antecedents_medicaux = antecedentsResponse.data.data;
+                    console.log(`✅ Antécédents médicaux récupérés`);
+                }
+            } catch (antecedentError) {
+                console.warn('⚠️ Impossible de récupérer les antécédents médicaux:', antecedentError.message);
+            }
+        }
+        
+        // ✅ AMÉLIORATION : Récupérer les allergies si manquantes
+        if (!dossierData.allergies || dossierData.allergies === 'Aucune allergie connue') {
+            console.log('🔍 Aucune allergie trouvée, tentative de récupération...');
+            try {
+                const allergiesResponse = await dmpApi.get(`/dossierMedical/patient/${patientId}/allergies`);
+                if (allergiesResponse.data && allergiesResponse.data.data) {
+                    dossierData.allergies = allergiesResponse.data.data;
+                    console.log(`✅ Allergies récupérées`);
+                }
+            } catch (allergieError) {
+                console.warn('⚠️ Impossible de récupérer les allergies:', allergieError.message);
+            }
+        }
+        
+        // ✅ AMÉLIORATION : Récupérer les consultations récentes si manquantes
+        if (!dossierData.consultations_recentes || dossierData.consultations_recentes.length === 0) {
+            console.log('🔍 Aucune consultation récente trouvée, tentative de récupération...');
+            try {
+                const consultationsResponse = await dmpApi.get(`/consultation/patient/${patientId}/recentes`);
+                if (consultationsResponse.data && consultationsResponse.data.data) {
+                    dossierData.consultations_recentes = consultationsResponse.data.data;
+                    console.log(`✅ ${dossierData.consultations_recentes.length} consultations récentes récupérées`);
+                }
+            } catch (consultationError) {
+                console.warn('⚠️ Impossible de récupérer les consultations récentes:', consultationError.message);
+            }
         }
         
         console.log(`✅ Dossier sécurisé récupéré avec succès pour le patient ${patientId}`);
@@ -1365,13 +1461,49 @@ export const getConsultationsHistoriqueMedical = async (patientId = null) => {
     try {
         console.log(`🔍 Récupération des consultations pour le patient ${patientId || 'connecté'}...`);
         
-        // Utiliser directement l'API des consultations
-        const consultationsResponse = await dmpApi.get(`/consultation/patient/${patientId}`);
-        
-        // Extraire les consultations de la réponse
+        // ✅ AMÉLIORATION : Essayer plusieurs endpoints pour les consultations
         let consultations = [];
+        let consultationsResponse = null;
+        
+        // Essayer d'abord l'endpoint principal
+        try {
+            consultationsResponse = await dmpApi.get(`/consultation/patient/${patientId}`);
+            console.log('✅ Consultations récupérées via endpoint principal:', consultationsResponse.data);
+        } catch (error) {
+            console.log('⚠️ Endpoint principal échoué, tentative avec endpoint alternatif...');
+            
+            // Essayer l'endpoint alternatif
+            try {
+                consultationsResponse = await dmpApi.get(`/ProfessionnelSante/consultations`);
+                console.log('✅ Consultations récupérées via endpoint alternatif:', consultationsResponse.data);
+            } catch (altError) {
+                console.log('⚠️ Endpoint alternatif échoué, tentative avec endpoint DMP...');
+                
+                // Essayer l'endpoint DMP
+                try {
+                    consultationsResponse = await dmpApi.get(`/dossierMedical/patient/${patientId}/consultations`);
+                    console.log('✅ Consultations récupérées via endpoint DMP:', consultationsResponse.data);
+                } catch (dmpError) {
+                    console.error('❌ Tous les endpoints de consultations ont échoué:', dmpError);
+                    throw dmpError;
+                }
+            }
+        }
+        
+        // Extraire les consultations de la réponse avec gestion robuste
         if (consultationsResponse?.data) {
-            consultations = Array.isArray(consultationsResponse.data) ? consultationsResponse.data : [consultationsResponse.data];
+            if (Array.isArray(consultationsResponse.data)) {
+                consultations = consultationsResponse.data;
+            } else if (consultationsResponse.data.consultations && Array.isArray(consultationsResponse.data.consultations)) {
+                consultations = consultationsResponse.data.consultations;
+            } else if (consultationsResponse.data.data && Array.isArray(consultationsResponse.data.data)) {
+                consultations = consultationsResponse.data.data;
+            } else if (consultationsResponse.data.consultations_recentes && Array.isArray(consultationsResponse.data.consultations_recentes)) {
+                consultations = consultationsResponse.data.consultations_recentes;
+            } else {
+                console.warn('⚠️ Structure de données inattendue pour les consultations:', consultationsResponse.data);
+                consultations = [];
+            }
         }
         
         console.log(`✅ ${consultations.length} consultations récupérées via l'API des consultations`);

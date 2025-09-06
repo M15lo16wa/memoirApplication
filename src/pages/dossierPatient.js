@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { QRCodeCanvas } from 'qrcode.react';
 
 import { createDossierMedical, getAllDossiersMedical, getDossierMedical, closeDossierPatient, updateDossierPatient, createOrdonnance, createExamen, getAllPrescriptions, getOrdonnancesRecentes, createOrdonnanceComplete, ajouterPrescriptionAuDossier, marquerNotificationLue, getNotificationsPatient, getResumeAujourdhui } from "../services/api/medicalApi";
-import { getPatients, getServices } from "../services/api/patientApi";
+import { getPatients, getServices, createPatient, updatePatient } from "../services/api/patientApi";
 import { isAuthenticated, isMedecinAuthenticated, isPatientAuthenticated, getMedecinProfile } from "../services/api/authApi";
 
 function DossierPatient() {
@@ -999,24 +999,284 @@ function DossierPatient() {
       return [];
     };
 
+    // ✅ AMÉLIORATION : Extraction des données du dossier si disponible
+    const dossierData = patient.rawData?.dossier || patient.dossier || {};
+    console.log('🔍 normalizePatientData - Données du dossier:', dossierData);
+    
+    // Vérifier si le patient a un dossier médical
+    const hasDossierMedical = dossierData && Object.keys(dossierData).length > 0;
+    console.log('🔍 normalizePatientData - Patient a un dossier médical:', hasDossierMedical);
+
     const normalizedPatient = {
       ...patient,
-      allergies: extractAllergies(patient.allergies),
-      pathologies: extractPathologies(patient.pathologies),
+      // Marquer si le patient a un dossier médical
+      hasDossierMedical: hasDossierMedical,
+      // Extraire les allergies depuis le dossier ou les données patient
+      allergies: hasDossierMedical ? extractAllergies(dossierData.allergies || patient.allergies) : [],
+      // Extraire les pathologies depuis le dossier
+      pathologies: hasDossierMedical ? extractPathologies(dossierData.antecedent_medicaux || patient.pathologies) : [],
+      // Extraire les traitements depuis le dossier
+      treatments: hasDossierMedical ? extractDataFromObject(dossierData.traitements_chroniques || patient.treatments, 'treatments') : [],
+      // Conserver les consultations existantes
       consultations: patient.consultations || [],
-      treatments: patient.treatments || [],
-      emergencyContacts: patient.emergencyContacts || []
+      // Conserver les contacts d'urgence existants
+      emergencyContacts: patient.emergencyContacts || [],
+      // ✅ NOUVEAU : Extraire les paramètres vitaux
+      vitalSigns: hasDossierMedical ? (dossierData.parametres_vitaux || {}) : {},
+      // ✅ NOUVEAU : Extraire les habitudes de vie
+      lifestyle: hasDossierMedical ? (dossierData.habitudes_vie || {}) : {},
+      // ✅ NOUVEAU : Extraire l'historique familial
+      familyHistory: hasDossierMedical ? (dossierData.historique_familial || 'Non documenté') : 'Non documenté',
+      // ✅ NOUVEAU : Extraire les observations
+      observations: hasDossierMedical ? (dossierData.observations || 'Aucune observation') : 'Aucune observation'
     };
     
     console.log('🔍 normalizePatientData - Patient normalisé:', normalizedPatient);
     console.log('🔍 normalizePatientData - Allergies normalisées:', normalizedPatient.allergies);
     console.log('🔍 normalizePatientData - Pathologies normalisées:', normalizedPatient.pathologies);
+    console.log('🔍 normalizePatientData - Traitements normalisés:', normalizedPatient.treatments);
     return normalizedPatient;
+  };
+
+  // État pour le formulaire d'ajout de patient
+  const [addPatientFormData, setAddPatientFormData] = useState({
+    nom: '',
+    prenom: '',
+    date_naissance: '',
+    genre: 'Homme',
+    adresse: '',
+    telephone: '',
+    email: '',
+    pathologies: '',
+    allergies: ''
+  });
+
+  // État pour les informations de connexion générées
+  const [generatedCredentials, setGeneratedCredentials] = useState({
+    password: '',
+    username: '',
+    showCredentials: false
+  });
+
+  // Gestionnaire pour le formulaire d'ajout de patient
+  const handleAddPatientFormChange = (field, value) => {
+    console.log(`📝 Champ ${field} changé vers:`, value);
+    setAddPatientFormData(prev => {
+      const newData = { ...prev, [field]: value };
+      console.log('📝 Nouvelles données du formulaire:', newData);
+      return newData;
+    });
+  };
+
+  // Gestionnaire pour soumettre le formulaire d'ajout de patient
+  const handleAddPatientSubmit = async (e) => {
+    e.preventDefault();
+    console.log('🚀 handleAddPatientSubmit appelé avec les données:', addPatientFormData);
+    
+    // Validation
+    if (!addPatientFormData.nom || !addPatientFormData.prenom) {
+      alert('Veuillez remplir le nom et le prénom');
+      return;
+    }
+    
+    if (!addPatientFormData.date_naissance) {
+      alert('Veuillez sélectionner une date de naissance');
+      return;
+    }
+    
+    if (!addPatientFormData.email) {
+      alert('Veuillez saisir un email');
+      return;
+    }
+    
+    try {
+      updateUIState({ loading: true });
+      
+      // Créer l'objet patient
+      const newPatient = {
+        nom: addPatientFormData.nom,
+        prenom: addPatientFormData.prenom,
+        date_naissance: addPatientFormData.date_naissance,
+        genre: addPatientFormData.genre,
+        adresse: addPatientFormData.adresse,
+        telephone: addPatientFormData.telephone,
+        email: addPatientFormData.email,
+        pathologies: addPatientFormData.pathologies,
+        allergies: addPatientFormData.allergies
+      };
+      
+      console.log('Création du patient:', newPatient);
+      
+      // Appel à l'API pour créer le patient
+      const response = await createPatient(newPatient);
+      console.log('✅ Patient créé avec succès:', response);
+      console.log('🔍 Structure complète de la réponse:', JSON.stringify(response, null, 2));
+      
+      // Générer un mot de passe temporaire côté frontend
+      const generateTemporaryPassword = () => {
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+        let password = '';
+        for (let i = 0; i < 8; i++) {
+          password += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        return password;
+      };
+      
+      const temporaryPassword = generateTemporaryPassword();
+      console.log('🔑 Mot de passe temporaire généré côté frontend:', temporaryPassword);
+      
+      // Extraire les identifiants générés par le serveur
+      const patientData = response.data || response;
+      console.log('🔍 Données du patient extraites:', patientData);
+      console.log('🔍 Clés disponibles dans patientData:', Object.keys(patientData || {}));
+      
+      // Essayer d'abord de récupérer le mot de passe du serveur
+      const serverPassword = patientData.password || 
+                            patientData.mot_de_passe || 
+                            patientData.default_password || 
+                            patientData.temporary_password ||
+                            patientData.generated_password ||
+                            patientData.pass ||
+                            patientData.pwd ||
+                            patientData.temp_password;
+      
+      // Utiliser le mot de passe du serveur s'il existe, sinon utiliser le mot de passe temporaire généré
+      const generatedPassword = serverPassword || temporaryPassword;
+      
+      const generatedUsername = patientData.username || 
+                               patientData.nom_utilisateur || 
+                               patientData.email || 
+                               patientData.user_email ||
+                               addPatientFormData.email;
+      
+      console.log('🔍 Mot de passe du serveur:', serverPassword);
+      console.log('🔍 Mot de passe final utilisé:', generatedPassword);
+      console.log('🔍 Nom d\'utilisateur extrait:', generatedUsername);
+      
+      // Afficher un message informatif
+      if (!serverPassword) {
+        console.log('ℹ️ Aucun mot de passe fourni par le serveur, utilisation du mot de passe temporaire généré');
+      }
+      
+      // Afficher les identifiants générés
+      setGeneratedCredentials({
+        password: generatedPassword,
+        username: generatedUsername,
+        showCredentials: true
+      });
+      
+      // Ne pas fermer le modal immédiatement pour permettre la copie des identifiants
+      // closeAddModal();
+      
+      // Réinitialiser le formulaire
+      setAddPatientFormData({
+        nom: '',
+        prenom: '',
+        date_naissance: '',
+        genre: 'Homme',
+        adresse: '',
+        telephone: '',
+        email: '',
+        pathologies: '',
+        allergies: ''
+      });
+      
+      // Recharger la liste des patients
+      try {
+        await loadPatients();
+        console.log('✅ Liste des patients rechargée');
+      } catch (reloadError) {
+        console.warn('⚠️ Erreur lors du rechargement des patients:', reloadError);
+      }
+      
+    } catch (error) {
+      console.error('Erreur lors de la création du patient:', error);
+      alert('Erreur lors de la création du patient');
+    } finally {
+      updateUIState({ loading: false });
+    }
+  };
+
+  // ✅ FONCTION : Charger les données du dossier médical
+  const loadDossierMedicalForPatient = async (patientId) => {
+    if (!patientId) return null;
+    
+    try {
+      console.log('🔍 loadDossierMedicalForPatient - Chargement du dossier pour le patient:', patientId);
+      
+      // Essayer de récupérer le dossier médical du patient
+      const dossierResponse = await getDossierMedical(patientId);
+      console.log('🔍 loadDossierMedicalForPatient - Réponse du dossier:', dossierResponse);
+      
+      // La fonction getDossierMedical retourne déjà response.data
+      if (dossierResponse) {
+        return dossierResponse;
+      }
+      
+      return null;
+    } catch (error) {
+      console.log('ℹ️ loadDossierMedicalForPatient - Aucun dossier médical trouvé pour ce patient:', error.message);
+      // Ne pas traiter comme une erreur, c'est normal pour un nouveau patient
+      return null;
+    }
+  };
+
+  // ✅ FONCTION : Extraction générique des données d'objets
+  const extractDataFromObject = (data, fieldName) => {
+    if (!data) return [];
+    
+    // Si c'est déjà un tableau, le retourner
+    if (Array.isArray(data)) return data;
+    
+    // Si c'est une chaîne, essayer de la diviser
+    if (typeof data === 'string') {
+      const items = data.split(/[,;]/).map(item => item.trim()).filter(item => item);
+      return items.length > 0 ? items : [];
+    }
+    
+    // Si c'est un objet, essayer d'extraire les valeurs
+    if (typeof data === 'object') {
+      // Vérifier si l'objet est vide
+      if (Object.keys(data).length === 0) {
+        console.log(`⚠️ normalizePatientData - Objet ${fieldName} vide`);
+        return [];
+      }
+      
+      // Extraire les valeurs non vides
+      const values = Object.values(data).filter(v => 
+        v !== null && v !== undefined && v !== '' && 
+        (typeof v === 'string' || typeof v === 'number')
+      );
+      
+      if (values.length > 0) {
+        console.log(`✅ normalizePatientData - ${fieldName} extraites de l'objet:`, values);
+        return values;
+      }
+      
+      console.log(`⚠️ normalizePatientData - Aucune valeur valide dans ${fieldName}:`, data);
+      return [];
+    }
+    
+    return [];
   };
 
   // Gestion des modals
   const openPatientModal = async (patient) => {
-    const normalizedPatient = normalizePatientData(patient);
+    console.log('🔍 openPatientModal - Ouverture du modal pour le patient:', patient);
+    
+    // ✅ AMÉLIORATION : Charger les données du dossier médical
+    const patientId = patient.id_patient || patient.id;
+    const dossierData = await loadDossierMedicalForPatient(patientId);
+    
+    // Enrichir les données du patient avec le dossier
+    const enrichedPatient = {
+      ...patient,
+      dossier: dossierData
+    };
+    
+    console.log('🔍 openPatientModal - Patient enrichi avec le dossier:', enrichedPatient);
+    
+    const normalizedPatient = normalizePatientData(enrichedPatient);
     modalPatientRef.current = normalizedPatient;
     updateModalState({ showPatientModal: true });
   };
@@ -1027,6 +1287,8 @@ function DossierPatient() {
   };
 
   const openEditModal = (patient) => {
+    console.log('🔍 DEBUG - Patient pour modification:', patient);
+    console.log('🔍 DEBUG - ID disponible:', patient?.id, patient?.rawData?.id_patient);
     editPatientRef.current = patient;
     updateModalState({ showEditModal: true });
   };
@@ -1034,6 +1296,43 @@ function DossierPatient() {
   const closeEditModal = () => {
     updateModalState({ showEditModal: false });
     editPatientRef.current = null;
+  };
+
+  const handleEditSubmit = async (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    
+    // Préparer les données pour la mise à jour du dossier médical
+    const dossierData = {
+      observations: formData.get('pathologies')?.trim() || '', // 'pathologies' = Observations médicales
+      allergies: formData.get('allergies')?.trim() || '' // Allergies
+    };
+
+    console.log('🔍 DEBUG - Données du formulaire:', Object.fromEntries(formData));
+    console.log('🔍 DEBUG - Dossier à modifier:', dossierData);
+    console.log('🔍 DEBUG - Patient info:', editPatientRef.current);
+
+    // Utiliser l'ID du dossier médical si disponible, sinon l'ID du patient
+    const dossierId = editPatientRef.current?.dossier?.data?.id_dossier || 
+                     editPatientRef.current?.rawData?.id_patient || 
+                     editPatientRef.current?.id;
+    
+    console.log('🔍 DEBUG - ID du dossier utilisé:', dossierId);
+
+    try {
+      // Appel API pour mettre à jour le dossier médical
+      console.log('🔍 DEBUG - Appel updateDossierPatient avec:', dossierId, dossierData);
+      const result = await updateDossierPatient(dossierId, dossierData);
+      console.log('🔍 DEBUG - Résultat API:', result);
+      
+      // Recharger la liste des patients
+      await loadPatients();
+      closeEditModal();
+      alert('Dossier patient modifié avec succès');
+    } catch (error) {
+      console.error('🔍 DEBUG - Erreur lors de la modification:', error);
+      alert(`Erreur lors de la modification du dossier patient: ${error.message || error.response?.data?.message || 'Erreur inconnue'}`);
+    }
   };
 
   const openShareModal = (patient) => {
@@ -1052,6 +1351,44 @@ function DossierPatient() {
 
   const closeAddModal = () => {
     updateModalState({ showAddModal: false });
+    // Réinitialiser le formulaire
+    setAddPatientFormData({
+      nom: '',
+      prenom: '',
+      date_naissance: '',
+      genre: 'Homme',
+      adresse: '',
+      telephone: '',
+      email: '',
+      pathologies: '',
+      allergies: ''
+    });
+    // Réinitialiser les identifiants
+    setGeneratedCredentials({
+      password: '',
+      username: '',
+      showCredentials: false
+    });
+  };
+
+  // Fonction pour copier les identifiants dans le presse-papiers
+  const copyCredentials = async () => {
+    const isTemporaryPassword = !generatedCredentials.password.includes('TempPass');
+    const credentialsText = `Identifiants de connexion pour ${addPatientFormData.prenom} ${addPatientFormData.nom}:\n\nEmail: ${generatedCredentials.username}\nMot de passe: ${generatedCredentials.password}${isTemporaryPassword ? '\n\n⚠️ MOT DE PASSE TEMPORAIRE - Le patient devra le changer lors de sa première connexion.' : ''}\n\nVeuillez communiquer ces informations au patient.`;
+    
+    try {
+      await navigator.clipboard.writeText(credentialsText);
+      alert('Identifiants copiés dans le presse-papiers !');
+    } catch (err) {
+      // Fallback pour les navigateurs qui ne supportent pas l'API Clipboard
+      const textArea = document.createElement('textarea');
+      textArea.value = credentialsText;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      alert('Identifiants copiés dans le presse-papiers !');
+    }
   };
 
   const openPrescriptionModal = (patient = null) => {
@@ -2578,67 +2915,102 @@ const loadOrdonnancesRecentes = useCallback(async () => {
                 </div>
               </div>
               <div className="md:col-span-2 space-y-6">
+                {/* Informations administratives */}
                 <div className="bg-white rounded-lg shadow-sm p-4">
-                  <h4 className="font-semibold mb-2">Antécédents médicaux</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <h4 className="font-semibold mb-4">Informations administratives</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                      <h5 className="font-medium mb-1">Pathologies</h5>
-                      <ul className="text-gray-700 space-y-1">
-                        {modalPatientRef.current.pathologies?.map((p, i) => <li key={i} className="flex items-center"><span className="mr-1">•</span> {p}</li>)}
-                      </ul>
-                    </div>
-                    <div>
-                      <h5 className="font-medium mb-1">Allergies</h5>
-                      <ul className="text-gray-700 space-y-1">
-                        {modalPatientRef.current.allergies?.map((a, i) => <li key={i} className="flex items-center"><span className="mr-1">•</span> {a}</li>)}
-                      </ul>
-                    </div>
-                  </div>
-                </div>
-                <div className="bg-white rounded-lg shadow-sm p-4">
-                  <div className="flex justify-between items-center mb-2">
-                    <h4 className="font-semibold">Dernières consultations</h4>
-                    <button className="text-blue-600 text-sm hover:text-blue-800">Voir tout</button>
-                  </div>
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full">
-                      <thead>
-                        <tr className="text-left text-gray-500 text-sm border-b">
-                          <th className="pb-2">Date</th>
-                          <th className="pb-2">Motif</th>
-                          <th className="pb-2">Médecin</th>
-                          <th className="pb-2">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {modalPatientRef.current.consultations?.map((c, i) => (
-                          <tr key={i} className="border-b text-sm">
-                            <td className="py-3">{c.date}</td>
-                            <td>{c.reason}</td>
-                            <td>{c.doctor}</td>
-                            <td><button className="text-blue-600 hover:text-blue-800">Voir</button></td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-                <div className="bg-white rounded-lg shadow-sm p-4">
-                  <div className="flex justify-between items-center mb-2">
-                    <h4 className="font-semibold">Traitements actuels</h4>
-                    <button className="text-blue-600 text-sm hover:text-blue-800">+ Ajouter</button>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {modalPatientRef.current.treatments?.map((t, i) => (
-                      <div key={i}>
+                      <h5 className="font-medium mb-3 text-gray-700">Identité</h5>
+                      <div className="space-y-2">
                         <div className="flex justify-between">
-                          <span className="font-medium">{t.name}</span>
-                          <span className="text-gray-500 text-sm">{t.dose}</span>
+                          <span className="text-gray-600">Nom complet :</span>
+                          <span className="font-medium">
+                            {modalPatientRef.current?.rawData?.nom || modalPatientRef.current?.dossier?.data?.patient?.nom || modalPatientRef.current?.name} {modalPatientRef.current?.rawData?.prenom || modalPatientRef.current?.dossier?.data?.patient?.prenom || modalPatientRef.current?.firstName}
+                          </span>
                         </div>
-                        <p className="text-gray-700 text-sm">{t.desc}</p>
-                        <p className="text-gray-700 text-sm">Depuis {t.since}</p>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Date de naissance :</span>
+                          <span className="font-medium">
+                            {modalPatientRef.current?.rawData?.date_naissance || modalPatientRef.current?.dossier?.data?.patient?.date_naissance || modalPatientRef.current?.birth || 'Non renseigné'}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Genre :</span>
+                          <span className="font-medium">
+                            {modalPatientRef.current?.rawData?.sexe === 'M' ? 'Homme' : modalPatientRef.current?.rawData?.sexe === 'F' ? 'Femme' : modalPatientRef.current?.gender || 'Non renseigné'}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Groupe sanguin :</span>
+                          <span className="font-medium">
+                            {modalPatientRef.current?.dossier?.data?.groupe_sanguin || modalPatientRef.current?.blood || 'Non renseigné'}
+                          </span>
+                        </div>
                       </div>
-                    ))}
+                    </div>
+                    
+                    <div>
+                      <h5 className="font-medium mb-3 text-gray-700">Contact</h5>
+                      <div className="space-y-2">
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Adresse :</span>
+                          <span className="font-medium text-right">
+                            {modalPatientRef.current?.rawData?.adresse || modalPatientRef.current?.dossier?.data?.patient?.adresse || modalPatientRef.current?.address || 'Non renseigné'}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Téléphone :</span>
+                          <span className="font-medium">
+                            {modalPatientRef.current?.rawData?.telephone || modalPatientRef.current?.dossier?.data?.patient?.telephone || modalPatientRef.current?.phone || 'Non renseigné'}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Email :</span>
+                          <span className="font-medium">
+                            {modalPatientRef.current?.rawData?.email || modalPatientRef.current?.dossier?.data?.patient?.email || modalPatientRef.current?.email || 'Non renseigné'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Actions rapides */}
+                <div className="bg-white rounded-lg shadow-sm p-4">
+                  <h4 className="font-semibold mb-4">Actions rapides</h4>
+                  <div className="flex flex-wrap gap-3">
+                    <button 
+                      onClick={() => {
+                        closePatientModal();
+                        openPatientFileModal();
+                      }}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 text-sm flex items-center space-x-2"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      <span>Créer un dossier médical</span>
+                    </button>
+                    
+                    <button 
+                      onClick={() => openPrescriptionModal(modalPatientRef.current)}
+                      className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-200 text-sm flex items-center space-x-2"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      <span>Nouvelle ordonnance</span>
+                    </button>
+                    
+                    <button 
+                      onClick={() => openEditModal(modalPatientRef.current)}
+                      className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors duration-200 text-sm flex items-center space-x-2"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                      <span>Modifier les informations</span>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -2664,57 +3036,57 @@ const loadOrdonnancesRecentes = useCallback(async () => {
                 </svg>
               </button>
             </div>
-            <form className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 mb-4 sm:mb-6">
+            <form onSubmit={handleEditSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 mb-4 sm:mb-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Nom</label>
-                <input type="text" className="w-full px-3 py-2 border rounded-md" defaultValue={editPatientRef.current.name.split(" ")[0]} />
+                <input type="text" name="nom" className="w-full px-3 py-2 border rounded-md" defaultValue={editPatientRef.current.rawData?.nom || editPatientRef.current.name?.split(" ")[0]} />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Prénom</label>
-                <input type="text" className="w-full px-3 py-2 border rounded-md" defaultValue={editPatientRef.current.name.split(" ")[1]} />
+                <input type="text" name="prenom" className="w-full px-3 py-2 border rounded-md" defaultValue={editPatientRef.current.rawData?.prenom || editPatientRef.current.name?.split(" ")[1]} />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Date de naissance</label>
-                <input type="date" className="w-full px-3 py-2 border rounded-md" />
+                <input type="date" name="date_naissance" className="w-full px-3 py-2 border rounded-md" defaultValue={editPatientRef.current.rawData?.date_naissance || editPatientRef.current.birth} />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Genre</label>
-                <select className="w-full px-3 py-2 border rounded-md">
-                  <option>Homme</option>
-                  <option>Femme</option>
-                  <option>Autre</option>
+                <select name="genre" className="w-full px-3 py-2 border rounded-md" defaultValue={editPatientRef.current.rawData?.sexe === 'M' ? 'Homme' : 'Femme'}>
+                  <option value="Homme">Homme</option>
+                  <option value="Femme">Femme</option>
+                  <option value="Autre">Autre</option>
                 </select>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Adresse</label>
-                <input type="text" className="w-full px-3 py-2 border rounded-md" defaultValue={editPatientRef.current.address} />
+                <input type="text" name="adresse" className="w-full px-3 py-2 border rounded-md" defaultValue={editPatientRef.current.rawData?.adresse || editPatientRef.current.address} />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Téléphone</label>
-                <input type="tel" className="w-full px-3 py-2 border rounded-md" defaultValue={editPatientRef.current.phone} />
+                <input type="tel" name="telephone" className="w-full px-3 py-2 border rounded-md" defaultValue={editPatientRef.current.rawData?.telephone || editPatientRef.current.phone} />
               </div>
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                <input type="email" className="w-full px-3 py-2 border rounded-md" defaultValue={editPatientRef.current.email} />
+                <input type="email" name="email" className="w-full px-3 py-2 border rounded-md" defaultValue={editPatientRef.current.rawData?.email || editPatientRef.current.email} />
               </div>
               <div className="md:col-span-2">
                 <h3 className="font-semibold mb-2">Antécédents médicaux</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Pathologies</label>
-                    <textarea className="w-full px-3 py-2 border rounded-md" rows={2}>{editPatientRef.current.pathologies?.join("\n")}</textarea>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Observations médicales</label>
+                    <textarea name="pathologies" className="w-full px-3 py-2 border rounded-md" rows={2} defaultValue={editPatientRef.current.pathologies?.join("\n")}></textarea>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Allergies</label>
-                    <textarea className="w-full px-3 py-2 border rounded-md" rows={2}>{editPatientRef.current.allergies?.join("\n")}</textarea>
+                    <textarea name="allergies" className="w-full px-3 py-2 border rounded-md" rows={2} defaultValue={editPatientRef.current.allergies?.join("\n")}></textarea>
                   </div>
                 </div>
               </div>
+              <div className="flex justify-end space-x-3 mt-4">
+                <button type="button" onClick={closeEditModal} className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50">Annuler</button>
+                <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Enregistrer</button>
+              </div>
             </form>
-            <div className="flex justify-end space-x-3">
-              <button type="button" onClick={closeEditModal} className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50">Annuler</button>
-              <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Enregistrer</button>
-            </div>
           </div>
         </div>
       )}
@@ -2809,57 +3181,211 @@ Dr. Dupont`
                 </svg>
               </button>
             </div>
-            <form className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 mb-4 sm:mb-6">
+            <form onSubmit={handleAddPatientSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 mb-4 sm:mb-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Nom</label>
-                <input type="text" className="w-full px-3 py-2 border rounded-md" />
+                <label className="block text-sm font-medium text-gray-700 mb-1">Nom *</label>
+                <input 
+                  type="text" 
+                  className="w-full px-3 py-2 border rounded-md" 
+                  value={addPatientFormData.nom}
+                  onChange={(e) => handleAddPatientFormChange('nom', e.target.value)}
+                  required
+                />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Prénom</label>
-                <input type="text" className="w-full px-3 py-2 border rounded-md" />
+                <label className="block text-sm font-medium text-gray-700 mb-1">Prénom *</label>
+                <input 
+                  type="text" 
+                  className="w-full px-3 py-2 border rounded-md" 
+                  value={addPatientFormData.prenom}
+                  onChange={(e) => handleAddPatientFormChange('prenom', e.target.value)}
+                  required
+                />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Date de naissance</label>
-                <input type="date" className="w-full px-3 py-2 border rounded-md" />
+                <label className="block text-sm font-medium text-gray-700 mb-1">Date de naissance *</label>
+                <input 
+                  type="date" 
+                  className="w-full px-3 py-2 border rounded-md" 
+                  value={addPatientFormData.date_naissance}
+                  onChange={(e) => handleAddPatientFormChange('date_naissance', e.target.value)}
+                  required
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Genre</label>
-                <select className="w-full px-3 py-2 border rounded-md">
-                  <option>Homme</option>
-                  <option>Femme</option>
-                  <option>Autre</option>
+                <select 
+                  className="w-full px-3 py-2 border rounded-md"
+                  value={addPatientFormData.genre}
+                  onChange={(e) => handleAddPatientFormChange('genre', e.target.value)}
+                >
+                  <option value="Homme">Homme</option>
+                  <option value="Femme">Femme</option>
+                  <option value="Autre">Autre</option>
                 </select>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Adresse</label>
-                <input type="text" className="w-full px-3 py-2 border rounded-md" />
+                <input 
+                  type="text" 
+                  className="w-full px-3 py-2 border rounded-md" 
+                  value={addPatientFormData.adresse}
+                  onChange={(e) => handleAddPatientFormChange('adresse', e.target.value)}
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Téléphone</label>
-                <input type="tel" className="w-full px-3 py-2 border rounded-md" />
+                <input 
+                  type="tel" 
+                  className="w-full px-3 py-2 border rounded-md" 
+                  value={addPatientFormData.telephone}
+                  onChange={(e) => handleAddPatientFormChange('telephone', e.target.value)}
+                />
               </div>
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                <input type="email" className="w-full px-3 py-2 border rounded-md" />
+                <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
+                <input 
+                  type="email" 
+                  className="w-full px-3 py-2 border rounded-md" 
+                  value={addPatientFormData.email}
+                  onChange={(e) => handleAddPatientFormChange('email', e.target.value)}
+                  required
+                />
               </div>
               <div className="md:col-span-2">
                 <h3 className="font-semibold mb-2">Antécédents médicaux</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Pathologies</label>
-                    <textarea className="w-full px-3 py-2 border rounded-md" rows={2}></textarea>
+                    <textarea 
+                      className="w-full px-3 py-2 border rounded-md" 
+                      rows={2}
+                      value={addPatientFormData.pathologies}
+                      onChange={(e) => handleAddPatientFormChange('pathologies', e.target.value)}
+                    ></textarea>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Allergies</label>
-                    <textarea className="w-full px-3 py-2 border rounded-md" rows={2}></textarea>
+                    <textarea 
+                      className="w-full px-3 py-2 border rounded-md" 
+                      rows={2}
+                      value={addPatientFormData.allergies}
+                      onChange={(e) => handleAddPatientFormChange('allergies', e.target.value)}
+                    ></textarea>
                   </div>
                 </div>
               </div>
+              
+              {/* Affichage des identifiants générés */}
+              {generatedCredentials.showCredentials && (
+                <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+                  <div className="flex items-start">
+                    <svg className="w-5 h-5 text-green-600 mt-0.5 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                    <div className="flex-1">
+                      <h4 className="text-sm font-medium text-green-800 mb-2">Patient créé avec succès !</h4>
+                      <p className="text-sm text-green-700 mb-3">Voici les identifiants de connexion pour le patient :</p>
+                      {!generatedCredentials.password.includes('TempPass') && (
+                        <div className="mb-3 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-800">
+                          <strong>Note :</strong> Mot de passe temporaire généré. Le patient devra le changer lors de sa première connexion.
+                        </div>
+                      )}
+                      
+                      <div className="bg-white p-3 rounded border border-green-200 mb-3">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Email de connexion :</label>
+                            <div className="flex items-center space-x-2">
+                              <input 
+                                type="text" 
+                                value={generatedCredentials.username} 
+                                readOnly 
+                                className="flex-1 px-2 py-1 text-sm border rounded bg-gray-50 font-mono"
+                              />
+                              <button
+                                onClick={() => {
+                                  navigator.clipboard.writeText(generatedCredentials.username);
+                                  alert('Email copié !');
+                                }}
+                                className="px-2 py-1 text-xs bg-gray-200 hover:bg-gray-300 rounded"
+                              >
+                                Copier
+                              </button>
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Mot de passe temporaire :</label>
+                            <div className="flex items-center space-x-2">
+                              <input 
+                                type="text" 
+                                value={generatedCredentials.password} 
+                                readOnly 
+                                className="flex-1 px-2 py-1 text-sm border rounded bg-gray-50 font-mono"
+                              />
+                              <button
+                                onClick={() => {
+                                  navigator.clipboard.writeText(generatedCredentials.password);
+                                  alert('Mot de passe copié !');
+                                }}
+                                className="px-2 py-1 text-xs bg-gray-200 hover:bg-gray-300 rounded"
+                              >
+                                Copier
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={copyCredentials}
+                          className="px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 flex items-center space-x-1"
+                        >
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                          </svg>
+                          <span>Copier tout</span>
+                        </button>
+                        <button
+                          onClick={closeAddModal}
+                          className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
+                        >
+                          Fermer
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {/* Boutons du formulaire */}
+              <div className="flex justify-end space-x-3 mt-6">
+                <button 
+                  type="button" 
+                  onClick={closeAddModal} 
+                  className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
+                  disabled={uiState.loading}
+                >
+                  Annuler
+                </button>
+                {!generatedCredentials.showCredentials && (
+                  <button 
+                    type="submit" 
+                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                    disabled={uiState.loading}
+                  >
+                    {uiState.loading && (
+                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                    )}
+                    <span>{uiState.loading ? 'Création...' : 'Enregistrer'}</span>
+                  </button>
+                )}
+              </div>
             </form>
-            <div className="flex justify-end space-x-3">
-              <button type="button" onClick={closeAddModal} className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50">Annuler</button>
-              <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Enregistrer</button>
-            </div>
           </div>
         </div>
       )}
@@ -4816,6 +5342,7 @@ Dr. Dupont`
           display: inline-flex !important;
         }
       `}</style>
+      
     </div>
   );
 }
